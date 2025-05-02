@@ -19,10 +19,15 @@ Releases will include all necessary packages but if you're working with the sour
 **understory** is in the very early days of developement with most of the work still ahead. Here are some of the things we'd like to be able to do with the engine (and the editor!):
 
 ○ Photorealistic pre-rendered graphics (rendered elsewhere!)
+
 ○ Real-time day/night cycles
+
 ○ Autonomous entities that can follow a schedule and make decisions
+
 ○ Contextual gameplay
+
 ○ Video albums
+
 ○ Kiosks/Installations
 
 
