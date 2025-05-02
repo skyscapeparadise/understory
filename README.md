@@ -18,7 +18,7 @@ Releases will include all necessary packages but if you're working with the sour
 
 **understory** is in the very early days of developement with most of the work still ahead. Here are some of the things we'd like to be able to do with the engine (and the editor!):
 
-○ Photorealistic pre-rendered graphics (rendered elsewhere!)
+○ Photorealistic pre-rendered adventure games
 
 ○ Real-time day/night cycles
 
