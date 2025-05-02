@@ -27,8 +27,15 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtCore import QUrl
 
+versionnumber = "0.1"
+
+
 app = QGuiApplication(sys.argv)
 engine = QQmlApplicationEngine()
+
+# Set the version number as a context property
+engine.rootContext().setContextProperty("versionnumber", versionnumber)
+
 
 # Load QML file
 qml_file = QUrl("understoryui.qml")
