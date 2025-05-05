@@ -506,45 +506,76 @@ Window {
 
 			GridLayout {
 				id: sceneEditorButtons
-				anchors.right: parent.right
-				anchors.rightMargin: 14
-				anchors.bottom: parent.bottom
-				anchors.bottomMargin: 14
-				columns: 2
-				rowSpacing: 4; columnSpacing: 4
+				anchors.right: parent.right;   anchors.rightMargin: 14
+				anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+				columns: 2; rowSpacing: 4; columnSpacing: 4
 			
 				Repeater {
-					model: [ "scene script", "settings", "save scene", "close scene" ]
-					delegate: Rectangle {
-						width: 138; height: 28
-						radius: height/2
-						color: "transparent"
-						border.color: "white"; border.width: 2
+					model: [ "scene script"
+						   , "scene settings"
+						   , "save scene"
+						   , "close scene"
+						   ]
 			
+					delegate: Item {
+						id: btn
+						width: 138; height: 28
+					
+						property bool hovered: false
+						property bool togglable: modelData === "scene script" || modelData === "scene settings"
+						property bool toggled: togglable && buttonGrid.selectedTool === modelData
+						property bool pressed: false
+					
+						// background + border
+						Rectangle {
+							anchors.fill: parent
+							radius: height/2
+							color: toggled
+								   ? "white"
+								   : (btn.pressed ? "white" : "transparent")
+							border.width: 2
+							border.color: hovered ? "#80cfff" : "white"
+							Behavior on color { ColorAnimation { duration: 100 } }
+						}
+					
+						// label, recolored when toggled or pressed
 						Text {
 							anchors.centerIn: parent
 							text: modelData
-							color: "white"
 							font.pixelSize: 14
+							color: toggled
+								   ? buttonGrid.activeIconColor
+								   : (btn.pressed
+									  ? buttonGrid.activeIconColor
+									  : "white")
+							Behavior on color { ColorAnimation { duration: 100 } }
 						}
-			
+					
 						MouseArea {
 							anchors.fill: parent
+							hoverEnabled: true
+							onEntered: hovered = true
+							onExited:  hovered = false
+							onPressed:  btn.pressed = true
+							onReleased: btn.pressed = false
+					
 							onClicked: {
-								console.log("button", modelData, "clicked!")
-								if (modelData === "close scene"){
+								if (togglable) {
+									// toggle group behavior
+									buttonGrid.selectedTool = btn.toggled ? "" : modelData
+								} else if (modelData === "save scene") {
+									console.log("Saving scene…")
+								} else if (modelData === "close scene") {
+									console.log("Closing scene…")
 									xanimationduration = 1000
 									mainWindow.width = 960
 									mainWindow.x = x + 275
 									sceneEditor2sceneMenu.windowSizeCompleteTrigger = true
 								}
 							}
-							hoverEnabled: true
-							// you can also add hover‐state styling here
 						}
 					}
 				}
-				
 			}
 			
 			
@@ -566,7 +597,7 @@ Window {
 				Rectangle {
 					
 					id: areaSettings
-					visible: false
+					visible: buttonGrid.selectedTool === "newarea"
 					height: parent.height
 					width: parent.width
 					radius: parent.radius
@@ -578,7 +609,7 @@ Window {
 						
 						property string iconSource: "headings/area_heading.svg"
 						anchors.top: parent.top
-						anchors.topMargin: 20
+						anchors.topMargin: 25
 						anchors.left: parent.left
 						anchors.leftMargin: 20
 						
@@ -606,7 +637,7 @@ Window {
 				Rectangle {
 					
 					id: imageSettings
-					visible: false
+					visible: buttonGrid.selectedTool === "newimage"
 					height: parent.height
 					width: parent.width
 					radius: parent.radius
@@ -624,7 +655,7 @@ Window {
 						
 						Rectangle {
 							
-							height: 20
+							height: 35
 							color: "transparent"
 						
 							Image {
@@ -646,7 +677,7 @@ Window {
 				Rectangle {
 					
 					id: videoSettings
-					visible: false
+					visible: buttonGrid.selectedTool === "newvideo"
 					height: parent.height
 					width: parent.width
 					radius: parent.radius
@@ -664,7 +695,7 @@ Window {
 						
 						Rectangle {
 							
-							height: 20
+							height: 25
 							color: "transparent"
 						
 							Image {
@@ -686,7 +717,7 @@ Window {
 				Rectangle {
 					
 					id: textSettings
-					visible: false
+					visible: buttonGrid.selectedTool === "newtext"
 					height: parent.height
 					width: parent.width
 					radius: parent.radius
@@ -704,7 +735,7 @@ Window {
 						
 						Rectangle {
 							
-							height: 20
+							height: 25
 							color: "transparent"
 						
 							Image {
@@ -726,11 +757,53 @@ Window {
 				Rectangle {
 					
 					id: navigationSettings
-					visible: true
+					visible: buttonGrid.selectedTool === "navigation"
 					height: parent.height
 					width: parent.width
 					radius: parent.radius
 					color: "transparent"
+					
+					Rectangle {
+						id: navigationLayoutButton
+						anchors.centerIn: parent
+						width: 100; height: 36
+						radius: height/2
+					
+						// hover & press state
+						property bool hovered: false
+						property bool pressed: false
+					
+						// fill on press, otherwise transparent
+						color: navigationLayoutButton.pressed ? "white" : "transparent"
+						border.width: 2
+						// blue on hover, white otherwise
+						border.color: navigationLayoutButton.hovered ? "#80cfff" : "white"
+						Behavior on color       { ColorAnimation { duration: 100 } }
+						Behavior on border.color{ ColorAnimation { duration: 150 } }
+					
+						Text {
+							anchors.centerIn: parent
+							text: "layout areas"
+							// now explicitly reference the rectangle’s pressed flag
+							color: navigationLayoutButton.pressed
+								   ? buttonGrid.activeIconColor
+								   : "white"
+							Behavior on color { ColorAnimation { duration: 100 } }
+						}
+					
+						MouseArea {
+							anchors.fill: parent
+							hoverEnabled: true
+							onEntered:  navigationLayoutButton.hovered = true
+							onExited:   navigationLayoutButton.hovered = false
+							onPressed:  navigationLayoutButton.pressed = true
+							onReleased: navigationLayoutButton.pressed = false
+					
+							onClicked: {
+								console.log("layout areas clicked")
+							}
+						}
+					}
 				
 					Rectangle {
 						
@@ -865,6 +938,32 @@ Window {
 					}
 					
 					
+				}
+				
+				Rectangle {
+					
+					id: sceneSettings
+					visible: buttonGrid.selectedTool === "scene settings"
+					height: parent.height
+					width: parent.width
+					radius: parent.radius
+					color: "darkcyan"
+					border.color: "white"
+					border.width: 2
+				
+				}
+				
+				Rectangle {
+					
+					id: sceneScript
+					visible: buttonGrid.selectedTool === "scene script"
+					height: parent.height
+					width: parent.width
+					radius: parent.radius
+					color: "darkslategrey"
+					border.color: "white"
+					border.width: 2
+				
 				}
 				
 				
