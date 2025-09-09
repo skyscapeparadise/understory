@@ -223,7 +223,7 @@ Window {
                 }
 
                 Text {
-                    text: "design and developement"
+                    text: "design and development"
                     font.pixelSize: 24
                     font.bold: true
                     color: "white"
@@ -233,6 +233,14 @@ Window {
 
                 Text {
                     text: "kady everpetal"
+                    font.pixelSize: 20
+                    color: "white"
+                    wrapMode: Text.WordWrap
+                    Layout.alignment: Qt.AlignRight
+                }
+
+                Text {
+                    text: "  "
                     font.pixelSize: 20
                     color: "white"
                     wrapMode: Text.WordWrap
