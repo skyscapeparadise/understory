@@ -19,16 +19,24 @@ Releases will include all necessary packages but if you're working with the sour
 **understory** is in the very early days of developement with most of the work still ahead. Here are some of the things we'd like to be able to do with the engine (and the editor!):
 
 ○ Pre-rendered adventure games
+
 ○ Video albums
+
 ○ Kiosks/Installations
 
 # Roadmap
 
 ○ time system
+
 ○ node-based map editor
+
 ○ video cataloging and fast seeking (via concatenation)
+
 ○ entity system
+
 ○ python runtime engine
+
 ○ demo and alpha release
+
 ○ c++ runtime engine
 ○ beta release
