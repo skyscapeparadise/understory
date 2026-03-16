@@ -464,18 +464,12 @@ Window {
             y: 28
             height: 398
             width: 900
-            opacity: 0.0
+
             visible: sceneMenuButtons.selectedButton === "settings"
             clip: true
             topPadding: 20
             leftPadding: 20
             rightPadding: 20
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: 160
-                }
-            }
 
             ColumnLayout {
                 width: sceneSettingsView.availableWidth
