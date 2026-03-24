@@ -864,7 +864,7 @@ Window {
                 columnSpacing: 4
 
                 Repeater {
-                    model: ["scene script", "scene settings", "save scene", "close scene"]
+                    model: ["conditions", "variables", "timeline", "close scene"]
 
                     delegate: Item {
                         id: editorBtn
@@ -872,7 +872,7 @@ Window {
                         height: 28
 
                         property bool hovered: false
-                        property bool togglable: modelData === "scene script" || modelData === "scene settings"
+                        property bool togglable: modelData === "conditions" || modelData === "variables"
                         property bool toggled: togglable && buttonGrid.selectedTool === modelData
                         property bool pressed: false
 
@@ -912,8 +912,8 @@ Window {
                             onClicked: {
                                 if (togglable) {
                                     buttonGrid.selectedTool = editorBtn.toggled ? "" : modelData;
-                                } else if (modelData === "save scene") {
-                                    console.log("Saving scene…");
+                                } else if (modelData === "timeline") {
+                                    console.log("opening node editor...");
                                 } else if (modelData === "close scene") {
                                     console.log("Closing scene…");
                                     xanimationduration = 1000;
@@ -1324,7 +1324,7 @@ Window {
 
                 Rectangle {
                     id: sceneSettings
-                    visible: buttonGrid.selectedTool === "scene settings"
+                    visible: buttonGrid.selectedTool === "conditions"
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -1335,7 +1335,7 @@ Window {
 
                 Rectangle {
                     id: sceneScript
-                    visible: buttonGrid.selectedTool === "scene script"
+                    visible: buttonGrid.selectedTool === "variables"
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
