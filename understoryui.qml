@@ -14,6 +14,8 @@ Window {
     color: "black"
 
     property int xanimationduration: 0
+    property int yanimationduration: 0
+    property real sceneEditorEntryX: 0
 
     // animate any change to `width`
     Behavior on width {
@@ -39,6 +41,22 @@ Window {
     Behavior on x {
         NumberAnimation {
             duration: xanimationduration
+            easing.type: Easing.InOutQuad
+        }
+    }
+
+    // animate any change to `height`
+    Behavior on height {
+        NumberAnimation {
+            duration: 1000
+            easing.type: Easing.InOutQuad
+        }
+    }
+
+    // animate any change to `y`
+    Behavior on y {
+        NumberAnimation {
+            duration: yanimationduration
             easing.type: Easing.InOutQuad
         }
     }
@@ -863,6 +881,8 @@ Window {
                 rowSpacing: 4
                 columnSpacing: 4
 
+                property bool timelineOpen: false
+
                 Repeater {
                     model: ["conditions", "variables", "timeline", "close scene"]
 
@@ -873,7 +893,7 @@ Window {
 
                         property bool hovered: false
                         property bool togglable: modelData === "conditions" || modelData === "variables"
-                        property bool toggled: togglable && buttonGrid.selectedTool === modelData
+                        property bool toggled: modelData === "timeline" ? sceneEditorButtons.timelineOpen : (togglable && buttonGrid.selectedTool === modelData)
                         property bool pressed: false
 
                         Rectangle {
@@ -913,13 +933,30 @@ Window {
                                 if (togglable) {
                                     buttonGrid.selectedTool = editorBtn.toggled ? "" : modelData;
                                 } else if (modelData === "timeline") {
-                                    console.log("opening node editor...");
+                                    var opening = !sceneEditorButtons.timelineOpen;
+                                    sceneEditorButtons.timelineOpen = opening;
+                                    yanimationduration = 1000;
+                                    if (opening) {
+                                        mainWindow.height = mainWindow.height + 300;
+                                        mainWindow.y = mainWindow.y - 150;
+                                    } else {
+                                        mainWindow.height = mainWindow.height - 300;
+                                        mainWindow.y = mainWindow.y + 150;
+                                    }
                                 } else if (modelData === "close scene") {
                                     console.log("Closing scene…");
-                                    xanimationduration = 1000;
-                                    mainWindow.width = 960;
-                                    mainWindow.x = x + 275;
-                                    sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
+                                    if (sceneEditorButtons.timelineOpen) {
+                                        sceneEditorButtons.timelineOpen = false;
+                                        yanimationduration = 1000;
+                                        mainWindow.height = 540;
+                                        mainWindow.y = mainWindow.y + 150;
+                                        closeSceneTimer.start();
+                                    } else {
+                                        xanimationduration = 1000;
+                                        mainWindow.width = 960;
+                                        mainWindow.x = sceneEditorEntryX;
+                                        sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
+                                    }
                                 }
                             }
                         }
@@ -1405,6 +1442,26 @@ Window {
         }
     }
 
+    Timer {
+        id: closeSceneTimer
+        interval: 1000
+        repeat: false
+        onTriggered: {
+            xanimationduration = 1000;
+            mainWindow.width = 960;
+            mainWindow.x = sceneEditorEntryX;
+            sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
+        }
+    }
+
+    NodeWorkspace {
+        id: nodeWorkspace
+        x: 0
+        y: 540
+        width: 1365
+        height: 300
+    }
+
     Rectangle {
         id: story2sceneMenu
         width: parent.width
@@ -1494,9 +1551,10 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
+                    sceneEditorEntryX = mainWindow.x;
                     xanimationduration = 1000;
                     mainWindow.width = 1365;
-                    mainWindow.x = x - 202;
+                    mainWindow.x = mainWindow.x - 202;
                     sceneEditor.visible = true;
                     sceneMenu2sceneEditor.visible = false;
                     sceneMenu.visible = false;
