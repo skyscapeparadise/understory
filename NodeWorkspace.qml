@@ -33,7 +33,8 @@ Item {
     property real pixelsPerSecond: 60
     property bool draggingPlayhead: false
     property bool playheadHovered: false
-    property bool timelineAreaHovered: false
+    property bool timelineAreaHovered: timelineMouseArea.containsMouse || transportHoverHandler.hovered
+    onTimelineAreaHoveredChanged: if (timelineAreaHovered) root.forceActiveFocus()
 
     onPixelsPerSecondChanged: timelineCanvas.requestPaint()
 
@@ -783,6 +784,7 @@ Item {
             }
 
             MouseArea {
+                id: timelineMouseArea
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: (root.draggingPlayhead || root.playheadHovered) ? Qt.SizeHorCursor : Qt.ArrowCursor
@@ -792,13 +794,7 @@ Item {
                     return Math.abs(mouseX - playheadX) <= 8
                 }
 
-                onEntered: {
-                    root.timelineAreaHovered = true
-                    root.forceActiveFocus()
-                }
-
                 onExited: {
-                    root.timelineAreaHovered = false
                     root.playheadHovered = false
                     timelineCanvas.requestPaint()
                 }
@@ -862,12 +858,8 @@ Item {
             anchors.left: parent.left
         }
 
-        MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            z: -1
-            onEntered: { root.timelineAreaHovered = true; root.forceActiveFocus() }
-            onExited: root.timelineAreaHovered = false
+        HoverHandler {
+            id: transportHoverHandler
         }
 
         Row {
