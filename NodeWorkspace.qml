@@ -298,6 +298,7 @@ Item {
         width: parent.width
         height: parent.height - 50
         color: "#1a1a1d"
+        clip: true
         focus: true // Allows the background to take focus and defocus inputs
 
         //
