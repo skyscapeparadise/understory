@@ -101,8 +101,9 @@ Item {
             root.playheadTime += 0.016
             if (!root.draggingPlayhead) {
                 var playheadPx = root.playheadTime * root.pixelsPerSecond
-                if (playheadPx > root.timelineScrollOffset + timelineSection.width - 20) {
-                    root.timelineScrollOffset = playheadPx - timelineSection.width + 20
+                var midpoint = timelineSection.width / 2
+                if (playheadPx > root.timelineScrollOffset + midpoint) {
+                    root.timelineScrollOffset = playheadPx - midpoint
                 }
             }
             timelineCanvas.requestPaint()
