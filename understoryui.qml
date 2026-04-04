@@ -987,30 +987,16 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
-                    Item {
+                    Text {
                         id: areaSettingsHeading
-
-                        property string iconSource: "headings/area_heading.svg"
+                        text: "new area"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
                         anchors.top: parent.top
-                        anchors.topMargin: 25
+                        anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
-
-                        Rectangle {
-                            height: 20
-                            color: "transparent"
-
-                            Image {
-                                id: areaHeading
-                                x: parent.x
-                                y: parent.y
-                                height: parent.height
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                fillMode: Image.PreserveAspectFit
-                                source: areaSettingsHeading.iconSource
-                            }
-                        }
                     }
                 }
 
@@ -1022,30 +1008,16 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
-                    Item {
+                    Text {
                         id: imageSettingsHeading
-
-                        property string iconSource: "headings/image_heading.svg"
+                        text: "new image"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
                         anchors.top: parent.top
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
-
-                        Rectangle {
-                            height: 35
-                            color: "transparent"
-
-                            Image {
-                                id: imageHeading
-                                x: parent.x
-                                y: parent.y
-                                height: parent.height
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                fillMode: Image.PreserveAspectFit
-                                source: imageSettingsHeading.iconSource
-                            }
-                        }
                     }
                 }
 
@@ -1057,30 +1029,16 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
-                    Item {
+                    Text {
                         id: videoSettingsHeading
-
-                        property string iconSource: "headings/video_heading.svg"
+                        text: "new video"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
                         anchors.top: parent.top
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
-
-                        Rectangle {
-                            height: 25
-                            color: "transparent"
-
-                            Image {
-                                id: videoHeading
-                                x: parent.x
-                                y: parent.y
-                                height: parent.height
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                fillMode: Image.PreserveAspectFit
-                                source: videoSettingsHeading.iconSource
-                            }
-                        }
                     }
                 }
 
@@ -1092,30 +1050,100 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
-                    Item {
+                    Text {
                         id: textSettingsHeading
-
-                        property string iconSource: "headings/text_heading.svg"
+                        text: "new text"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
                         anchors.top: parent.top
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                    }
+                }
 
-                        Rectangle {
-                            height: 25
-                            color: "transparent"
+                Rectangle {
+                    id: selectSettings
+                    visible: buttonGrid.selectedTool === "select"
+                    height: parent.height
+                    width: parent.width
+                    radius: parent.radius
+                    color: "transparent"
 
-                            Image {
-                                id: textHeading
-                                x: parent.x
-                                y: parent.y
-                                height: parent.height
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                fillMode: Image.PreserveAspectFit
-                                source: textSettingsHeading.iconSource
-                            }
-                        }
+                    Text {
+                        id: selectSettingsHeading
+                        text: "select"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
+                        anchors.top: parent.top
+                        anchors.topMargin: 20
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                    }
+                }
+
+                Rectangle {
+                    id: newlinkSettings
+                    visible: buttonGrid.selectedTool === "newlink"
+                    height: parent.height
+                    width: parent.width
+                    radius: parent.radius
+                    color: "transparent"
+
+                    Text {
+                        id: newlinkSettingsHeading
+                        text: "simulate"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
+                        anchors.top: parent.top
+                        anchors.topMargin: 20
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                    }
+                }
+
+                Rectangle {
+                    id: relayerSettings
+                    visible: buttonGrid.selectedTool === "relayer"
+                    height: parent.height
+                    width: parent.width
+                    radius: parent.radius
+                    color: "transparent"
+
+                    Text {
+                        id: relayerSettingsHeading
+                        text: "reorder"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
+                        anchors.top: parent.top
+                        anchors.topMargin: 20
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                    }
+                }
+
+                Rectangle {
+                    id: destroySettings
+                    visible: buttonGrid.selectedTool === "destroy"
+                    height: parent.height
+                    width: parent.width
+                    radius: parent.radius
+                    color: "transparent"
+
+                    Text {
+                        id: destroySettingsHeading
+                        text: "delete"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
+                        anchors.top: parent.top
+                        anchors.topMargin: 20
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
                     }
                 }
 
@@ -1368,6 +1396,18 @@ Window {
                     color: "darkcyan"
                     border.color: "white"
                     border.width: 2
+
+                    Text {
+                        id: conditionsSettingsHeading
+                        text: "scene conditions"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
+                        anchors.top: parent.top
+                        anchors.topMargin: 20
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                    }
                 }
 
                 Rectangle {
@@ -1379,6 +1419,18 @@ Window {
                     color: "darkslategrey"
                     border.color: "white"
                     border.width: 2
+
+                    Text {
+                        id: variablesSettingsHeading
+                        text: "story variables"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
+                        anchors.top: parent.top
+                        anchors.topMargin: 20
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                    }
                 }
             }
 
