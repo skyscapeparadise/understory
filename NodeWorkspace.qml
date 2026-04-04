@@ -33,6 +33,16 @@ Item {
     property real pixelsPerSecond: 60
     property bool draggingPlayhead: false
     property bool playheadHovered: false
+    property bool timelineAreaHovered: false
+
+    onPixelsPerSecondChanged: timelineCanvas.requestPaint()
+
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_Space && root.timelineAreaHovered) {
+            root.isPlaying = !root.isPlaying
+            event.accepted = true
+        }
+    }
 
     onZoomChanged: requestRedraw()
     onPanXChanged: requestRedraw()
@@ -754,50 +764,75 @@ Item {
             }
         }
 
-        MouseArea {
+        PinchArea {
             anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: (root.draggingPlayhead || root.playheadHovered) ? Qt.SizeHorCursor : Qt.ArrowCursor
 
-            function nearPlayhead(mouseX) {
-                var playheadX = root.playheadTime * root.pixelsPerSecond - root.timelineScrollOffset
-                return Math.abs(mouseX - playheadX) <= 8
+            property real startPps: root.pixelsPerSecond
+            property real startOffset: root.timelineScrollOffset
+
+            onPinchStarted: {
+                startPps = root.pixelsPerSecond
+                startOffset = root.timelineScrollOffset
             }
 
-            onPressed: mouse => {
-                if (nearPlayhead(mouse.x)) {
-                    root.draggingPlayhead = true
-                    mouse.accepted = true
+            onPinchUpdated: pinch => {
+                var newPps = Math.max(10, Math.min(startPps * pinch.scale, 500))
+                var centerTime = (pinch.center.x + startOffset) / startPps
+                root.pixelsPerSecond = newPps
+                root.timelineScrollOffset = Math.max(0, centerTime * newPps - pinch.center.x)
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: (root.draggingPlayhead || root.playheadHovered) ? Qt.SizeHorCursor : Qt.ArrowCursor
+
+                function nearPlayhead(mouseX) {
+                    var playheadX = root.playheadTime * root.pixelsPerSecond - root.timelineScrollOffset
+                    return Math.abs(mouseX - playheadX) <= 8
                 }
-            }
 
-            onPositionChanged: mouse => {
-                if (root.draggingPlayhead) {
-                    root.playheadTime = Math.max(0, (mouse.x + root.timelineScrollOffset) / root.pixelsPerSecond)
+                onEntered: {
+                    root.timelineAreaHovered = true
+                    root.forceActiveFocus()
+                }
+
+                onExited: {
+                    root.timelineAreaHovered = false
+                    root.playheadHovered = false
                     timelineCanvas.requestPaint()
-                } else {
-                    root.playheadHovered = nearPlayhead(mouse.x)
+                }
+
+                onPressed: mouse => {
+                    if (nearPlayhead(mouse.x)) {
+                        root.draggingPlayhead = true
+                        mouse.accepted = true
+                    }
+                }
+
+                onPositionChanged: mouse => {
+                    if (root.draggingPlayhead) {
+                        root.playheadTime = Math.max(0, (mouse.x + root.timelineScrollOffset) / root.pixelsPerSecond)
+                        timelineCanvas.requestPaint()
+                    } else {
+                        root.playheadHovered = nearPlayhead(mouse.x)
+                        timelineCanvas.requestPaint()
+                    }
+                }
+
+                onReleased: {
+                    root.draggingPlayhead = false
+                }
+
+                onWheel: wheel => {
+                    if (wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0) {
+                        root.timelineScrollOffset = Math.max(0, root.timelineScrollOffset - wheel.pixelDelta.x)
+                    } else {
+                        root.timelineScrollOffset = Math.max(0, root.timelineScrollOffset - wheel.angleDelta.x / 2)
+                    }
                     timelineCanvas.requestPaint()
+                    wheel.accepted = true
                 }
-            }
-
-            onReleased: {
-                root.draggingPlayhead = false
-            }
-
-            onExited: {
-                root.playheadHovered = false
-                timelineCanvas.requestPaint()
-            }
-
-            onWheel: wheel => {
-                if (wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0) {
-                    root.timelineScrollOffset = Math.max(0, root.timelineScrollOffset - wheel.pixelDelta.x)
-                } else {
-                    root.timelineScrollOffset = Math.max(0, root.timelineScrollOffset - wheel.angleDelta.x / 2)
-                }
-                timelineCanvas.requestPaint()
-                wheel.accepted = true
             }
         }
     }
@@ -825,6 +860,14 @@ Item {
             height: parent.height
             color: "#333"
             anchors.left: parent.left
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            z: -1
+            onEntered: { root.timelineAreaHovered = true; root.forceActiveFocus() }
+            onExited: root.timelineAreaHovered = false
         }
 
         Row {
