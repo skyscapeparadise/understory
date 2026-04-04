@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Qt5Compat.GraphicalEffects
 
 Item {
     id: root
@@ -25,6 +26,12 @@ Item {
     property real panX: 0.0
     property real panY: 0.0
 
+    // Playback and timeline state
+    property real playheadTime: 0
+    property real timelineScrollOffset: 0
+    property bool isPlaying: false
+    property real pixelsPerSecond: 60
+
     onZoomChanged: requestRedraw()
     onPanXChanged: requestRedraw()
     onPanYChanged: requestRedraw()
@@ -39,6 +46,21 @@ Item {
     property int wobblingLinkIndex: -1
     property real wobblePhase: 0.0
     property real wobbleAmplitude: 0.0
+
+    Timer {
+        id: playbackTimer
+        interval: 16
+        repeat: true
+        running: root.isPlaying
+        onTriggered: {
+            root.playheadTime += 0.016
+            var playheadPx = root.playheadTime * root.pixelsPerSecond
+            if (playheadPx > root.timelineScrollOffset + timelineSection.width - 20) {
+                root.timelineScrollOffset = playheadPx - timelineSection.width + 20
+            }
+            timelineCanvas.requestPaint()
+        }
+    }
 
     Timer {
         id: wobbleTimer
@@ -267,7 +289,10 @@ Item {
 
     Rectangle {
         id: stage
-        anchors.fill: parent
+        x: 0
+        y: 0
+        width: parent.width
+        height: parent.height - 50
         color: "#1a1a1d"
         focus: true // Allows the background to take focus and defocus inputs
 
@@ -530,6 +555,219 @@ Item {
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
                 text: "Pinch or Ctrl+Scroll: zoom in/out\n2-Finger / Mid-Click Drag: pan\nDouble-click empty space: new node\nDrag node (center): move\nDrag node (edge): connect\nDouble-click node: rename or color\nRight-click & hold link: delete"
+            }
+        }
+    }
+
+    //
+    // Timeline section
+    //
+    Rectangle {
+        id: timelineSection
+        x: 0
+        y: parent.height - 50
+        width: parent.width - 240
+        height: 50
+        color: "#141417"
+        clip: true
+
+        Rectangle {
+            width: parent.width
+            height: 1
+            color: "#333"
+            anchors.top: parent.top
+        }
+
+        Canvas {
+            id: timelineCanvas
+            anchors.fill: parent
+            antialiasing: true
+
+            function formatTime(totalSeconds) {
+                var s = Math.floor(totalSeconds)
+                var m = Math.floor(s / 60)
+                var sec = s % 60
+                return m + ":" + (sec < 10 ? "0" + sec : sec)
+            }
+
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+
+                var pps = root.pixelsPerSecond
+                var offset = root.timelineScrollOffset
+                var w = width
+                var h = height
+
+                var startTime = offset / pps
+                var endTime = (offset + w) / pps + 1
+                var firstSecond = Math.floor(Math.max(0, startTime))
+
+                for (var s = firstSecond; s <= endTime; s++) {
+                    var x = s * pps - offset
+
+                    if (s % 10 === 0) {
+                        ctx.beginPath()
+                        ctx.moveTo(x, h)
+                        ctx.lineTo(x, h - 12)
+                        ctx.strokeStyle = "#777"
+                        ctx.lineWidth = 1.5
+                        ctx.stroke()
+
+                        ctx.fillStyle = "#999"
+                        ctx.font = "10px sans-serif"
+                        ctx.textAlign = "left"
+                        ctx.fillText(timelineCanvas.formatTime(s), x + 3, h - 14)
+                    } else if (s % 5 === 0) {
+                        ctx.beginPath()
+                        ctx.moveTo(x, h)
+                        ctx.lineTo(x, h - 7)
+                        ctx.strokeStyle = "#555"
+                        ctx.lineWidth = 1
+                        ctx.stroke()
+                    } else {
+                        ctx.beginPath()
+                        ctx.moveTo(x, h)
+                        ctx.lineTo(x, h - 4)
+                        ctx.strokeStyle = "#444"
+                        ctx.lineWidth = 1
+                        ctx.stroke()
+                    }
+                }
+
+                // Playhead
+                var playheadX = root.playheadTime * pps - offset
+                if (playheadX >= 0 && playheadX <= w) {
+                    ctx.beginPath()
+                    ctx.moveTo(playheadX, 0)
+                    ctx.lineTo(playheadX, h)
+                    ctx.strokeStyle = "#ff4444"
+                    ctx.lineWidth = 2
+                    ctx.stroke()
+
+                    ctx.beginPath()
+                    ctx.moveTo(playheadX - 6, 0)
+                    ctx.lineTo(playheadX + 6, 0)
+                    ctx.lineTo(playheadX, 10)
+                    ctx.closePath()
+                    ctx.fillStyle = "#ff4444"
+                    ctx.fill()
+                }
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onWheel: wheel => {
+                if (wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0) {
+                    root.timelineScrollOffset = Math.max(0, root.timelineScrollOffset - wheel.pixelDelta.x)
+                } else {
+                    root.timelineScrollOffset = Math.max(0, root.timelineScrollOffset - wheel.angleDelta.x / 2)
+                }
+                timelineCanvas.requestPaint()
+                wheel.accepted = true
+            }
+        }
+    }
+
+    //
+    // Transport controls
+    //
+    Rectangle {
+        id: transportControls
+        x: parent.width - 240
+        y: parent.height - 50
+        width: 240
+        height: 50
+        color: "#141417"
+
+        Rectangle {
+            width: parent.width
+            height: 1
+            color: "#333"
+            anchors.top: parent.top
+        }
+
+        Rectangle {
+            width: 1
+            height: parent.height
+            color: "#333"
+            anchors.left: parent.left
+        }
+
+        Row {
+            anchors.centerIn: parent
+            spacing: 8
+
+            Repeater {
+                model: ["previous", "stop", "play", "pause", "next"]
+
+                delegate: Item {
+                    id: transportBtn
+                    width: 36
+                    height: 36
+
+                    property bool hovered: false
+                    property bool isDummy: modelData === "previous" || modelData === "next"
+                    property bool toggled: {
+                        if (modelData === "play") return root.isPlaying
+                        if (modelData === "pause") return !root.isPlaying && root.playheadTime > 0
+                        return false
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 12
+                        color: transportBtn.toggled ? "white" : "transparent"
+                        border.width: 2
+                        border.color: transportBtn.hovered ? "#80cfff" : "white"
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150 }
+                        }
+                        Behavior on color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
+
+                    Image {
+                        id: transportIcon
+                        anchors.centerIn: parent
+                        width: 22
+                        height: 22
+                        fillMode: Image.PreserveAspectFit
+                        source: "icons/" + modelData + ".svg"
+                        visible: false
+                    }
+
+                    ColorOverlay {
+                        anchors.fill: transportIcon
+                        source: transportIcon
+                        color: transportBtn.toggled ? "#477B78" : (transportBtn.isDummy ? "#555555" : "white")
+                        Behavior on color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: transportBtn.hovered = true
+                        onExited: transportBtn.hovered = false
+                        onClicked: {
+                            if (modelData === "play") {
+                                root.isPlaying = true
+                            } else if (modelData === "pause") {
+                                root.isPlaying = false
+                            } else if (modelData === "stop") {
+                                root.isPlaying = false
+                                root.playheadTime = 0
+                                root.timelineScrollOffset = 0
+                                timelineCanvas.requestPaint()
+                            }
+                            // previous and next are dummy buttons — no action yet
+                        }
+                    }
+                }
             }
         }
     }
