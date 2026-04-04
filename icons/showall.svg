@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Corner brackets representing the viewport frame -->
+  <path d="M6,18 L6,10 Q6,6 10,6 L18,6" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M46,6 L54,6 Q58,6 58,10 L58,18" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M6,46 L6,54 Q6,58 10,58 L18,58" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M46,58 L54,58 Q58,58 58,54 L58,46" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Abstract nodes (staggered y positions, all elongated) -->
+  <rect x="12" y="12" width="16" height="9" rx="4.5" fill="white"/>
+  <rect x="35" y="22" width="16" height="9" rx="4.5" fill="white"/>
+  <rect x="18" y="43" width="22" height="9" rx="4.5" fill="white"/>
+
+  <!-- Connection lines between nodes -->
+  <line x1="22" y1="21" x2="29" y2="43" stroke="white" stroke-width="1.5" opacity="0.5"/>
+  <line x1="43" y1="31" x2="35" y2="43" stroke="white" stroke-width="1.5" opacity="0.5"/>
+</svg>

@@ -49,6 +49,49 @@ Item {
     property real wobblePhase: 0.0
     property real wobbleAmplitude: 0.0
 
+    function showAll() {
+        if (nodesModel.count === 0) return
+
+        var minX = Infinity, maxX = -Infinity
+        var minY = Infinity, maxY = -Infinity
+
+        for (var i = 0; i < nodesModel.count; i++) {
+            var n = nodesModel.get(i)
+            minX = Math.min(minX, n.x)
+            maxX = Math.max(maxX, n.x)
+            minY = Math.min(minY, n.y)
+            maxY = Math.max(maxY, n.y)
+        }
+
+        var margin = 60
+        var contentW = (maxX - minX) + margin * 2
+        var contentH = (maxY - minY) + margin * 2
+        var sw = stage.width
+        var sh = stage.height
+
+        var targetZoom
+        if (nodesModel.count === 1 || contentW <= margin * 2 || contentH <= margin * 2) {
+            targetZoom = 1.0
+        } else {
+            targetZoom = Math.min(sw / contentW, sh / contentH)
+            targetZoom = Math.max(0.1, Math.min(targetZoom, 10.0))
+        }
+
+        var cx = (minX + maxX) / 2
+        var cy = (minY + maxY) / 2
+        zoomAnim.to = targetZoom
+        panXAnim.to = sw / 2 - cx * targetZoom
+        panYAnim.to = sh / 2 - cy * targetZoom
+        showAllAnimation.start()
+    }
+
+    ParallelAnimation {
+        id: showAllAnimation
+        NumberAnimation { id: zoomAnim; target: root; property: "zoom"; duration: 380; easing.type: Easing.InOutCubic }
+        NumberAnimation { id: panXAnim; target: root; property: "panX"; duration: 380; easing.type: Easing.InOutCubic }
+        NumberAnimation { id: panYAnim; target: root; property: "panY"; duration: 380; easing.type: Easing.InOutCubic }
+    }
+
     Timer {
         id: playbackTimer
         interval: 16
@@ -560,6 +603,53 @@ Item {
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
                 text: "Pinch or Ctrl+Scroll: zoom in/out\n2-Finger / Mid-Click Drag: pan\nDouble-click empty space: new node\nDrag node (center): move\nDrag node (edge): connect\nDouble-click node: rename or color\nRight-click & hold link: delete"
+            }
+        }
+
+        Item {
+            id: showAllBtn
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 8
+            width: 36
+            height: 36
+            z: 10
+
+            property bool hovered: false
+
+            Rectangle {
+                anchors.fill: parent
+                radius: 12
+                color: "transparent"
+                border.width: 2
+                border.color: showAllBtn.hovered ? "#80cfff" : "white"
+                Behavior on border.color {
+                    ColorAnimation { duration: 150 }
+                }
+            }
+
+            Image {
+                id: showAllIcon
+                anchors.centerIn: parent
+                width: 22
+                height: 22
+                fillMode: Image.PreserveAspectFit
+                source: "icons/showall.svg"
+                visible: false
+            }
+
+            ColorOverlay {
+                anchors.fill: showAllIcon
+                source: showAllIcon
+                color: "white"
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onEntered: showAllBtn.hovered = true
+                onExited: showAllBtn.hovered = false
+                onClicked: root.showAll()
             }
         }
     }
