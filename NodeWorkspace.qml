@@ -31,6 +31,8 @@ Item {
     property real timelineScrollOffset: 0
     property bool isPlaying: false
     property real pixelsPerSecond: 60
+    property bool draggingPlayhead: false
+    property bool playheadHovered: false
 
     onZoomChanged: requestRedraw()
     onPanXChanged: requestRedraw()
@@ -54,9 +56,11 @@ Item {
         running: root.isPlaying
         onTriggered: {
             root.playheadTime += 0.016
-            var playheadPx = root.playheadTime * root.pixelsPerSecond
-            if (playheadPx > root.timelineScrollOffset + timelineSection.width - 20) {
-                root.timelineScrollOffset = playheadPx - timelineSection.width + 20
+            if (!root.draggingPlayhead) {
+                var playheadPx = root.playheadTime * root.pixelsPerSecond
+                if (playheadPx > root.timelineScrollOffset + timelineSection.width - 20) {
+                    root.timelineScrollOffset = playheadPx - timelineSection.width + 20
+                }
             }
             timelineCanvas.requestPaint()
         }
@@ -638,19 +642,21 @@ Item {
                 // Playhead
                 var playheadX = root.playheadTime * pps - offset
                 if (playheadX >= 0 && playheadX <= w) {
+                    var active = root.draggingPlayhead || root.playheadHovered
                     ctx.beginPath()
                     ctx.moveTo(playheadX, 0)
                     ctx.lineTo(playheadX, h)
-                    ctx.strokeStyle = "#ff4444"
-                    ctx.lineWidth = 2
+                    ctx.strokeStyle = active ? "#ff6666" : "#ff4444"
+                    ctx.lineWidth = active ? 2.5 : 2
                     ctx.stroke()
 
+                    var tipW = active ? 8 : 6
                     ctx.beginPath()
-                    ctx.moveTo(playheadX - 6, 0)
-                    ctx.lineTo(playheadX + 6, 0)
-                    ctx.lineTo(playheadX, 10)
+                    ctx.moveTo(playheadX - tipW, 0)
+                    ctx.lineTo(playheadX + tipW, 0)
+                    ctx.lineTo(playheadX, tipW + 4)
                     ctx.closePath()
-                    ctx.fillStyle = "#ff4444"
+                    ctx.fillStyle = active ? "#ff6666" : "#ff4444"
                     ctx.fill()
                 }
             }
@@ -658,6 +664,40 @@ Item {
 
         MouseArea {
             anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: (root.draggingPlayhead || root.playheadHovered) ? Qt.SizeHorCursor : Qt.ArrowCursor
+
+            function nearPlayhead(mouseX) {
+                var playheadX = root.playheadTime * root.pixelsPerSecond - root.timelineScrollOffset
+                return Math.abs(mouseX - playheadX) <= 8
+            }
+
+            onPressed: mouse => {
+                if (nearPlayhead(mouse.x)) {
+                    root.draggingPlayhead = true
+                    mouse.accepted = true
+                }
+            }
+
+            onPositionChanged: mouse => {
+                if (root.draggingPlayhead) {
+                    root.playheadTime = Math.max(0, (mouse.x + root.timelineScrollOffset) / root.pixelsPerSecond)
+                    timelineCanvas.requestPaint()
+                } else {
+                    root.playheadHovered = nearPlayhead(mouse.x)
+                    timelineCanvas.requestPaint()
+                }
+            }
+
+            onReleased: {
+                root.draggingPlayhead = false
+            }
+
+            onExited: {
+                root.playheadHovered = false
+                timelineCanvas.requestPaint()
+            }
+
             onWheel: wheel => {
                 if (wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0) {
                     root.timelineScrollOffset = Math.max(0, root.timelineScrollOffset - wheel.pixelDelta.x)
