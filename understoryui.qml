@@ -1432,6 +1432,82 @@ Window {
                         anchors.leftMargin: 20
                     }
                 }
+
+                Rectangle {
+                    id: sceneNameSettings
+                    visible: buttonGrid.selectedTool === ""
+                    height: parent.height
+                    width: parent.width
+                    radius: parent.radius
+                    color: "transparent"
+
+                    // Measures text at full 48pt so we can compute scale without circular binding
+                    Text {
+                        id: sceneNameMeasurer
+                        text: sceneNameInput.text
+                        font.pixelSize: 48
+                        font.bold: true
+                        visible: false
+                    }
+
+                    property real targetFontSize: {
+                        var available = width - 40
+                        if (sceneNameMeasurer.contentWidth <= 0 || sceneNameMeasurer.contentWidth <= available)
+                            return 48
+                        return Math.max(12, 48 * available / sceneNameMeasurer.contentWidth)
+                    }
+
+                    property real computedFontSize: targetFontSize
+
+                    Behavior on computedFontSize {
+                        NumberAnimation { duration: 120; easing.type: Easing.OutQuad }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        z: -1
+                        onClicked: sceneNameInput.focus = false
+                    }
+
+                    TextInput {
+                        id: sceneNameInput
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 20
+                        anchors.bottom: sceneNameLine.top
+                        anchors.bottomMargin: 2
+                        text: "scene one"
+                        color: "white"
+                        font.bold: true
+                        font.pixelSize: sceneNameSettings.computedFontSize
+                        selectByMouse: true
+                        clip: true
+                        Keys.onReturnPressed: focus = false
+                        Keys.onEscapePressed: focus = false
+                    }
+
+                    Rectangle {
+                        id: sceneNameLine
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 20
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 32
+                        height: 1
+                        color: "white"
+                    }
+
+                    Text {
+                        anchors.top: sceneNameLine.bottom
+                        anchors.topMargin: 5
+                        anchors.left: sceneNameLine.left
+                        text: "scene name"
+                        font.pixelSize: 14
+                        color: "white"
+                    }
+                }
             }
 
             Item {
