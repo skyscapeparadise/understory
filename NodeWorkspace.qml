@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Dialogs
 import Qt5Compat.GraphicalEffects
 
 Item {
@@ -359,6 +361,7 @@ Item {
         clip: true
 
         property string activeTab: "characters"
+        property int activeDialogIndex: -1
 
         // Right border divider
         Rectangle {
@@ -409,6 +412,7 @@ Item {
         }
 
         Rectangle {
+            id: tabSeparator
             anchors.top: tabBar.bottom
             anchors.left: parent.left
             anchors.right: parent.right
@@ -416,15 +420,439 @@ Item {
             color: "#2a2a30"
         }
 
+        ListModel { id: charactersModel }
+        ListModel { id: soundsModel }
+
+        FileDialog {
+            id: soundFileDialog
+            title: "Select audio file"
+            nameFilters: ["Audio files (*.mp3 *.wav *.ogg *.flac *.aac *.m4a *.opus *.wma)"]
+            onAccepted: {
+                if (leftPanel.activeDialogIndex >= 0)
+                    soundsModel.setProperty(leftPanel.activeDialogIndex, "filePath", selectedFile.toString())
+            }
+        }
+
         Text {
+            id: leftPanelHeading
             text: leftPanel.activeTab
             font.pixelSize: 24
             font.bold: true
             color: "white"
-            anchors.top: tabBar.bottom
+            anchors.top: tabSeparator.bottom
             anchors.topMargin: 20
             anchors.left: parent.left
             anchors.leftMargin: 20
+        }
+
+        //
+        // Characters list
+        //
+        ScrollView {
+            id: charsScrollView
+            visible: leftPanel.activeTab === "characters"
+            anchors.top: leftPanelHeading.bottom
+            anchors.topMargin: 10
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            anchors.bottomMargin: 8
+            clip: true
+
+            Column {
+                width: charsScrollView.availableWidth
+                spacing: 4
+
+                Repeater {
+                    model: charactersModel
+
+                    delegate: Item {
+                        id: charDelegate
+                        width: parent.width
+                        height: 26
+                        property int idx: index
+                        property bool on: model.enabled
+
+                        RowLayout {
+                            anchors.fill: parent
+                            spacing: 4
+
+                            // Toggle icon button
+                            Item {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 4
+                                    color: "transparent"
+                                    border.color: charDelegate.on ? "white" : "#3a3a3a"
+                                    border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+
+                                    Image {
+                                        id: charIconImg
+                                        anchors.centerIn: parent
+                                        width: 16; height: 16
+                                        source: "icons/character.svg"
+                                        fillMode: Image.PreserveAspectFit
+                                        visible: false
+                                    }
+                                    ColorOverlay {
+                                        anchors.fill: charIconImg
+                                        source: charIconImg
+                                        color: charDelegate.on ? "white" : "#555"
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: charactersModel.setProperty(charDelegate.idx, "enabled", !model.enabled)
+                                    }
+                                }
+                            }
+
+                            // Name field
+                            Rectangle {
+                                Layout.preferredWidth: 90
+                                Layout.preferredHeight: 26
+                                color: "transparent"
+                                border.color: charDelegate.on ? "white" : "#3a3a3a"
+                                border.width: 1
+                                radius: 4
+                                Behavior on border.color { ColorAnimation { duration: 100 } }
+
+                                TextInput {
+                                    id: charNameInput
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    color: charDelegate.on ? "white" : "#666"
+                                    font.pixelSize: 11
+                                    clip: true
+                                    selectByMouse: true
+                                    text: model.charName
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: focus = false
+                                    onEditingFinished: charactersModel.setProperty(charDelegate.idx, "charName", text)
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                }
+                                Text {
+                                    text: "name"
+                                    color: charDelegate.on ? "#60ffffff" : "#44666666"
+                                    font.pixelSize: 11
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: charNameInput.text === "" && !charNameInput.activeFocus
+                                }
+                            }
+
+                            // Role radio buttons
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 26
+
+                                Row {
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 8
+
+                                    Item {
+                                        width: performCircle.width + 4 + performLabel.implicitWidth
+                                        height: 26
+
+                                        Rectangle {
+                                            id: performCircle
+                                            width: 10; height: 10; radius: 5
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            color: "transparent"
+                                            border.color: charDelegate.on ? "white" : "#666"
+                                            border.width: 1
+                                            Behavior on border.color { ColorAnimation { duration: 100 } }
+                                            Rectangle {
+                                                anchors.centerIn: parent
+                                                width: 6; height: 6; radius: 3
+                                                color: charDelegate.on ? "white" : "#666"
+                                                visible: model.charRole === "perform"
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                            }
+                                        }
+                                        Text {
+                                            id: performLabel
+                                            text: "perform"
+                                            x: 14
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            color: charDelegate.on ? "white" : "#666"
+                                            font.pixelSize: 11
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: charactersModel.setProperty(charDelegate.idx, "charRole", "perform")
+                                        }
+                                    }
+
+                                    Item {
+                                        width: wildCircle.width + 4 + wildLabel.implicitWidth
+                                        height: 26
+
+                                        Rectangle {
+                                            id: wildCircle
+                                            width: 10; height: 10; radius: 5
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            color: "transparent"
+                                            border.color: charDelegate.on ? "white" : "#666"
+                                            border.width: 1
+                                            Behavior on border.color { ColorAnimation { duration: 100 } }
+                                            Rectangle {
+                                                anchors.centerIn: parent
+                                                width: 6; height: 6; radius: 3
+                                                color: charDelegate.on ? "white" : "#666"
+                                                visible: model.charRole === "wild"
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                            }
+                                        }
+                                        Text {
+                                            id: wildLabel
+                                            text: "wild"
+                                            x: 14
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            color: charDelegate.on ? "white" : "#666"
+                                            font.pixelSize: 11
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: charactersModel.setProperty(charDelegate.idx, "charRole", "wild")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Item { width: parent.width; height: 4 }
+
+                Item {
+                    width: parent.width
+                    height: 26
+                    property bool hovered: false
+
+                    Rectangle {
+                        width: 26
+                        height: 26
+                        anchors.left: parent.left
+                        anchors.leftMargin: 10
+                        radius: 4
+                        color: parent.hovered ? "white" : "transparent"
+                        border.color: "white"
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 100 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "+"
+                            font.pixelSize: 18
+                            font.bold: true
+                            color: parent.parent.hovered ? "darkslategrey" : "white"
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: parent.hovered = true
+                        onExited: parent.hovered = false
+                        onClicked: charactersModel.append({ enabled: true, charName: "", charRole: "perform" })
+                    }
+                }
+            }
+        }
+
+        //
+        // Sound list
+        //
+        ScrollView {
+            id: soundsScrollView
+            visible: leftPanel.activeTab === "sound"
+            anchors.top: leftPanelHeading.bottom
+            anchors.topMargin: 10
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            anchors.bottomMargin: 8
+            clip: true
+
+            Column {
+                width: soundsScrollView.availableWidth
+                spacing: 4
+
+                Repeater {
+                    model: soundsModel
+
+                    delegate: Item {
+                        id: soundDelegate
+                        width: parent.width
+                        height: 26
+                        property int idx: index
+                        property bool on: model.enabled
+
+                        RowLayout {
+                            anchors.fill: parent
+                            spacing: 4
+
+                            // Toggle icon button
+                            Item {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 4
+                                    color: "transparent"
+                                    border.color: soundDelegate.on ? "white" : "#3a3a3a"
+                                    border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+
+                                    Image {
+                                        id: soundIconImg
+                                        anchors.centerIn: parent
+                                        width: 16; height: 16
+                                        source: "icons/sound.svg"
+                                        fillMode: Image.PreserveAspectFit
+                                        visible: false
+                                    }
+                                    ColorOverlay {
+                                        anchors.fill: soundIconImg
+                                        source: soundIconImg
+                                        color: soundDelegate.on ? "white" : "#555"
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: soundsModel.setProperty(soundDelegate.idx, "enabled", !model.enabled)
+                                    }
+                                }
+                            }
+
+                            // Name field
+                            Rectangle {
+                                Layout.preferredWidth: 90
+                                Layout.preferredHeight: 26
+                                color: "transparent"
+                                border.color: soundDelegate.on ? "white" : "#3a3a3a"
+                                border.width: 1
+                                radius: 4
+                                Behavior on border.color { ColorAnimation { duration: 100 } }
+
+                                TextInput {
+                                    id: soundNameInput
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    color: soundDelegate.on ? "white" : "#666"
+                                    font.pixelSize: 11
+                                    clip: true
+                                    selectByMouse: true
+                                    text: model.soundName
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: focus = false
+                                    onEditingFinished: soundsModel.setProperty(soundDelegate.idx, "soundName", text)
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                }
+                                Text {
+                                    text: "name"
+                                    color: soundDelegate.on ? "#60ffffff" : "#44666666"
+                                    font.pixelSize: 11
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: soundNameInput.text === "" && !soundNameInput.activeFocus
+                                }
+                            }
+
+                            // File drop zone
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 26
+                                color: "black"
+                                radius: 4
+
+                                Image {
+                                    id: dropSoundImg
+                                    anchors.centerIn: parent
+                                    width: 16; height: 16
+                                    source: "icons/dropsound.svg"
+                                    fillMode: Image.PreserveAspectFit
+                                    visible: false
+                                }
+                                ColorOverlay {
+                                    anchors.fill: dropSoundImg
+                                    source: dropSoundImg
+                                    color: "#666"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        leftPanel.activeDialogIndex = soundDelegate.idx
+                                        soundFileDialog.open()
+                                    }
+                                }
+
+                                DropArea {
+                                    anchors.fill: parent
+                                    onDropped: drop => {
+                                        if (drop.hasUrls)
+                                            soundsModel.setProperty(soundDelegate.idx, "filePath", drop.urls[0].toString())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Item { width: parent.width; height: 4 }
+
+                Item {
+                    width: parent.width
+                    height: 26
+                    property bool hovered: false
+
+                    Rectangle {
+                        width: 26
+                        height: 26
+                        anchors.left: parent.left
+                        anchors.leftMargin: 10
+                        radius: 4
+                        color: parent.hovered ? "white" : "transparent"
+                        border.color: "white"
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 100 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "+"
+                            font.pixelSize: 18
+                            font.bold: true
+                            color: parent.parent.hovered ? "darkslategrey" : "white"
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: parent.hovered = true
+                        onExited: parent.hovered = false
+                        onClicked: soundsModel.append({ enabled: true, soundName: "", filePath: "" })
+                    }
+                }
+            }
         }
     }
 
