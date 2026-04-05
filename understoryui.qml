@@ -1812,6 +1812,7 @@ Window {
                             }
 
                             // Add a new variable to the list
+                            Item { width: parent.width; height: 4 }
                             Item {
                                 width: parent.width
                                 height: 26
@@ -1821,6 +1822,7 @@ Window {
                                     width: 26
                                     height: 26
                                     anchors.left: parent.left
+                                    anchors.leftMargin: 10
                                     radius: 4
                                     color: parent.hovered ? "white" : "transparent"
                                     border.color: "white"

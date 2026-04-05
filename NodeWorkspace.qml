@@ -358,6 +358,8 @@ Item {
         color: "#151518"
         clip: true
 
+        property string activeTab: "characters"
+
         // Right border divider
         Rectangle {
             anchors.right: parent.right
@@ -366,12 +368,60 @@ Item {
             color: "#2a2a30"
         }
 
+        // Tab bar
+        Row {
+            id: tabBar
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 36
+
+            Repeater {
+                model: ["characters", "sound"]
+                delegate: Item {
+                    width: leftPanel.width / 2
+                    height: 36
+                    property bool active: leftPanel.activeTab === modelData
+
+                    Text {
+                        text: modelData
+                        color: parent.active ? "white" : "#555"
+                        font.pixelSize: 12
+                        anchors.centerIn: parent
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        height: 2
+                        color: parent.active ? "#5DA9A4" : "transparent"
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: leftPanel.activeTab = modelData
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.top: tabBar.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 1
+            color: "#2a2a30"
+        }
+
         Text {
-            text: "characters"
+            text: leftPanel.activeTab
             font.pixelSize: 24
             font.bold: true
             color: "white"
-            anchors.top: parent.top
+            anchors.top: tabBar.bottom
             anchors.topMargin: 20
             anchors.left: parent.left
             anchors.leftMargin: 20
