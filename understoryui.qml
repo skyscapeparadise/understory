@@ -1431,6 +1431,430 @@ Window {
                         anchors.left: parent.left
                         anchors.leftMargin: 20
                     }
+
+                    // Clicking the panel background defocuses any active text field
+                    MouseArea {
+                        anchors.fill: parent
+                        z: -1
+                        onClicked: sceneScript.forceActiveFocus()
+                    }
+
+                    // Stores the list of user-defined story variables
+                    ListModel {
+                        id: variablesModel
+                    }
+
+                    // Remove unnamed variables when the user navigates away
+                    onVisibleChanged: {
+                        if (!visible) {
+                            for (var i = variablesModel.count - 1; i >= 0; i--) {
+                                if (variablesModel.get(i).varName === "")
+                                    variablesModel.remove(i)
+                            }
+                        }
+                    }
+
+                    ScrollView {
+                        id: variablesScrollView
+                        anchors.top: variablesSettingsHeading.bottom
+                        anchors.topMargin: 10
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        anchors.bottomMargin: 8
+                        clip: true
+
+                        Column {
+                            width: variablesScrollView.availableWidth
+                            spacing: 4
+
+                            Repeater {
+                                model: variablesModel
+                                delegate: Item {
+                                    width: parent.width
+                                    height: 26
+
+                                    // Capture the Repeater index so it isn't shadowed by
+                                    // signal parameters also named index
+                                    property int delegateIndex: index
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        spacing: 4
+
+                                        // Type selector — square icon button
+                                        // truefalsevariable.svg → stored as boolean
+                                        // numbervariable.svg    → stored as float
+                                        // textvariable.svg      → stored as string
+                                        Item {
+                                            Layout.preferredWidth: 26
+                                            Layout.preferredHeight: 26
+
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: 4
+                                                color: "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+
+                                                Image {
+                                                    anchors.centerIn: parent
+                                                    width: 16
+                                                    height: 16
+                                                    source: {
+                                                        if (varType === "true or false") return "icons/truefalsevariable.svg"
+                                                        if (varType === "number") return "icons/numbervariable.svg"
+                                                        return "icons/textvariable.svg"
+                                                    }
+                                                    fillMode: Image.PreserveAspectFit
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: typePickerPopup.open()
+                                                }
+                                            }
+
+                                            // Type picker popup — padding: 0 so contentItem fills
+                                            // the full declared size without any internal insets
+                                            Popup {
+                                                id: typePickerPopup
+                                                y: -height - 4
+                                                x: 0
+                                                width: 94
+                                                height: 34
+                                                padding: 0
+                                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                                                background: Rectangle {
+                                                    color: "#162020"
+                                                    border.color: "white"
+                                                    border.width: 1
+                                                    radius: 4
+                                                }
+
+                                                contentItem: Item {
+                                                    Row {
+                                                    anchors.centerIn: parent
+                                                    spacing: 4
+
+                                                    // true or false option (boolean)
+                                                    Rectangle {
+                                                        width: 26
+                                                        height: 26
+                                                        radius: 4
+                                                        color: varType === "true or false" ? "#477B78" : "transparent"
+                                                        border.color: "white"
+                                                        border.width: 1
+                                                        Image {
+                                                            anchors.centerIn: parent
+                                                            width: 16
+                                                            height: 16
+                                                            source: "icons/truefalsevariable.svg"
+                                                            fillMode: Image.PreserveAspectFit
+                                                        }
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            onClicked: {
+                                                                variablesModel.setProperty(delegateIndex, "varType", "true or false")
+                                                                variablesModel.setProperty(delegateIndex, "varValue", "")
+                                                                numberInput.text = ""
+                                                                textValueInput.text = ""
+                                                                typePickerPopup.close()
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // number option (float)
+                                                    Rectangle {
+                                                        width: 26
+                                                        height: 26
+                                                        radius: 4
+                                                        color: varType === "number" ? "#477B78" : "transparent"
+                                                        border.color: "white"
+                                                        border.width: 1
+                                                        Image {
+                                                            anchors.centerIn: parent
+                                                            width: 16
+                                                            height: 16
+                                                            source: "icons/numbervariable.svg"
+                                                            fillMode: Image.PreserveAspectFit
+                                                        }
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            onClicked: {
+                                                                variablesModel.setProperty(delegateIndex, "varType", "number")
+                                                                variablesModel.setProperty(delegateIndex, "varValue", "")
+                                                                numberInput.text = ""
+                                                                textValueInput.text = ""
+                                                                typePickerPopup.close()
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // text option (string)
+                                                    Rectangle {
+                                                        width: 26
+                                                        height: 26
+                                                        radius: 4
+                                                        color: varType === "text" ? "#477B78" : "transparent"
+                                                        border.color: "white"
+                                                        border.width: 1
+                                                        Image {
+                                                            anchors.centerIn: parent
+                                                            width: 16
+                                                            height: 16
+                                                            source: "icons/textvariable.svg"
+                                                            fillMode: Image.PreserveAspectFit
+                                                        }
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            onClicked: {
+                                                                variablesModel.setProperty(delegateIndex, "varType", "text")
+                                                                variablesModel.setProperty(delegateIndex, "varValue", "")
+                                                                numberInput.text = ""
+                                                                textValueInput.text = ""
+                                                                typePickerPopup.close()
+                                                            }
+                                                        }
+                                                    }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Variable name field
+                                        Rectangle {
+                                            Layout.preferredWidth: 90
+                                            Layout.preferredHeight: 26
+                                            color: "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            radius: 4
+
+                                            TextInput {
+                                                id: nameInput
+                                                anchors.fill: parent
+                                                anchors.margins: 4
+                                                color: "white"
+                                                font.pixelSize: 11
+                                                clip: true
+                                                selectByMouse: true
+                                                text: varName
+                                                Keys.onReturnPressed: focus = false
+                                                Keys.onEscapePressed: focus = false
+                                                onEditingFinished: variablesModel.setProperty(delegateIndex, "varName", text)
+                                            }
+                                            Text {
+                                                text: "name"
+                                                color: "#60ffffff"
+                                                font.pixelSize: 11
+                                                anchors.left: parent.left
+                                                anchors.leftMargin: 4
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: nameInput.text === "" && !nameInput.activeFocus
+                                            }
+                                        }
+
+                                        // Value field — appearance changes based on selected type
+                                        Item {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 26
+
+                                            // number type: accepts floats only
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                visible: varType === "number"
+                                                color: "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+
+                                                TextInput {
+                                                    id: numberInput
+                                                    anchors.fill: parent
+                                                    anchors.margins: 4
+                                                    color: "white"
+                                                    font.pixelSize: 11
+                                                    clip: true
+                                                    selectByMouse: true
+                                                    validator: DoubleValidator {}
+                                                    text: varType === "number" ? varValue : ""
+                                                    Keys.onReturnPressed: focus = false
+                                                    Keys.onEscapePressed: focus = false
+                                                    onEditingFinished: variablesModel.setProperty(delegateIndex, "varValue", text)
+                                                }
+                                                Text {
+                                                    text: "0"
+                                                    color: "#60ffffff"
+                                                    font.pixelSize: 11
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    visible: numberInput.text === "" && !numberInput.activeFocus
+                                                }
+                                            }
+
+                                            // text type: plain string input
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                visible: varType === "text"
+                                                color: "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+
+                                                TextInput {
+                                                    id: textValueInput
+                                                    anchors.fill: parent
+                                                    anchors.margins: 4
+                                                    color: "white"
+                                                    font.pixelSize: 11
+                                                    clip: true
+                                                    selectByMouse: true
+                                                    text: varType === "text" ? varValue : ""
+                                                    Keys.onReturnPressed: focus = false
+                                                    Keys.onEscapePressed: focus = false
+                                                    onEditingFinished: variablesModel.setProperty(delegateIndex, "varValue", text)
+                                                }
+                                                Text {
+                                                    text: "value"
+                                                    color: "#60ffffff"
+                                                    font.pixelSize: 11
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    visible: textValueInput.text === "" && !textValueInput.activeFocus
+                                                }
+                                            }
+
+                                            // true or false type: toggleable radio buttons
+                                            Row {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: varType === "true or false"
+                                                spacing: 8
+
+                                                // "true" radio option
+                                                Row {
+                                                    spacing: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+
+                                                    Rectangle {
+                                                        width: 12
+                                                        height: 12
+                                                        radius: 6
+                                                        border.color: "white"
+                                                        border.width: 1
+                                                        color: "transparent"
+                                                        anchors.verticalCenter: parent.verticalCenter
+
+                                                        Rectangle {
+                                                            anchors.centerIn: parent
+                                                            width: 6
+                                                            height: 6
+                                                            radius: 3
+                                                            color: "white"
+                                                            visible: varValue === "true"
+                                                        }
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            onClicked: variablesModel.setProperty(delegateIndex, "varValue", "true")
+                                                        }
+                                                    }
+                                                    Text {
+                                                        text: "true"
+                                                        color: "white"
+                                                        font.pixelSize: 11
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                }
+
+                                                // "false" radio option
+                                                Row {
+                                                    spacing: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+
+                                                    Rectangle {
+                                                        width: 12
+                                                        height: 12
+                                                        radius: 6
+                                                        border.color: "white"
+                                                        border.width: 1
+                                                        color: "transparent"
+                                                        anchors.verticalCenter: parent.verticalCenter
+
+                                                        Rectangle {
+                                                            anchors.centerIn: parent
+                                                            width: 6
+                                                            height: 6
+                                                            radius: 3
+                                                            color: "white"
+                                                            visible: varValue === "false"
+                                                        }
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            onClicked: variablesModel.setProperty(delegateIndex, "varValue", "false")
+                                                        }
+                                                    }
+                                                    Text {
+                                                        text: "false"
+                                                        color: "white"
+                                                        font.pixelSize: 11
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Add a new variable to the list
+                            Item {
+                                width: parent.width
+                                height: 26
+                                property bool hovered: false
+
+                                Rectangle {
+                                    width: 26
+                                    height: 26
+                                    anchors.left: parent.left
+                                    radius: 4
+                                    color: parent.hovered ? "white" : "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    Behavior on color {
+                                        ColorAnimation { duration: 100 }
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "+"
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                        color: parent.parent.hovered ? "darkslategrey" : "white"
+                                        Behavior on color {
+                                            ColorAnimation { duration: 100 }
+                                        }
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onEntered: parent.hovered = true
+                                    onExited: parent.hovered = false
+                                    onClicked: variablesModel.append({
+                                        varType: "text",
+                                        varName: "",
+                                        varValue: ""
+                                    })
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Rectangle {
