@@ -1115,7 +1115,7 @@ Window {
 
                     Text {
                         id: relayerSettingsHeading
-                        text: "reorder"
+                        text: "stack"
                         font.pixelSize: 24
                         font.bold: true
                         color: "white"

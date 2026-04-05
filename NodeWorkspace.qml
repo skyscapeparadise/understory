@@ -346,11 +346,43 @@ Item {
         requestRedraw();
     }
 
+    //
+    // Left panel
+    //
     Rectangle {
-        id: stage
+        id: leftPanel
         x: 0
         y: 0
-        width: parent.width
+        width: 360
+        height: parent.height - 50
+        color: "#151518"
+        clip: true
+
+        // Right border divider
+        Rectangle {
+            anchors.right: parent.right
+            width: 1
+            height: parent.height
+            color: "#2a2a30"
+        }
+
+        Text {
+            text: "characters"
+            font.pixelSize: 24
+            font.bold: true
+            color: "white"
+            anchors.top: parent.top
+            anchors.topMargin: 20
+            anchors.left: parent.left
+            anchors.leftMargin: 20
+        }
+    }
+
+    Rectangle {
+        id: stage
+        x: 360
+        y: 0
+        width: parent.width - 360
         height: parent.height - 50
         color: "#1a1a1d"
         clip: true
@@ -588,33 +620,6 @@ Item {
                 onEndLinkDrag: (sceneX, sceneY) => {
                     root.endLink(sceneX, sceneY);
                 }
-            }
-        }
-
-        //
-        // HUD / instructions
-        //
-        Rectangle {
-            id: helpBox
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.margins: 8
-            radius: 4
-            color: "#00000088"
-            border.color: "#444"
-            border.width: 1
-            z: 10
-
-            width: helpText.paintedWidth + 16
-            height: helpText.paintedHeight + 16
-
-            Text {
-                id: helpText
-                anchors.centerIn: parent
-                color: "#ddd"
-                font.pixelSize: 12
-                wrapMode: Text.WordWrap
-                text: "Pinch or Ctrl+Scroll: zoom in/out\n2-Finger / Mid-Click Drag: pan\nDouble-click empty space: new node\nDrag node (center): move\nDrag node (edge): connect\nDouble-click node: rename or color\nRight-click & hold link: delete"
             }
         }
 
