@@ -1828,10 +1828,12 @@ Item {
 
             Rectangle {
                 id: deleteBtn
-                width: 24
-                height: 24
-                radius: 12
-                color: deleteBtnArea.containsMouse ? "#cccccc" : "#ffffff"
+                width: 26
+                height: 26
+                radius: 4
+                color: deleteBtnArea.containsMouse ? "white" : "transparent"
+                border.color: "white"
+                border.width: 1
                 visible: node.isEditing
                 opacity: node.isEditing ? 1.0 : 0.0
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -1842,10 +1844,18 @@ Item {
                     }
                 }
 
+                Behavior on color {
+                    ColorAnimation { duration: 100 }
+                }
+
                 Text {
-                    text: "🗑️"
                     anchors.centerIn: parent
-                    font.pixelSize: 12
+                    anchors.verticalCenterOffset: -1
+                    text: "×"
+                    font.pixelSize: 18
+                    font.bold: true
+                    color: deleteBtnArea.containsMouse ? "darkslategrey" : "white"
+                    Behavior on color { ColorAnimation { duration: 100 } }
                 }
 
                 MouseArea {

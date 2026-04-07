@@ -313,7 +313,7 @@ Window {
             property color activeIconColor: "#477B78"
 
             Repeater {
-                model: ["new story", "update", "settings", "credits"]
+                model: ["getting started", "settings", "update", "credits"]
                 delegate: Item {
                     id: storyBtn
                     width: 138
@@ -522,7 +522,7 @@ Window {
             property color activeIconColor: "#477B78"
 
             Repeater {
-                model: ["new scene", "delete", "settings", "exit story"]
+                model: ["publish", "delete", "settings", "exit story"]
                 delegate: Item {
                     id: sceneBtn
                     width: 138
@@ -637,7 +637,7 @@ Window {
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
-                cursorShape: ["select","newlink","relayer","destroy","newarea","newtext","newimage","newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor
+                cursorShape: ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor
                 z: 999
             }
 
@@ -646,8 +646,8 @@ Window {
                 y: viewportCursorArea.mouseY
                 width: 36
                 height: 36
-                source: ["select","newlink","relayer","destroy","newarea","newtext","newimage","newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : ""
-                visible: viewportCursorArea.containsMouse && ["select","newlink","relayer","destroy","newarea","newtext","newimage","newvideo"].indexOf(buttonGrid.selectedTool) !== -1
+                source: ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : ""
+                visible: viewportCursorArea.containsMouse && ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1
                 fillMode: Image.PreserveAspectFit
                 z: 1000
             }
@@ -1472,7 +1472,7 @@ Window {
                         if (!visible) {
                             for (var i = variablesModel.count - 1; i >= 0; i--) {
                                 if (variablesModel.get(i).varName === "")
-                                    variablesModel.remove(i)
+                                    variablesModel.remove(i);
                             }
                         }
                     }
@@ -1527,9 +1527,11 @@ Window {
                                                     width: 16
                                                     height: 16
                                                     source: {
-                                                        if (varType === "true or false") return "icons/truefalsevariable.svg"
-                                                        if (varType === "number") return "icons/numbervariable.svg"
-                                                        return "icons/textvariable.svg"
+                                                        if (varType === "true or false")
+                                                            return "icons/truefalsevariable.svg";
+                                                        if (varType === "number")
+                                                            return "icons/numbervariable.svg";
+                                                        return "icons/textvariable.svg";
                                                     }
                                                     fillMode: Image.PreserveAspectFit
                                                 }
@@ -1560,89 +1562,89 @@ Window {
 
                                                 contentItem: Item {
                                                     Row {
-                                                    anchors.centerIn: parent
-                                                    spacing: 4
+                                                        anchors.centerIn: parent
+                                                        spacing: 4
 
-                                                    // true or false option (boolean)
-                                                    Rectangle {
-                                                        width: 26
-                                                        height: 26
-                                                        radius: 4
-                                                        color: varType === "true or false" ? "#477B78" : "transparent"
-                                                        border.color: "white"
-                                                        border.width: 1
-                                                        Image {
-                                                            anchors.centerIn: parent
-                                                            width: 16
-                                                            height: 16
-                                                            source: "icons/truefalsevariable.svg"
-                                                            fillMode: Image.PreserveAspectFit
-                                                        }
-                                                        MouseArea {
-                                                            anchors.fill: parent
-                                                            onClicked: {
-                                                                variablesModel.setProperty(delegateIndex, "varType", "true or false")
-                                                                variablesModel.setProperty(delegateIndex, "varValue", "")
-                                                                numberInput.text = ""
-                                                                textValueInput.text = ""
-                                                                typePickerPopup.close()
+                                                        // true or false option (boolean)
+                                                        Rectangle {
+                                                            width: 26
+                                                            height: 26
+                                                            radius: 4
+                                                            color: varType === "true or false" ? "#477B78" : "transparent"
+                                                            border.color: "white"
+                                                            border.width: 1
+                                                            Image {
+                                                                anchors.centerIn: parent
+                                                                width: 16
+                                                                height: 16
+                                                                source: "icons/truefalsevariable.svg"
+                                                                fillMode: Image.PreserveAspectFit
+                                                            }
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                onClicked: {
+                                                                    variablesModel.setProperty(delegateIndex, "varType", "true or false");
+                                                                    variablesModel.setProperty(delegateIndex, "varValue", "");
+                                                                    numberInput.text = "";
+                                                                    textValueInput.text = "";
+                                                                    typePickerPopup.close();
+                                                                }
                                                             }
                                                         }
-                                                    }
 
-                                                    // number option (float)
-                                                    Rectangle {
-                                                        width: 26
-                                                        height: 26
-                                                        radius: 4
-                                                        color: varType === "number" ? "#477B78" : "transparent"
-                                                        border.color: "white"
-                                                        border.width: 1
-                                                        Image {
-                                                            anchors.centerIn: parent
-                                                            width: 16
-                                                            height: 16
-                                                            source: "icons/numbervariable.svg"
-                                                            fillMode: Image.PreserveAspectFit
-                                                        }
-                                                        MouseArea {
-                                                            anchors.fill: parent
-                                                            onClicked: {
-                                                                variablesModel.setProperty(delegateIndex, "varType", "number")
-                                                                variablesModel.setProperty(delegateIndex, "varValue", "")
-                                                                numberInput.text = ""
-                                                                textValueInput.text = ""
-                                                                typePickerPopup.close()
+                                                        // number option (float)
+                                                        Rectangle {
+                                                            width: 26
+                                                            height: 26
+                                                            radius: 4
+                                                            color: varType === "number" ? "#477B78" : "transparent"
+                                                            border.color: "white"
+                                                            border.width: 1
+                                                            Image {
+                                                                anchors.centerIn: parent
+                                                                width: 16
+                                                                height: 16
+                                                                source: "icons/numbervariable.svg"
+                                                                fillMode: Image.PreserveAspectFit
+                                                            }
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                onClicked: {
+                                                                    variablesModel.setProperty(delegateIndex, "varType", "number");
+                                                                    variablesModel.setProperty(delegateIndex, "varValue", "");
+                                                                    numberInput.text = "";
+                                                                    textValueInput.text = "";
+                                                                    typePickerPopup.close();
+                                                                }
                                                             }
                                                         }
-                                                    }
 
-                                                    // text option (string)
-                                                    Rectangle {
-                                                        width: 26
-                                                        height: 26
-                                                        radius: 4
-                                                        color: varType === "text" ? "#477B78" : "transparent"
-                                                        border.color: "white"
-                                                        border.width: 1
-                                                        Image {
-                                                            anchors.centerIn: parent
-                                                            width: 16
-                                                            height: 16
-                                                            source: "icons/textvariable.svg"
-                                                            fillMode: Image.PreserveAspectFit
-                                                        }
-                                                        MouseArea {
-                                                            anchors.fill: parent
-                                                            onClicked: {
-                                                                variablesModel.setProperty(delegateIndex, "varType", "text")
-                                                                variablesModel.setProperty(delegateIndex, "varValue", "")
-                                                                numberInput.text = ""
-                                                                textValueInput.text = ""
-                                                                typePickerPopup.close()
+                                                        // text option (string)
+                                                        Rectangle {
+                                                            width: 26
+                                                            height: 26
+                                                            radius: 4
+                                                            color: varType === "text" ? "#477B78" : "transparent"
+                                                            border.color: "white"
+                                                            border.width: 1
+                                                            Image {
+                                                                anchors.centerIn: parent
+                                                                width: 16
+                                                                height: 16
+                                                                source: "icons/textvariable.svg"
+                                                                fillMode: Image.PreserveAspectFit
+                                                            }
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                onClicked: {
+                                                                    variablesModel.setProperty(delegateIndex, "varType", "text");
+                                                                    variablesModel.setProperty(delegateIndex, "varValue", "");
+                                                                    numberInput.text = "";
+                                                                    textValueInput.text = "";
+                                                                    typePickerPopup.close();
+                                                                }
                                                             }
                                                         }
-                                                    }
                                                     }
                                                 }
                                             }
@@ -1843,7 +1845,11 @@ Window {
                                                 color: parent.hovered ? "white" : "transparent"
                                                 border.color: "white"
                                                 border.width: 1
-                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                Behavior on color {
+                                                    ColorAnimation {
+                                                        duration: 100
+                                                    }
+                                                }
 
                                                 Text {
                                                     anchors.centerIn: parent
@@ -1852,7 +1858,11 @@ Window {
                                                     font.pixelSize: 18
                                                     font.bold: true
                                                     color: parent.parent.hovered ? "darkslategrey" : "white"
-                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                    Behavior on color {
+                                                        ColorAnimation {
+                                                            duration: 100
+                                                        }
+                                                    }
                                                 }
                                             }
 
@@ -1869,7 +1879,10 @@ Window {
                             }
 
                             // Add a new variable to the list
-                            Item { width: parent.width; height: 4 }
+                            Item {
+                                width: parent.width
+                                height: 4
+                            }
                             Item {
                                 width: parent.width
                                 height: 26
@@ -1885,7 +1898,9 @@ Window {
                                     border.color: "white"
                                     border.width: 1
                                     Behavior on color {
-                                        ColorAnimation { duration: 100 }
+                                        ColorAnimation {
+                                            duration: 100
+                                        }
                                     }
 
                                     Text {
@@ -1896,7 +1911,9 @@ Window {
                                         font.bold: true
                                         color: parent.parent.hovered ? "darkslategrey" : "white"
                                         Behavior on color {
-                                            ColorAnimation { duration: 100 }
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
                                         }
                                     }
                                 }
@@ -1935,16 +1952,19 @@ Window {
                     }
 
                     property real targetFontSize: {
-                        var available = width - 40
+                        var available = width - 40;
                         if (sceneNameMeasurer.contentWidth <= 0 || sceneNameMeasurer.contentWidth <= available)
-                            return 48
-                        return Math.max(12, 48 * available / sceneNameMeasurer.contentWidth)
+                            return 48;
+                        return Math.max(12, 48 * available / sceneNameMeasurer.contentWidth);
                     }
 
                     property real computedFontSize: targetFontSize
 
                     Behavior on computedFontSize {
-                        NumberAnimation { duration: 120; easing.type: Easing.OutQuad }
+                        NumberAnimation {
+                            duration: 120
+                            easing.type: Easing.OutQuad
+                        }
                     }
 
                     MouseArea {
