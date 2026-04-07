@@ -629,6 +629,29 @@ Window {
                 source: "file:stairwell.jpg"
             }
 
+            // Tool cursor: tracks mouse position to drive the custom cursor image below.
+            // acceptedButtons: Qt.NoButton means this area never consumes clicks —
+            // all pointer events pass through to viewport content underneath.
+            MouseArea {
+                id: viewportCursorArea
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.NoButton
+                cursorShape: ["select","newlink","relayer","destroy","newarea","newtext","newimage","newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor
+                z: 999
+            }
+
+            Image {
+                x: viewportCursorArea.mouseX
+                y: viewportCursorArea.mouseY
+                width: 36
+                height: 36
+                source: ["select","newlink","relayer","destroy","newarea","newtext","newimage","newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : ""
+                visible: viewportCursorArea.containsMouse && ["select","newlink","relayer","destroy","newarea","newtext","newimage","newvideo"].indexOf(buttonGrid.selectedTool) !== -1
+                fillMode: Image.PreserveAspectFit
+                z: 1000
+            }
+
             Rectangle {
                 id: navigationViewportOverlay
                 visible: buttonGrid.selectedTool === "navigation"
