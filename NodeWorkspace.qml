@@ -820,7 +820,7 @@ Item {
                                 Image {
                                     id: dropSoundImg
                                     anchors.centerIn: parent
-                                    width: 16; height: 16
+                                    width: 28; height: 28
                                     source: "icons/dropsound.svg"
                                     fillMode: Image.PreserveAspectFit
                                     visible: false
