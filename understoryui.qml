@@ -4,6 +4,7 @@ import QtMultimedia
 import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
+import QtQuick.Dialogs
 
 Window {
     id: mainWindow
@@ -633,6 +634,15 @@ Window {
             property real areaX2: 0
             property real areaY2: 0
 
+            property bool textBoxDragging: false
+            property real tbX1: 0
+            property real tbY1: 0
+            property real tbX2: 0
+            property real tbY2: 0
+            property int pendingFocusTextBox: -1
+
+            ListModel { id: textBoxesModel }
+
             function findHoveredArea(px, py) {
                 if (buttonGrid.selectedTool !== "select") return -1
                 for (var i = 0; i < areasModel.count; i++) {
@@ -690,6 +700,44 @@ Window {
                 }
             }
 
+            // New text box drag: click and drag to define a text box
+            MouseArea {
+                anchors.fill: parent
+                enabled: buttonGrid.selectedTool === "newtext"
+                z: 998
+
+                onPressed: {
+                    viewport.tbX1 = viewport.snapX(mouseX)
+                    viewport.tbY1 = viewport.snapY(mouseY)
+                    viewport.tbX2 = viewport.tbX1
+                    viewport.tbY2 = viewport.tbY1
+                    viewport.textBoxDragging = true
+                }
+                onPositionChanged: {
+                    viewport.tbX2 = viewport.snapX(mouseX)
+                    viewport.tbY2 = viewport.snapY(mouseY)
+                }
+                onReleased: {
+                    viewport.textBoxDragging = false
+                    var w = Math.abs(viewport.tbX2 - viewport.tbX1)
+                    var h = Math.abs(viewport.tbY2 - viewport.tbY1)
+                    if (w > 2 && h > 2) {
+                        viewport.pendingFocusTextBox = textBoxesModel.count
+                        textBoxesModel.append({
+                            x1: viewport.tbX1, y1: viewport.tbY1,
+                            x2: viewport.tbX2, y2: viewport.tbY2,
+                            family: textSettings.txtFamily,
+                            tbWeight: textSettings.txtBold ? Font.Bold : textSettings.txtWeight,
+                            size: textSettings.txtSize,
+                            italic: textSettings.txtItalic,
+                            underline: textSettings.txtUnderline,
+                            textColor: textSettings.txtColor.toString(),
+                            content: ""
+                        })
+                    }
+                }
+            }
+
             // Completed areas
             Repeater {
                 model: areasModel
@@ -718,6 +766,81 @@ Window {
                 }
             }
 
+            // Completed text boxes
+            Repeater {
+                model: textBoxesModel
+                delegate: Rectangle {
+                    x: Math.min(model.x1, model.x2)
+                    y: Math.min(model.y1, model.y2)
+                    width: Math.abs(model.x2 - model.x1)
+                    height: Math.abs(model.y2 - model.y1)
+                    color: "transparent"
+                    border.color: "white"
+                    border.width: 1
+                    z: 997
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 1
+                        color: "transparent"
+                        border.color: "black"
+                        border.width: 1
+                    }
+
+                    TextEdit {
+                        id: tbTextEdit
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        color: model.textColor
+                        font.family: model.family
+                        font.weight: model.tbWeight
+                        font.pixelSize: model.size
+                        font.italic: model.italic
+                        font.underline: model.underline
+                        wrapMode: TextEdit.Wrap
+                        clip: true
+                        onTextChanged: textBoxesModel.setProperty(index, "content", text)
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        z: 1
+                        onPressed: function(mouse) {
+                            tbTextEdit.forceActiveFocus()
+                            mouse.accepted = false
+                        }
+                    }
+
+                    Component.onCompleted: {
+                        if (index === viewport.pendingFocusTextBox) {
+                            tbTextEdit.forceActiveFocus()
+                            viewport.pendingFocusTextBox = -1
+                        }
+                    }
+                }
+            }
+
+            // In-progress text box rubber-band
+            Rectangle {
+                visible: viewport.textBoxDragging
+                x: Math.min(viewport.tbX1, viewport.tbX2)
+                y: Math.min(viewport.tbY1, viewport.tbY2)
+                width: Math.abs(viewport.tbX2 - viewport.tbX1)
+                height: Math.abs(viewport.tbY2 - viewport.tbY1)
+                color: "transparent"
+                border.color: "white"
+                border.width: 1
+                z: 998
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    color: "transparent"
+                    border.color: "black"
+                    border.width: 1
+                }
+            }
+
             // In-progress rubber-band (only visible while dragging)
             Rectangle {
                 visible: viewport.areaDragging
@@ -739,9 +862,7 @@ Window {
                 }
             }
 
-            // Tool cursor: tracks mouse position to drive the custom cursor image below.
-            // acceptedButtons: Qt.NoButton means this area never consumes clicks —
-            // all pointer events pass through to viewport content underneath.
+            // Tool cursor
             MouseArea {
                 id: viewportCursorArea
                 anchors.fill: parent
@@ -754,8 +875,8 @@ Window {
             }
 
             Image {
-                x: viewport.areaDragging ? viewport.areaX2 : viewportCursorArea.mouseX
-                y: viewport.areaDragging ? viewport.areaY2 : viewportCursorArea.mouseY
+                x: viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : viewportCursorArea.mouseX)
+                y: viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : viewportCursorArea.mouseY)
                 width: 36
                 height: 36
                 source: ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : ""
@@ -1185,6 +1306,20 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
+                    // Formatting settings applied to each new text box at creation time
+                    readonly property var fontFamilies: Qt.fontFamilies()
+                    property int txtFamilyIndex: 0
+                    property string txtFamily: fontFamilies.length > 0 ? fontFamilies[txtFamilyIndex] : ""
+                    readonly property var weightNames:  ["Thin","ExtraLight","Light","Regular","Medium","SemiBold","Bold","ExtraBold","Black"]
+                    readonly property var weightValues: [Font.Thin, Font.ExtraLight, Font.Light, Font.Normal, Font.Medium, Font.DemiBold, Font.Bold, Font.ExtraBold, Font.Black]
+                    property int txtWeightIndex: 3
+                    property int txtWeight: weightValues[txtWeightIndex]
+                    property int txtSize: 16
+                    property bool txtBold: false
+                    property bool txtItalic: false
+                    property bool txtUnderline: false
+                    property color txtColor: "white"
+
                     Text {
                         id: textSettingsHeading
                         text: "new text"
@@ -1195,6 +1330,257 @@ Window {
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                    }
+
+                    Column {
+                        anchors.top: textSettingsHeading.bottom
+                        anchors.topMargin: 12
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        spacing: 8
+
+                        // Font family
+                        ComboBox {
+                            id: familyCombo
+                            width: parent.width
+                            height: 26
+                            model: textSettings.fontFamilies
+                            currentIndex: textSettings.txtFamilyIndex
+                            onCurrentIndexChanged: textSettings.txtFamilyIndex = currentIndex
+
+                            contentItem: Text {
+                                leftPadding: 6
+                                rightPadding: 24
+                                text: familyCombo.displayText
+                                font.pixelSize: 11
+                                color: "white"
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+                            indicator: Text {
+                                x: familyCombo.width - width - 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "▾"
+                                font.pixelSize: 10
+                                color: "white"
+                            }
+                            background: Rectangle {
+                                radius: 4
+                                color: "transparent"
+                                border.color: "white"
+                                border.width: 1
+                            }
+                            popup: Popup {
+                                y: familyCombo.height + 2
+                                width: familyCombo.width
+                                height: Math.min(familyListView.contentHeight, 180)
+                                padding: 1
+                                background: Rectangle {
+                                    color: "#162020"
+                                    border.color: "white"
+                                    border.width: 1
+                                    radius: 4
+                                }
+                                contentItem: ListView {
+                                    id: familyListView
+                                    clip: true
+                                    model: familyCombo.delegateModel
+                                    currentIndex: familyCombo.currentIndex
+                                    ScrollBar.vertical: ScrollBar {}
+                                }
+                            }
+                            delegate: ItemDelegate {
+                                width: familyCombo.width
+                                height: 22
+                                padding: 0
+                                highlighted: familyCombo.highlightedIndex === index
+                                contentItem: Text {
+                                    text: modelData
+                                    font.pixelSize: 11
+                                    color: "white"
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 6
+                                }
+                                background: Rectangle {
+                                    color: familyCombo.highlightedIndex === index ? "#477B78" : "transparent"
+                                }
+                            }
+                        }
+
+                        // Weight + size
+                        RowLayout {
+                            width: parent.width
+                            spacing: 6
+
+                            ComboBox {
+                                id: weightCombo
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 26
+                                model: textSettings.weightNames
+                                currentIndex: textSettings.txtWeightIndex
+                                onCurrentIndexChanged: textSettings.txtWeightIndex = currentIndex
+
+                                contentItem: Text {
+                                    leftPadding: 6
+                                    rightPadding: 24
+                                    text: weightCombo.displayText
+                                    font.pixelSize: 11
+                                    color: "white"
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                indicator: Text {
+                                    x: weightCombo.width - width - 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"
+                                    font.pixelSize: 10
+                                    color: "white"
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                }
+                                popup: Popup {
+                                    y: weightCombo.height + 2
+                                    width: weightCombo.width
+                                    height: Math.min(weightListView.contentHeight, 220)
+                                    padding: 1
+                                    background: Rectangle {
+                                        color: "#162020"
+                                        border.color: "white"
+                                        border.width: 1
+                                        radius: 4
+                                    }
+                                    contentItem: ListView {
+                                        id: weightListView
+                                        clip: true
+                                        model: weightCombo.delegateModel
+                                        currentIndex: weightCombo.currentIndex
+                                    }
+                                }
+                                delegate: ItemDelegate {
+                                    width: weightCombo.width
+                                    height: 22
+                                    padding: 0
+                                    highlighted: weightCombo.highlightedIndex === index
+                                    contentItem: Text {
+                                        text: modelData
+                                        font.pixelSize: 11
+                                        color: "white"
+                                        verticalAlignment: Text.AlignVCenter
+                                        leftPadding: 6
+                                    }
+                                    background: Rectangle {
+                                        color: weightCombo.highlightedIndex === index ? "#477B78" : "transparent"
+                                    }
+                                }
+                            }
+
+                            // Size (px)
+                            Rectangle {
+                                Layout.preferredWidth: 52
+                                Layout.preferredHeight: 26
+                                color: "transparent"
+                                border.color: "white"
+                                border.width: 1
+                                radius: 4
+
+                                TextInput {
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    color: "white"
+                                    font.pixelSize: 11
+                                    horizontalAlignment: TextInput.AlignHCenter
+                                    text: textSettings.txtSize.toString()
+                                    validator: IntValidator { bottom: 6; top: 999 }
+                                    selectByMouse: true
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: focus = false
+                                    onEditingFinished: textSettings.txtSize = parseInt(text) || 16
+                                }
+                            }
+                        }
+
+                        // Bold / Italic / Underline + color
+                        RowLayout {
+                            width: parent.width
+                            spacing: 6
+
+                            Rectangle {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+                                radius: 4
+                                property bool on: textSettings.txtBold
+                                color: on ? "white" : "transparent"
+                                border.color: "white"; border.width: 1
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                                Text {
+                                    anchors.centerIn: parent
+                                    anchors.verticalCenterOffset: -1
+                                    text: "B"; font.pixelSize: 13; font.bold: true
+                                    color: parent.on ? "darkslategrey" : "white"
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                }
+                                MouseArea { anchors.fill: parent; onClicked: textSettings.txtBold = !textSettings.txtBold }
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+                                radius: 4
+                                property bool on: textSettings.txtItalic
+                                color: on ? "white" : "transparent"
+                                border.color: "white"; border.width: 1
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                                Text {
+                                    anchors.centerIn: parent
+                                    anchors.verticalCenterOffset: -1
+                                    text: "I"; font.pixelSize: 13; font.italic: true
+                                    color: parent.on ? "darkslategrey" : "white"
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                }
+                                MouseArea { anchors.fill: parent; onClicked: textSettings.txtItalic = !textSettings.txtItalic }
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+                                radius: 4
+                                property bool on: textSettings.txtUnderline
+                                color: on ? "white" : "transparent"
+                                border.color: "white"; border.width: 1
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                                Text {
+                                    anchors.centerIn: parent
+                                    anchors.verticalCenterOffset: -1
+                                    text: "U"; font.pixelSize: 13; font.underline: true
+                                    color: parent.on ? "darkslategrey" : "white"
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                }
+                                MouseArea { anchors.fill: parent; onClicked: textSettings.txtUnderline = !textSettings.txtUnderline }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            // Color swatch
+                            Rectangle {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+                                radius: 4
+                                color: textSettings.txtColor
+                                border.color: "white"; border.width: 1
+                                MouseArea { anchors.fill: parent; onClicked: txtColorDialog.open() }
+                            }
+                        }
+                    }
+
+                    ColorDialog {
+                        id: txtColorDialog
+                        selectedColor: textSettings.txtColor
+                        onAccepted: textSettings.txtColor = selectedColor
                     }
                 }
 
