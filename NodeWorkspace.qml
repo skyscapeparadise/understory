@@ -629,6 +629,40 @@ Item {
                                     }
                                 }
                             }
+
+                            // Delete button
+                            Item {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+                                property bool hovered: false
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 4
+                                    color: parent.hovered ? "white" : "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        anchors.verticalCenterOffset: -1
+                                        text: "×"
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                        color: parent.parent.hovered ? "darkslategrey" : "white"
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onEntered: parent.hovered = true
+                                    onExited: parent.hovered = false
+                                    onClicked: charactersModel.remove(charDelegate.idx)
+                                }
+                            }
                         }
                     }
                 }
@@ -653,6 +687,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
+                            anchors.verticalCenterOffset: -1
                             text: "+"
                             font.pixelSize: 18
                             font.bold: true
@@ -812,6 +847,40 @@ Item {
                                     }
                                 }
                             }
+
+                            // Delete button
+                            Item {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+                                property bool hovered: false
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 4
+                                    color: parent.hovered ? "white" : "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        anchors.verticalCenterOffset: -1
+                                        text: "×"
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                        color: parent.parent.hovered ? "darkslategrey" : "white"
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onEntered: parent.hovered = true
+                                    onExited: parent.hovered = false
+                                    onClicked: soundsModel.remove(soundDelegate.idx)
+                                }
+                            }
                         }
                     }
                 }
@@ -836,6 +905,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
+                            anchors.verticalCenterOffset: -1
                             text: "+"
                             font.pixelSize: 18
                             font.bold: true
