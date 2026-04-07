@@ -22,13 +22,18 @@
 import sys
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QFont, QFontDatabase
 from PySide6.QtQml import QQmlApplicationEngine
 
 versionnumber = "0.1"
 
 
 app = QGuiApplication(sys.argv)
+
+QFontDatabase.addApplicationFont("headings/MonaSans-VariableFont_wdth,wght.ttf")
+QFontDatabase.addApplicationFont("headings/MonaSans-Italic-VariableFont_wdth,wght.ttf")
+app.setFont(QFont("Mona Sans"))
+
 engine = QQmlApplicationEngine()
 
 # Set the version number as a context property

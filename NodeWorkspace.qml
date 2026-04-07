@@ -646,7 +646,7 @@ Item {
 
                                     Text {
                                         anchors.centerIn: parent
-                                        anchors.verticalCenterOffset: -1
+                                        anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                                         text: "×"
                                         font.pixelSize: 18
                                         font.bold: true
@@ -687,7 +687,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            anchors.verticalCenterOffset: -1
+                            anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                             text: "+"
                             font.pixelSize: 18
                             font.bold: true
@@ -864,7 +864,7 @@ Item {
 
                                     Text {
                                         anchors.centerIn: parent
-                                        anchors.verticalCenterOffset: -1
+                                        anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                                         text: "×"
                                         font.pixelSize: 18
                                         font.bold: true
@@ -905,7 +905,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            anchors.verticalCenterOffset: -1
+                            anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                             text: "+"
                             font.pixelSize: 18
                             font.bold: true
@@ -1850,7 +1850,7 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    anchors.verticalCenterOffset: -1
+                    anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                     text: "×"
                     font.pixelSize: 18
                     font.bold: true

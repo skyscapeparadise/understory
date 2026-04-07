@@ -14,6 +14,9 @@ Window {
     title: qsTr("understory")
     color: "black"
 
+    FontLoader { id: monaSans;       source: "headings/MonaSans-VariableFont_wdth,wght.ttf" }
+    FontLoader { id: monaSansItalic; source: "headings/MonaSans-Italic-VariableFont_wdth,wght.ttf" }
+
     property int xanimationduration: 0
     property int yanimationduration: 0
     property real sceneEditorEntryX: 0
@@ -1309,7 +1312,12 @@ Window {
                     // Formatting settings applied to each new text box at creation time
                     readonly property var fontFamilies: Qt.fontFamilies()
                     property int txtFamilyIndex: 0
-                    property string txtFamily: fontFamilies.length > 0 ? fontFamilies[txtFamilyIndex] : ""
+                    property string txtFamily: fontFamilies.length > 0 ? fontFamilies[txtFamilyIndex] : "Mona Sans"
+
+                    Component.onCompleted: {
+                        var idx = fontFamilies.indexOf("Mona Sans")
+                        if (idx !== -1) txtFamilyIndex = idx
+                    }
                     readonly property var weightNames:  ["Thin","ExtraLight","Light","Regular","Medium","SemiBold","Bold","ExtraBold","Black"]
                     readonly property var weightValues: [Font.Thin, Font.ExtraLight, Font.Light, Font.Normal, Font.Medium, Font.DemiBold, Font.Bold, Font.ExtraBold, Font.Black]
                     property int txtWeightIndex: 3
@@ -1519,7 +1527,7 @@ Window {
                                 Behavior on color { ColorAnimation { duration: 100 } }
                                 Text {
                                     anchors.centerIn: parent
-                                    anchors.verticalCenterOffset: -1
+                                    anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                                     text: "B"; font.pixelSize: 13; font.bold: true
                                     color: parent.on ? "darkslategrey" : "white"
                                     Behavior on color { ColorAnimation { duration: 100 } }
@@ -1537,7 +1545,7 @@ Window {
                                 Behavior on color { ColorAnimation { duration: 100 } }
                                 Text {
                                     anchors.centerIn: parent
-                                    anchors.verticalCenterOffset: -1
+                                    anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                                     text: "I"; font.pixelSize: 13; font.italic: true
                                     color: parent.on ? "darkslategrey" : "white"
                                     Behavior on color { ColorAnimation { duration: 100 } }
@@ -1555,7 +1563,7 @@ Window {
                                 Behavior on color { ColorAnimation { duration: 100 } }
                                 Text {
                                     anchors.centerIn: parent
-                                    anchors.verticalCenterOffset: -1
+                                    anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                                     text: "U"; font.pixelSize: 13; font.underline: true
                                     color: parent.on ? "darkslategrey" : "white"
                                     Behavior on color { ColorAnimation { duration: 100 } }
@@ -2351,7 +2359,7 @@ Window {
 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    anchors.verticalCenterOffset: -1
+                                                    anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                                                     text: "×"
                                                     font.pixelSize: 18
                                                     font.bold: true
@@ -2403,7 +2411,7 @@ Window {
 
                                     Text {
                                         anchors.centerIn: parent
-                                        anchors.verticalCenterOffset: -1
+                                        anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
                                         text: "+"
                                         font.pixelSize: 18
                                         font.bold: true
