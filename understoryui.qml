@@ -624,9 +624,119 @@ Window {
             height: 540
             color: "black"
 
+            property bool areaDragging: false
+            property int hoveredAreaIndex: -1
+
+            ListModel { id: areasModel }
+            property real areaX1: 0
+            property real areaY1: 0
+            property real areaX2: 0
+            property real areaY2: 0
+
+            function findHoveredArea(px, py) {
+                if (buttonGrid.selectedTool !== "select") return -1
+                for (var i = 0; i < areasModel.count; i++) {
+                    var a = areasModel.get(i)
+                    var ax = Math.min(a.x1, a.x2), ay = Math.min(a.y1, a.y2)
+                    var aw = Math.abs(a.x2 - a.x1), ah = Math.abs(a.y2 - a.y1)
+                    if (px >= ax && px <= ax + aw && py >= ay && py <= ay + ah)
+                        return i
+                }
+                return -1
+            }
+
+            function snapX(val) {
+                var clamped = Math.max(0, Math.min(val, width))
+                if (clamped <= 10) return 0
+                if (clamped >= width - 10) return width
+                return clamped
+            }
+            function snapY(val) {
+                var clamped = Math.max(0, Math.min(val, height))
+                if (clamped <= 10) return 0
+                if (clamped >= height - 10) return height
+                return clamped
+            }
+
             Image {
                 anchors.fill: parent
                 source: "file:stairwell.jpg"
+            }
+
+            // New area drag: click and drag to define a rectangular area
+            MouseArea {
+                anchors.fill: parent
+                enabled: buttonGrid.selectedTool === "newarea"
+                z: 998
+
+                onPressed: {
+                    viewport.areaX1 = viewport.snapX(mouseX)
+                    viewport.areaY1 = viewport.snapY(mouseY)
+                    viewport.areaX2 = viewport.areaX1
+                    viewport.areaY2 = viewport.areaY1
+                    viewport.areaDragging = true
+                }
+                onPositionChanged: {
+                    viewport.areaX2 = viewport.snapX(mouseX)
+                    viewport.areaY2 = viewport.snapY(mouseY)
+                }
+                onReleased: {
+                    viewport.areaDragging = false
+                    var w = Math.abs(viewport.areaX2 - viewport.areaX1)
+                    var h = Math.abs(viewport.areaY2 - viewport.areaY1)
+                    if (w > 2 && h > 2)
+                        areasModel.append({ x1: viewport.areaX1, y1: viewport.areaY1,
+                                            x2: viewport.areaX2, y2: viewport.areaY2 })
+                }
+            }
+
+            // Completed areas
+            Repeater {
+                model: areasModel
+                delegate: Rectangle {
+                    x: Math.min(model.x1, model.x2)
+                    y: Math.min(model.y1, model.y2)
+                    width: Math.abs(model.x2 - model.x1)
+                    height: Math.abs(model.y2 - model.y1)
+                    color: index === viewport.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent"
+                    border.color: "white"
+                    border.width: index === viewport.hoveredAreaIndex ? 2 : 1
+                    z: 997
+
+                    Behavior on color { ColorAnimation { duration: 80 } }
+                    Behavior on border.width { NumberAnimation { duration: 80 } }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: index === viewport.hoveredAreaIndex ? 2 : 1
+                        color: "transparent"
+                        border.color: "black"
+                        border.width: 1
+
+                        Behavior on anchors.margins { NumberAnimation { duration: 80 } }
+                    }
+                }
+            }
+
+            // In-progress rubber-band (only visible while dragging)
+            Rectangle {
+                visible: viewport.areaDragging
+                x: Math.min(viewport.areaX1, viewport.areaX2)
+                y: Math.min(viewport.areaY1, viewport.areaY2)
+                width: Math.abs(viewport.areaX2 - viewport.areaX1)
+                height: Math.abs(viewport.areaY2 - viewport.areaY1)
+                color: "transparent"
+                border.color: "white"
+                border.width: 1
+                z: 998
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    color: "transparent"
+                    border.color: "black"
+                    border.width: 1
+                }
             }
 
             // Tool cursor: tracks mouse position to drive the custom cursor image below.
@@ -639,11 +749,13 @@ Window {
                 acceptedButtons: Qt.NoButton
                 cursorShape: ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor
                 z: 999
+                onPositionChanged: viewport.hoveredAreaIndex = viewport.findHoveredArea(mouseX, mouseY)
+                onExited: viewport.hoveredAreaIndex = -1
             }
 
             Image {
-                x: viewportCursorArea.mouseX
-                y: viewportCursorArea.mouseY
+                x: viewport.areaDragging ? viewport.areaX2 : viewportCursorArea.mouseX
+                y: viewport.areaDragging ? viewport.areaY2 : viewportCursorArea.mouseY
                 width: 36
                 height: 36
                 source: ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : ""
