@@ -644,6 +644,10 @@ Window {
             property real tbY2: 0
             property int pendingFocusTextBox: -1
 
+            property bool elementDragging: false
+            property real elementDragX: 0
+            property real elementDragY: 0
+
             ListModel { id: textBoxesModel }
 
             function findHoveredArea(px, py) {
@@ -676,6 +680,16 @@ Window {
                 source: "file:stairwell.jpg"
             }
 
+            // Defocus text boxes when clicking anywhere else in the viewport
+            MouseArea {
+                anchors.fill: parent
+                z: 1
+                onPressed: function(mouse) {
+                    viewport.forceActiveFocus()
+                    mouse.accepted = false
+                }
+            }
+
             // New area drag: click and drag to define a rectangular area
             MouseArea {
                 anchors.fill: parent
@@ -698,8 +712,10 @@ Window {
                     var w = Math.abs(viewport.areaX2 - viewport.areaX1)
                     var h = Math.abs(viewport.areaY2 - viewport.areaY1)
                     if (w > 2 && h > 2)
-                        areasModel.append({ x1: viewport.areaX1, y1: viewport.areaY1,
-                                            x2: viewport.areaX2, y2: viewport.areaY2 })
+                        areasModel.append({ x1: Math.min(viewport.areaX1, viewport.areaX2),
+                                            y1: Math.min(viewport.areaY1, viewport.areaY2),
+                                            x2: Math.max(viewport.areaX1, viewport.areaX2),
+                                            y2: Math.max(viewport.areaY1, viewport.areaY2) })
                 }
             }
 
@@ -727,8 +743,10 @@ Window {
                     if (w > 2 && h > 2) {
                         viewport.pendingFocusTextBox = textBoxesModel.count
                         textBoxesModel.append({
-                            x1: viewport.tbX1, y1: viewport.tbY1,
-                            x2: viewport.tbX2, y2: viewport.tbY2,
+                            x1: Math.min(viewport.tbX1, viewport.tbX2),
+                            y1: Math.min(viewport.tbY1, viewport.tbY2),
+                            x2: Math.max(viewport.tbX1, viewport.tbX2),
+                            y2: Math.max(viewport.tbY1, viewport.tbY2),
                             family: textSettings.txtFamily,
                             tbWeight: textSettings.txtBold ? Font.Bold : textSettings.txtWeight,
                             size: textSettings.txtSize,
@@ -744,27 +762,225 @@ Window {
             // Completed areas
             Repeater {
                 model: areasModel
-                delegate: Rectangle {
-                    x: Math.min(model.x1, model.x2)
-                    y: Math.min(model.y1, model.y2)
-                    width: Math.abs(model.x2 - model.x1)
-                    height: Math.abs(model.y2 - model.y1)
-                    color: index === viewport.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent"
-                    border.color: "white"
-                    border.width: index === viewport.hoveredAreaIndex ? 2 : 1
+                delegate: Item {
+                    id: areaDelegate
+                    x: model.x1; y: model.y1
+                    width: model.x2 - model.x1; height: model.y2 - model.y1
                     z: 997
 
-                    Behavior on color { ColorAnimation { duration: 80 } }
-                    Behavior on border.width { NumberAnimation { duration: 80 } }
+                    property bool isSelect: buttonGrid.selectedTool === "select"
+                    property real pressVpX: 0; property real pressVpY: 0
+                    property real origX1: 0; property real origY1: 0
+                    property real origX2: 0; property real origY2: 0
 
+                    // Visual border
                     Rectangle {
                         anchors.fill: parent
-                        anchors.margins: index === viewport.hoveredAreaIndex ? 2 : 1
-                        color: "transparent"
-                        border.color: "black"
-                        border.width: 1
+                        color: index === viewport.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent"
+                        border.color: "white"
+                        border.width: index === viewport.hoveredAreaIndex ? 2 : 1
+                        Behavior on color { ColorAnimation { duration: 80 } }
+                        Behavior on border.width { NumberAnimation { duration: 80 } }
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: index === viewport.hoveredAreaIndex ? 2 : 1
+                            color: "transparent"; border.color: "black"; border.width: 1
+                            Behavior on anchors.margins { NumberAnimation { duration: 80 } }
+                        }
+                    }
 
-                        Behavior on anchors.margins { NumberAnimation { duration: 80 } }
+                    // Interior drag to move
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: areaDelegate.isSelect; z: 2; cursorShape: Qt.SizeAllCursor
+                        onPressed: function(mouse) {
+                            var pt = mapToItem(viewport, mouse.x, mouse.y)
+                            areaDelegate.pressVpX = pt.x; areaDelegate.pressVpY = pt.y
+                            areaDelegate.origX1 = model.x1; areaDelegate.origY1 = model.y1
+                            areaDelegate.origX2 = model.x2; areaDelegate.origY2 = model.y2
+                            viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                        }
+                        onPositionChanged: function(mouse) {
+                            var pt = mapToItem(viewport, mouse.x, mouse.y)
+                            viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            var dx = pt.x - areaDelegate.pressVpX, dy = pt.y - areaDelegate.pressVpY
+                            var w = areaDelegate.origX2 - areaDelegate.origX1, h = areaDelegate.origY2 - areaDelegate.origY1
+                            var nx1 = Math.max(0, Math.min(areaDelegate.origX1 + dx, viewport.width - w))
+                            var ny1 = Math.max(0, Math.min(areaDelegate.origY1 + dy, viewport.height - h))
+                            areasModel.setProperty(index, "x1", nx1); areasModel.setProperty(index, "y1", ny1)
+                            areasModel.setProperty(index, "x2", nx1 + w); areasModel.setProperty(index, "y2", ny1 + h)
+                        }
+                        onReleased: viewport.elementDragging = false
+                    }
+
+                    // Resize handles (8 total, all positioned within delegate bounds)
+                    // Top-left
+                    Item {
+                        x: 0; y: 0; width: 14; height: 14
+                        visible: areaDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                areaDelegate.pressVpX = pt.x; areaDelegate.pressVpY = pt.y
+                                areaDelegate.origX1 = model.x1; areaDelegate.origY1 = model.y1
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                areasModel.setProperty(index, "x1", Math.max(0, Math.min(areaDelegate.origX1 + pt.x - areaDelegate.pressVpX, model.x2 - 20)))
+                                areasModel.setProperty(index, "y1", Math.max(0, Math.min(areaDelegate.origY1 + pt.y - areaDelegate.pressVpY, model.y2 - 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Top-mid
+                    Item {
+                        x: parent.width / 2 - 7; y: 0; width: 14; height: 14
+                        visible: areaDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeVerCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                areaDelegate.pressVpY = pt.y; areaDelegate.origY1 = model.y1
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                areasModel.setProperty(index, "y1", Math.max(0, Math.min(areaDelegate.origY1 + pt.y - areaDelegate.pressVpY, model.y2 - 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Top-right
+                    Item {
+                        x: parent.width - 14; y: 0; width: 14; height: 14
+                        visible: areaDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                areaDelegate.pressVpX = pt.x; areaDelegate.pressVpY = pt.y
+                                areaDelegate.origX2 = model.x2; areaDelegate.origY1 = model.y1
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                areasModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(areaDelegate.origX2 + pt.x - areaDelegate.pressVpX, model.x1 + 20)))
+                                areasModel.setProperty(index, "y1", Math.max(0, Math.min(areaDelegate.origY1 + pt.y - areaDelegate.pressVpY, model.y2 - 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Right-mid
+                    Item {
+                        x: parent.width - 14; y: parent.height / 2 - 7; width: 14; height: 14
+                        visible: areaDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                areaDelegate.pressVpX = pt.x; areaDelegate.origX2 = model.x2
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                areasModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(areaDelegate.origX2 + pt.x - areaDelegate.pressVpX, model.x1 + 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Bottom-right
+                    Item {
+                        x: parent.width - 14; y: parent.height - 14; width: 14; height: 14
+                        visible: areaDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                areaDelegate.pressVpX = pt.x; areaDelegate.pressVpY = pt.y
+                                areaDelegate.origX2 = model.x2; areaDelegate.origY2 = model.y2
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                areasModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(areaDelegate.origX2 + pt.x - areaDelegate.pressVpX, model.x1 + 20)))
+                                areasModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(areaDelegate.origY2 + pt.y - areaDelegate.pressVpY, model.y1 + 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Bottom-mid
+                    Item {
+                        x: parent.width / 2 - 7; y: parent.height - 14; width: 14; height: 14
+                        visible: areaDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeVerCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                areaDelegate.pressVpY = pt.y; areaDelegate.origY2 = model.y2
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                areasModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(areaDelegate.origY2 + pt.y - areaDelegate.pressVpY, model.y1 + 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Bottom-left
+                    Item {
+                        x: 0; y: parent.height - 14; width: 14; height: 14
+                        visible: areaDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                areaDelegate.pressVpX = pt.x; areaDelegate.pressVpY = pt.y
+                                areaDelegate.origX1 = model.x1; areaDelegate.origY2 = model.y2
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                areasModel.setProperty(index, "x1", Math.max(0, Math.min(areaDelegate.origX1 + pt.x - areaDelegate.pressVpX, model.x2 - 20)))
+                                areasModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(areaDelegate.origY2 + pt.y - areaDelegate.pressVpY, model.y1 + 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Left-mid
+                    Item {
+                        x: 0; y: parent.height / 2 - 7; width: 14; height: 14
+                        visible: areaDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                areaDelegate.pressVpX = pt.x; areaDelegate.origX1 = model.x1
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                areasModel.setProperty(index, "x1", Math.max(0, Math.min(areaDelegate.origX1 + pt.x - areaDelegate.pressVpX, model.x2 - 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                 }
             }
@@ -772,45 +988,234 @@ Window {
             // Completed text boxes
             Repeater {
                 model: textBoxesModel
-                delegate: Rectangle {
-                    x: Math.min(model.x1, model.x2)
-                    y: Math.min(model.y1, model.y2)
-                    width: Math.abs(model.x2 - model.x1)
-                    height: Math.abs(model.y2 - model.y1)
-                    color: "transparent"
-                    border.color: "white"
-                    border.width: 1
+                delegate: Item {
+                    id: tbDelegate
+                    x: model.x1; y: model.y1
+                    width: model.x2 - model.x1; height: model.y2 - model.y1
                     z: 997
 
+                    property bool isSelect: buttonGrid.selectedTool === "select"
+                    property real pressVpX: 0; property real pressVpY: 0
+                    property real origX1: 0; property real origY1: 0
+                    property real origX2: 0; property real origY2: 0
+
+                    // Visual border
                     Rectangle {
                         anchors.fill: parent
-                        anchors.margins: 1
-                        color: "transparent"
-                        border.color: "black"
-                        border.width: 1
+                        color: "transparent"; border.color: "white"; border.width: 1
+                        Rectangle {
+                            anchors.fill: parent; anchors.margins: 1
+                            color: "transparent"; border.color: "black"; border.width: 1
+                        }
                     }
 
                     TextEdit {
                         id: tbTextEdit
-                        anchors.fill: parent
-                        anchors.margins: 6
+                        anchors.fill: parent; anchors.margins: 6
                         color: model.textColor
-                        font.family: model.family
-                        font.weight: model.tbWeight
-                        font.pixelSize: model.size
-                        font.italic: model.italic
-                        font.underline: model.underline
-                        wrapMode: TextEdit.Wrap
-                        clip: true
+                        font.family: model.family; font.weight: model.tbWeight
+                        font.pixelSize: model.size; font.italic: model.italic; font.underline: model.underline
+                        wrapMode: TextEdit.Wrap; clip: true
                         onTextChanged: textBoxesModel.setProperty(index, "content", text)
                     }
 
+                    // Focus on click (interior, passes events through)
+                    MouseArea {
+                        anchors.fill: parent; z: 1
+                        onPressed: function(mouse) { tbTextEdit.forceActiveFocus(); mouse.accepted = false }
+                    }
+
+                    // Interior drag to move (select tool only, passes focus through)
                     MouseArea {
                         anchors.fill: parent
-                        z: 1
+                        enabled: tbDelegate.isSelect; z: 2; cursorShape: Qt.SizeAllCursor
                         onPressed: function(mouse) {
-                            tbTextEdit.forceActiveFocus()
-                            mouse.accepted = false
+                            var pt = mapToItem(viewport, mouse.x, mouse.y)
+                            tbDelegate.pressVpX = pt.x; tbDelegate.pressVpY = pt.y
+                            tbDelegate.origX1 = model.x1; tbDelegate.origY1 = model.y1
+                            tbDelegate.origX2 = model.x2; tbDelegate.origY2 = model.y2
+                            viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                        }
+                        onPositionChanged: function(mouse) {
+                            var pt = mapToItem(viewport, mouse.x, mouse.y)
+                            viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            var dx = pt.x - tbDelegate.pressVpX, dy = pt.y - tbDelegate.pressVpY
+                            var w = tbDelegate.origX2 - tbDelegate.origX1, h = tbDelegate.origY2 - tbDelegate.origY1
+                            var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + dx, viewport.width - w))
+                            var ny1 = Math.max(0, Math.min(tbDelegate.origY1 + dy, viewport.height - h))
+                            textBoxesModel.setProperty(index, "x1", nx1); textBoxesModel.setProperty(index, "y1", ny1)
+                            textBoxesModel.setProperty(index, "x2", nx1 + w); textBoxesModel.setProperty(index, "y2", ny1 + h)
+                        }
+                        onReleased: viewport.elementDragging = false
+                    }
+
+                    // Resize handles (8 total, all within delegate bounds)
+                    // Top-left
+                    Item {
+                        x: 0; y: 0; width: 14; height: 14
+                        visible: tbDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                tbDelegate.pressVpX = pt.x; tbDelegate.pressVpY = pt.y
+                                tbDelegate.origX1 = model.x1; tbDelegate.origY1 = model.y1
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                textBoxesModel.setProperty(index, "x1", Math.max(0, Math.min(tbDelegate.origX1 + pt.x - tbDelegate.pressVpX, model.x2 - 20)))
+                                textBoxesModel.setProperty(index, "y1", Math.max(0, Math.min(tbDelegate.origY1 + pt.y - tbDelegate.pressVpY, model.y2 - 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Top-mid
+                    Item {
+                        x: parent.width / 2 - 7; y: 0; width: 14; height: 14
+                        visible: tbDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeVerCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                tbDelegate.pressVpY = pt.y; tbDelegate.origY1 = model.y1
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                textBoxesModel.setProperty(index, "y1", Math.max(0, Math.min(tbDelegate.origY1 + pt.y - tbDelegate.pressVpY, model.y2 - 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Top-right
+                    Item {
+                        x: parent.width - 14; y: 0; width: 14; height: 14
+                        visible: tbDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                tbDelegate.pressVpX = pt.x; tbDelegate.pressVpY = pt.y
+                                tbDelegate.origX2 = model.x2; tbDelegate.origY1 = model.y1
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                textBoxesModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(tbDelegate.origX2 + pt.x - tbDelegate.pressVpX, model.x1 + 20)))
+                                textBoxesModel.setProperty(index, "y1", Math.max(0, Math.min(tbDelegate.origY1 + pt.y - tbDelegate.pressVpY, model.y2 - 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Right-mid
+                    Item {
+                        x: parent.width - 14; y: parent.height / 2 - 7; width: 14; height: 14
+                        visible: tbDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                tbDelegate.pressVpX = pt.x; tbDelegate.origX2 = model.x2
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                textBoxesModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(tbDelegate.origX2 + pt.x - tbDelegate.pressVpX, model.x1 + 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Bottom-right
+                    Item {
+                        x: parent.width - 14; y: parent.height - 14; width: 14; height: 14
+                        visible: tbDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                tbDelegate.pressVpX = pt.x; tbDelegate.pressVpY = pt.y
+                                tbDelegate.origX2 = model.x2; tbDelegate.origY2 = model.y2
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                textBoxesModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(tbDelegate.origX2 + pt.x - tbDelegate.pressVpX, model.x1 + 20)))
+                                textBoxesModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(tbDelegate.origY2 + pt.y - tbDelegate.pressVpY, model.y1 + 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Bottom-mid
+                    Item {
+                        x: parent.width / 2 - 7; y: parent.height - 14; width: 14; height: 14
+                        visible: tbDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeVerCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                tbDelegate.pressVpY = pt.y; tbDelegate.origY2 = model.y2
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                textBoxesModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(tbDelegate.origY2 + pt.y - tbDelegate.pressVpY, model.y1 + 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Bottom-left
+                    Item {
+                        x: 0; y: parent.height - 14; width: 14; height: 14
+                        visible: tbDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                tbDelegate.pressVpX = pt.x; tbDelegate.pressVpY = pt.y
+                                tbDelegate.origX1 = model.x1; tbDelegate.origY2 = model.y2
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                textBoxesModel.setProperty(index, "x1", Math.max(0, Math.min(tbDelegate.origX1 + pt.x - tbDelegate.pressVpX, model.x2 - 20)))
+                                textBoxesModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(tbDelegate.origY2 + pt.y - tbDelegate.pressVpY, model.y1 + 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Left-mid
+                    Item {
+                        x: 0; y: parent.height / 2 - 7; width: 14; height: 14
+                        visible: tbDelegate.isSelect; z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.SizeHorCursor
+                            onPressed: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                tbDelegate.pressVpX = pt.x; tbDelegate.origX1 = model.x1
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
+                            onPositionChanged: function(mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                textBoxesModel.setProperty(index, "x1", Math.max(0, Math.min(tbDelegate.origX1 + pt.x - tbDelegate.pressVpX, model.x2 - 20)))
+                            }
+                            onReleased: viewport.elementDragging = false
                         }
                     }
 
@@ -878,8 +1283,8 @@ Window {
             }
 
             Image {
-                x: viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : viewportCursorArea.mouseX)
-                y: viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : viewportCursorArea.mouseY)
+                x: viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.elementDragging ? viewport.elementDragX : viewportCursorArea.mouseX))
+                y: viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.elementDragging ? viewport.elementDragY : viewportCursorArea.mouseY))
                 width: 36
                 height: 36
                 source: ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : ""
@@ -895,6 +1300,7 @@ Window {
                 radius: 20
                 color: Qt.rgba(0, 0, 0, 0.6)
                 opacity: buttonGrid.selectedTool === "navigation" ? 1 : 0
+                z: 998
 
                 Behavior on opacity {
                     NumberAnimation {
