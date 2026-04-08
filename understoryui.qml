@@ -764,8 +764,9 @@ Window {
                 model: areasModel
                 delegate: Item {
                     id: areaDelegate
-                    x: model.x1; y: model.y1
-                    width: model.x2 - model.x1; height: model.y2 - model.y1
+                    // expanded 28px on all sides so 56x56 handle items stay within parent bounds
+                    x: model.x1 - 28; y: model.y1 - 28
+                    width: model.x2 - model.x1 + 56; height: model.y2 - model.y1 + 56
                     z: 997
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
@@ -773,9 +774,9 @@ Window {
                     property real origX1: 0; property real origY1: 0
                     property real origX2: 0; property real origY2: 0
 
-                    // Visual border
+                    // Visual border (inset by 28px to match model coordinates)
                     Rectangle {
-                        anchors.fill: parent
+                        x: 28; y: 28; width: parent.width - 56; height: parent.height - 56
                         color: index === viewport.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent"
                         border.color: "white"
                         border.width: index === viewport.hoveredAreaIndex ? 2 : 1
@@ -789,9 +790,9 @@ Window {
                         }
                     }
 
-                    // Interior drag to move
+                    // Move: covers shape interior only, leaving handle regions free
                     MouseArea {
-                        anchors.fill: parent
+                        x: 28; y: 28; width: parent.width - 56; height: parent.height - 56
                         enabled: areaDelegate.isSelect; z: 2; cursorShape: Qt.SizeAllCursor
                         onPressed: function(mouse) {
                             var pt = mapToItem(viewport, mouse.x, mouse.y)
@@ -813,10 +814,11 @@ Window {
                         onReleased: viewport.elementDragging = false
                     }
 
-                    // Resize handles (8 total, all positioned within delegate bounds)
+                    // Resize handles — 56x56 hit area, 8x8 visual dot, centered on shape corners/midpoints
+                    // Corners at shape corners (model coords offset by 28px for delegate expansion)
                     // Top-left
                     Item {
-                        x: 0; y: 0; width: 14; height: 14
+                        x: 0; y: 0; width: 56; height: 56
                         visible: areaDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -838,7 +840,7 @@ Window {
                     }
                     // Top-mid
                     Item {
-                        x: parent.width / 2 - 7; y: 0; width: 14; height: 14
+                        x: parent.width / 2 - 14; y: 14; width: 28; height: 28
                         visible: areaDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -850,7 +852,7 @@ Window {
                             }
                             onPositionChanged: function(mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y)
-                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                viewport.elementDragY = pt.y
                                 areasModel.setProperty(index, "y1", Math.max(0, Math.min(areaDelegate.origY1 + pt.y - areaDelegate.pressVpY, model.y2 - 20)))
                             }
                             onReleased: viewport.elementDragging = false
@@ -858,7 +860,7 @@ Window {
                     }
                     // Top-right
                     Item {
-                        x: parent.width - 14; y: 0; width: 14; height: 14
+                        x: parent.width - 56; y: 0; width: 56; height: 56
                         visible: areaDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -880,7 +882,7 @@ Window {
                     }
                     // Right-mid
                     Item {
-                        x: parent.width - 14; y: parent.height / 2 - 7; width: 14; height: 14
+                        x: parent.width - 42; y: parent.height / 2 - 14; width: 28; height: 28
                         visible: areaDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -892,7 +894,7 @@ Window {
                             }
                             onPositionChanged: function(mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y)
-                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                viewport.elementDragX = pt.x
                                 areasModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(areaDelegate.origX2 + pt.x - areaDelegate.pressVpX, model.x1 + 20)))
                             }
                             onReleased: viewport.elementDragging = false
@@ -900,7 +902,7 @@ Window {
                     }
                     // Bottom-right
                     Item {
-                        x: parent.width - 14; y: parent.height - 14; width: 14; height: 14
+                        x: parent.width - 56; y: parent.height - 56; width: 56; height: 56
                         visible: areaDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -922,7 +924,7 @@ Window {
                     }
                     // Bottom-mid
                     Item {
-                        x: parent.width / 2 - 7; y: parent.height - 14; width: 14; height: 14
+                        x: parent.width / 2 - 14; y: parent.height - 42; width: 28; height: 28
                         visible: areaDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -934,7 +936,7 @@ Window {
                             }
                             onPositionChanged: function(mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y)
-                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                viewport.elementDragY = pt.y
                                 areasModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(areaDelegate.origY2 + pt.y - areaDelegate.pressVpY, model.y1 + 20)))
                             }
                             onReleased: viewport.elementDragging = false
@@ -942,7 +944,7 @@ Window {
                     }
                     // Bottom-left
                     Item {
-                        x: 0; y: parent.height - 14; width: 14; height: 14
+                        x: 0; y: parent.height - 56; width: 56; height: 56
                         visible: areaDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -964,7 +966,7 @@ Window {
                     }
                     // Left-mid
                     Item {
-                        x: 0; y: parent.height / 2 - 7; width: 14; height: 14
+                        x: 14; y: parent.height / 2 - 14; width: 28; height: 28
                         visible: areaDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -976,7 +978,7 @@ Window {
                             }
                             onPositionChanged: function(mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y)
-                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                viewport.elementDragX = pt.x
                                 areasModel.setProperty(index, "x1", Math.max(0, Math.min(areaDelegate.origX1 + pt.x - areaDelegate.pressVpX, model.x2 - 20)))
                             }
                             onReleased: viewport.elementDragging = false
@@ -990,18 +992,20 @@ Window {
                 model: textBoxesModel
                 delegate: Item {
                     id: tbDelegate
-                    x: model.x1; y: model.y1
-                    width: model.x2 - model.x1; height: model.y2 - model.y1
+                    // expanded 28px on all sides so 56x56 handle items stay within parent bounds
+                    x: model.x1 - 28; y: model.y1 - 28
+                    width: model.x2 - model.x1 + 56; height: model.y2 - model.y1 + 56
                     z: 997
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
+                    property bool editing: false
                     property real pressVpX: 0; property real pressVpY: 0
                     property real origX1: 0; property real origY1: 0
                     property real origX2: 0; property real origY2: 0
 
-                    // Visual border
+                    // Visual border (inset by 28px to match model coordinates)
                     Rectangle {
-                        anchors.fill: parent
+                        x: 28; y: 28; width: parent.width - 56; height: parent.height - 56
                         color: "transparent"; border.color: "white"; border.width: 1
                         Rectangle {
                             anchors.fill: parent; anchors.margins: 1
@@ -1011,48 +1015,50 @@ Window {
 
                     TextEdit {
                         id: tbTextEdit
-                        anchors.fill: parent; anchors.margins: 6
+                        x: 34; y: 34; width: parent.width - 68; height: parent.height - 68
                         color: model.textColor
                         font.family: model.family; font.weight: model.tbWeight
                         font.pixelSize: model.size; font.italic: model.italic; font.underline: model.underline
                         wrapMode: TextEdit.Wrap; clip: true
                         onTextChanged: textBoxesModel.setProperty(index, "content", text)
+                        onActiveFocusChanged: if (!activeFocus) tbDelegate.editing = false
                     }
 
-                    // Focus on click (interior, passes events through)
+                    // Interior MouseArea: disabled when editing so TextEdit handles its own mouse events.
+                    // When not editing: double-click to enter edit mode, drag to move (select tool only).
                     MouseArea {
-                        anchors.fill: parent; z: 1
-                        onPressed: function(mouse) { tbTextEdit.forceActiveFocus(); mouse.accepted = false }
-                    }
-
-                    // Interior drag to move (select tool only, passes focus through)
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: tbDelegate.isSelect; z: 2; cursorShape: Qt.SizeAllCursor
+                        x: 28; y: 28; width: parent.width - 56; height: parent.height - 56
+                        enabled: !tbDelegate.editing; z: 2
+                        cursorShape: tbDelegate.isSelect ? Qt.SizeAllCursor : Qt.ArrowCursor
+                        onDoubleClicked: { tbDelegate.editing = true; tbTextEdit.forceActiveFocus() }
                         onPressed: function(mouse) {
-                            var pt = mapToItem(viewport, mouse.x, mouse.y)
-                            tbDelegate.pressVpX = pt.x; tbDelegate.pressVpY = pt.y
-                            tbDelegate.origX1 = model.x1; tbDelegate.origY1 = model.y1
-                            tbDelegate.origX2 = model.x2; tbDelegate.origY2 = model.y2
-                            viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            if (tbDelegate.isSelect) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                tbDelegate.pressVpX = pt.x; tbDelegate.pressVpY = pt.y
+                                tbDelegate.origX1 = model.x1; tbDelegate.origY1 = model.y1
+                                tbDelegate.origX2 = model.x2; tbDelegate.origY2 = model.y2
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                            }
                         }
                         onPositionChanged: function(mouse) {
-                            var pt = mapToItem(viewport, mouse.x, mouse.y)
-                            viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
-                            var dx = pt.x - tbDelegate.pressVpX, dy = pt.y - tbDelegate.pressVpY
-                            var w = tbDelegate.origX2 - tbDelegate.origX1, h = tbDelegate.origY2 - tbDelegate.origY1
-                            var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + dx, viewport.width - w))
-                            var ny1 = Math.max(0, Math.min(tbDelegate.origY1 + dy, viewport.height - h))
-                            textBoxesModel.setProperty(index, "x1", nx1); textBoxesModel.setProperty(index, "y1", ny1)
-                            textBoxesModel.setProperty(index, "x2", nx1 + w); textBoxesModel.setProperty(index, "y2", ny1 + h)
+                            if (tbDelegate.isSelect) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y)
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                var dx = pt.x - tbDelegate.pressVpX, dy = pt.y - tbDelegate.pressVpY
+                                var w = tbDelegate.origX2 - tbDelegate.origX1, h = tbDelegate.origY2 - tbDelegate.origY1
+                                var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + dx, viewport.width - w))
+                                var ny1 = Math.max(0, Math.min(tbDelegate.origY1 + dy, viewport.height - h))
+                                textBoxesModel.setProperty(index, "x1", nx1); textBoxesModel.setProperty(index, "y1", ny1)
+                                textBoxesModel.setProperty(index, "x2", nx1 + w); textBoxesModel.setProperty(index, "y2", ny1 + h)
+                            }
                         }
                         onReleased: viewport.elementDragging = false
                     }
 
-                    // Resize handles (8 total, all within delegate bounds)
+                    // Resize handles — 56x56 hit area, 8x8 visual dot, centered on shape corners/midpoints
                     // Top-left
                     Item {
-                        x: 0; y: 0; width: 14; height: 14
+                        x: 0; y: 0; width: 56; height: 56
                         visible: tbDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -1074,7 +1080,7 @@ Window {
                     }
                     // Top-mid
                     Item {
-                        x: parent.width / 2 - 7; y: 0; width: 14; height: 14
+                        x: parent.width / 2 - 14; y: 14; width: 28; height: 28
                         visible: tbDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -1086,7 +1092,7 @@ Window {
                             }
                             onPositionChanged: function(mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y)
-                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                viewport.elementDragY = pt.y
                                 textBoxesModel.setProperty(index, "y1", Math.max(0, Math.min(tbDelegate.origY1 + pt.y - tbDelegate.pressVpY, model.y2 - 20)))
                             }
                             onReleased: viewport.elementDragging = false
@@ -1094,7 +1100,7 @@ Window {
                     }
                     // Top-right
                     Item {
-                        x: parent.width - 14; y: 0; width: 14; height: 14
+                        x: parent.width - 56; y: 0; width: 56; height: 56
                         visible: tbDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -1116,7 +1122,7 @@ Window {
                     }
                     // Right-mid
                     Item {
-                        x: parent.width - 14; y: parent.height / 2 - 7; width: 14; height: 14
+                        x: parent.width - 42; y: parent.height / 2 - 14; width: 28; height: 28
                         visible: tbDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -1128,7 +1134,7 @@ Window {
                             }
                             onPositionChanged: function(mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y)
-                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                viewport.elementDragX = pt.x
                                 textBoxesModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(tbDelegate.origX2 + pt.x - tbDelegate.pressVpX, model.x1 + 20)))
                             }
                             onReleased: viewport.elementDragging = false
@@ -1136,7 +1142,7 @@ Window {
                     }
                     // Bottom-right
                     Item {
-                        x: parent.width - 14; y: parent.height - 14; width: 14; height: 14
+                        x: parent.width - 56; y: parent.height - 56; width: 56; height: 56
                         visible: tbDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -1158,7 +1164,7 @@ Window {
                     }
                     // Bottom-mid
                     Item {
-                        x: parent.width / 2 - 7; y: parent.height - 14; width: 14; height: 14
+                        x: parent.width / 2 - 14; y: parent.height - 42; width: 28; height: 28
                         visible: tbDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -1170,7 +1176,7 @@ Window {
                             }
                             onPositionChanged: function(mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y)
-                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                viewport.elementDragY = pt.y
                                 textBoxesModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(tbDelegate.origY2 + pt.y - tbDelegate.pressVpY, model.y1 + 20)))
                             }
                             onReleased: viewport.elementDragging = false
@@ -1178,7 +1184,7 @@ Window {
                     }
                     // Bottom-left
                     Item {
-                        x: 0; y: parent.height - 14; width: 14; height: 14
+                        x: 0; y: parent.height - 56; width: 56; height: 56
                         visible: tbDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -1200,7 +1206,7 @@ Window {
                     }
                     // Left-mid
                     Item {
-                        x: 0; y: parent.height / 2 - 7; width: 14; height: 14
+                        x: 14; y: parent.height / 2 - 14; width: 28; height: 28
                         visible: tbDelegate.isSelect; z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -1212,7 +1218,7 @@ Window {
                             }
                             onPositionChanged: function(mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y)
-                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y
+                                viewport.elementDragX = pt.x
                                 textBoxesModel.setProperty(index, "x1", Math.max(0, Math.min(tbDelegate.origX1 + pt.x - tbDelegate.pressVpX, model.x2 - 20)))
                             }
                             onReleased: viewport.elementDragging = false
@@ -1221,6 +1227,7 @@ Window {
 
                     Component.onCompleted: {
                         if (index === viewport.pendingFocusTextBox) {
+                            tbDelegate.editing = true
                             tbTextEdit.forceActiveFocus()
                             viewport.pendingFocusTextBox = -1
                         }
@@ -1287,8 +1294,8 @@ Window {
                 y: viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.elementDragging ? viewport.elementDragY : viewportCursorArea.mouseY))
                 width: 36
                 height: 36
-                source: ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : ""
-                visible: viewportCursorArea.containsMouse && ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1
+                source: viewport.elementDragging ? "icons/pinch.svg" : (["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : "")
+                visible: viewportCursorArea.containsMouse && (viewport.elementDragging || ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1)
                 fillMode: Image.PreserveAspectFit
                 z: 1000
             }
