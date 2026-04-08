@@ -648,6 +648,8 @@ Window {
             property real elementDragX: 0
             property real elementDragY: 0
 
+            property bool textEditing: false
+
             ListModel { id: textBoxesModel }
 
             function findHoveredArea(px, py) {
@@ -999,6 +1001,7 @@ Window {
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
                     property bool editing: false
+                    onEditingChanged: viewport.textEditing = editing
                     property real pressVpX: 0; property real pressVpY: 0
                     property real origX1: 0; property real origY1: 0
                     property real origX2: 0; property real origY2: 0
@@ -1283,7 +1286,7 @@ Window {
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
-                cursorShape: ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor
+                cursorShape: viewport.textEditing ? Qt.IBeamCursor : (["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor)
                 z: 999
                 onPositionChanged: viewport.hoveredAreaIndex = viewport.findHoveredArea(mouseX, mouseY)
                 onExited: viewport.hoveredAreaIndex = -1
@@ -1295,7 +1298,7 @@ Window {
                 width: 36
                 height: 36
                 source: viewport.elementDragging ? "icons/pinch.svg" : (["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : "")
-                visible: viewportCursorArea.containsMouse && (viewport.elementDragging || ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1)
+                visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1)
                 fillMode: Image.PreserveAspectFit
                 z: 1000
             }
