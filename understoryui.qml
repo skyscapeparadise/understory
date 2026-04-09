@@ -867,9 +867,19 @@ Window {
                 return clamped;
             }
 
-            Image {
+            ShaderEffect {
                 anchors.fill: parent
-                source: "file:stairwell.jpg"
+                fragmentShader: "filmgrain.frag.qsb"
+                property real time: 0
+                property real density: 4.0       // noise scale — lower = bigger blobs, higher = finer
+                property real driftSpeed: 0.06   // how fast the noise crawls
+                property real intensity: 0.28    // grain strength
+                NumberAnimation on time {
+                    from: 0; to: 1000
+                    duration: 1000000
+                    loops: Animation.Infinite
+                    running: true
+                }
             }
 
             // Defocus text boxes + clear selection when clicking empty viewport
