@@ -4231,7 +4231,7 @@ Window {
                     rowSpacing: 8
                     columnSpacing: 8
 
-                    property string selectedTool: ""
+                    property string selectedTool: "select"
                     property color activeIconColor: "#477B78"
 
                     Repeater {
@@ -4285,7 +4285,11 @@ Window {
                                 hoverEnabled: true
 
                                 onClicked: {
-                                    buttonGrid.selectedTool = (buttonGrid.selectedTool === modelData) ? "" : modelData;
+                                    var nonCreation = ["select", "newlink", "relayer", "destroy"];
+                                    if (buttonGrid.selectedTool !== modelData)
+                                        buttonGrid.selectedTool = modelData;
+                                    else if (nonCreation.indexOf(modelData) === -1)
+                                        buttonGrid.selectedTool = "select";
                                 }
                                 onEntered: hovered = true
                                 onExited: hovered = false
@@ -6170,11 +6174,24 @@ Window {
 
                 Rectangle {
                     id: sceneNameSettings
-                    visible: buttonGrid.selectedTool === ""
+                    visible: ["select", "newlink", "relayer", "destroy"].indexOf(buttonGrid.selectedTool) !== -1
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
                     color: "transparent"
+
+                    readonly property var toolDisplayNames: ({ "select": "select", "newlink": "simulate", "relayer": "stack", "destroy": "delete" })
+
+                    Text {
+                        text: sceneNameSettings.toolDisplayNames[buttonGrid.selectedTool] || ""
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
+                        anchors.top: parent.top
+                        anchors.topMargin: 20
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                    }
 
                     // Measures text at full 48pt so we can compute scale without circular binding
                     Text {
