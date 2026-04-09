@@ -1073,21 +1073,40 @@ Window {
             // New image drag: click and drag to define an image box
             MouseArea {
                 anchors.fill: parent
-                enabled: buttonGrid.selectedTool === "newimage" && imageSettings.selectedFilePath !== ""
+                enabled: buttonGrid.selectedTool === "newimage"
                 z: 998
 
                 onPressed: {
+                    if (imageSettings.selectedFilePath === "") {
+                        imageFileDialog.open();
+                        return;
+                    }
                     viewport.imgX1 = viewport.snapX(mouseX);
                     viewport.imgY1 = viewport.snapY(mouseY);
                     viewport.imgX2 = viewport.imgX1;
                     viewport.imgY2 = viewport.imgY1;
                     viewport.imageDragging = true;
                 }
-                onPositionChanged: {
-                    viewport.imgX2 = viewport.snapX(mouseX);
-                    viewport.imgY2 = viewport.snapY(mouseY);
+                onPositionChanged: function (mouse) {
+                    if (!viewport.imageDragging) return;
+                    var aspect = imageSettings.imageAspectRatio;
+                    if (aspect > 0 && !(mouse.modifiers & Qt.ShiftModifier)) {
+                        var dx = mouse.x - viewport.imgX1;
+                        var dy = mouse.y - viewport.imgY1;
+                        var w = Math.abs(dx);
+                        var h = Math.abs(dy);
+                        if (w === 0 && h === 0) return;
+                        if (h === 0 || w / h > aspect) w = h * aspect;
+                        else h = w / aspect;
+                        viewport.imgX2 = viewport.snapX(viewport.imgX1 + (dx >= 0 ? w : -w));
+                        viewport.imgY2 = viewport.snapY(viewport.imgY1 + (dy >= 0 ? h : -h));
+                    } else {
+                        viewport.imgX2 = viewport.snapX(mouse.x);
+                        viewport.imgY2 = viewport.snapY(mouse.y);
+                    }
                 }
                 onReleased: {
+                    if (!viewport.imageDragging) return;
                     viewport.imageDragging = false;
                     var w = Math.abs(viewport.imgX2 - viewport.imgX1);
                     var h = Math.abs(viewport.imgY2 - viewport.imgY1);
@@ -1109,10 +1128,14 @@ Window {
             // New video drag: click and drag to define a video box
             MouseArea {
                 anchors.fill: parent
-                enabled: buttonGrid.selectedTool === "newvideo" && videoSettings.selectedFilePath !== ""
+                enabled: buttonGrid.selectedTool === "newvideo"
                 z: 998
 
                 onPressed: {
+                    if (videoSettings.selectedFilePath === "") {
+                        videoFileDialog.open();
+                        return;
+                    }
                     viewport.vidX1 = viewport.snapX(mouseX);
                     viewport.vidY1 = viewport.snapY(mouseY);
                     viewport.vidX2 = viewport.vidX1;
@@ -1120,10 +1143,25 @@ Window {
                     viewport.videoDragging = true;
                 }
                 onPositionChanged: {
-                    viewport.vidX2 = viewport.snapX(mouseX);
-                    viewport.vidY2 = viewport.snapY(mouseY);
+                    if (!viewport.videoDragging) return;
+                    var aspect = videoSettings.videoAspectRatio;
+                    if (aspect > 0) {
+                        var dx = mouseX - viewport.vidX1;
+                        var dy = mouseY - viewport.vidY1;
+                        var w = Math.abs(dx);
+                        var h = Math.abs(dy);
+                        if (w === 0 && h === 0) return;
+                        if (h === 0 || w / h > aspect) w = h * aspect;
+                        else h = w / aspect;
+                        viewport.vidX2 = viewport.snapX(viewport.vidX1 + (dx >= 0 ? w : -w));
+                        viewport.vidY2 = viewport.snapY(viewport.vidY1 + (dy >= 0 ? h : -h));
+                    } else {
+                        viewport.vidX2 = viewport.snapX(mouseX);
+                        viewport.vidY2 = viewport.snapY(mouseY);
+                    }
                 }
                 onReleased: {
+                    if (!viewport.videoDragging) return;
                     viewport.videoDragging = false;
                     var w = Math.abs(viewport.vidX2 - viewport.vidX1);
                     var h = Math.abs(viewport.vidY2 - viewport.vidY1);
@@ -2448,7 +2486,7 @@ Window {
                                 viewport.elementDragY = pt.y;
                                 var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20));
                                 var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20));
-                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                if (!(mouse.modifiers & Qt.ShiftModifier)) {
                                     var nW = model.x2 - nx1, nH = model.y2 - ny1;
                                     if (nW / nH > imgDelegate.origAspect) {
                                         nW = nH * imgDelegate.origAspect;
@@ -2537,7 +2575,7 @@ Window {
                                 viewport.elementDragY = pt.y;
                                 var nx2 = Math.min(viewport.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20));
                                 var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20));
-                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                if (!(mouse.modifiers & Qt.ShiftModifier)) {
                                     var nW = nx2 - model.x1, nH = model.y2 - ny1;
                                     if (nW / nH > imgDelegate.origAspect) {
                                         nW = nH * imgDelegate.origAspect;
@@ -2626,7 +2664,7 @@ Window {
                                 viewport.elementDragY = pt.y;
                                 var nx2 = Math.min(viewport.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20));
                                 var ny2 = Math.min(viewport.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20));
-                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                if (!(mouse.modifiers & Qt.ShiftModifier)) {
                                     var nW = nx2 - model.x1, nH = ny2 - model.y1;
                                     if (nW / nH > imgDelegate.origAspect) {
                                         nW = nH * imgDelegate.origAspect;
@@ -2715,7 +2753,7 @@ Window {
                                 viewport.elementDragY = pt.y;
                                 var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20));
                                 var ny2 = Math.min(viewport.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20));
-                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                if (!(mouse.modifiers & Qt.ShiftModifier)) {
                                     var nW = model.x2 - nx1, nH = ny2 - model.y1;
                                     if (nW / nH > imgDelegate.origAspect) {
                                         nW = nH * imgDelegate.origAspect;
@@ -4395,6 +4433,21 @@ Window {
                     color: "transparent"
 
                     property string selectedFilePath: ""
+                    property real imageAspectRatio: 0
+
+                    Image {
+                        id: imageProbe
+                        source: imageSettings.selectedFilePath
+                        visible: false
+                        width: 0
+                        height: 0
+                        onStatusChanged: {
+                            if (status === Image.Ready && implicitWidth > 0 && implicitHeight > 0)
+                                imageSettings.imageAspectRatio = implicitWidth / implicitHeight;
+                            else if (status === Image.Null || status === Image.Error)
+                                imageSettings.imageAspectRatio = 0;
+                        }
+                    }
 
                     Text {
                         id: imageSettingsHeading
@@ -4470,6 +4523,21 @@ Window {
                     color: "transparent"
 
                     property string selectedFilePath: ""
+                    property real videoAspectRatio: 0
+
+                    MediaPlayer {
+                        id: videoProbe
+                        source: videoSettings.selectedFilePath
+                        onMediaStatusChanged: (status) => {
+                            if (status === MediaPlayer.LoadedMedia || status === MediaPlayer.BufferedMedia) {
+                                var res = metaData.value(MediaMetaData.Resolution);
+                                if (res && res.width > 0 && res.height > 0)
+                                    videoSettings.videoAspectRatio = res.width / res.height;
+                            } else if (status === MediaPlayer.NoMedia || status === MediaPlayer.InvalidMedia) {
+                                videoSettings.videoAspectRatio = 0;
+                            }
+                        }
+                    }
 
                     Text {
                         id: videoSettingsHeading
