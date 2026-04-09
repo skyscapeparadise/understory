@@ -666,6 +666,11 @@ Window {
             property int selectionRevision: 0
             readonly property int selectionCount: selectedAreas.length + selectedTbs.length + selectedImages.length + selectedVideos.length
 
+            // Stack/z-order state
+            property int nextStackOrder: 0
+            property string relayerHoveredType: ""
+            property int relayerHoveredIndex: -1
+
             property bool boxSelecting: false
             property real boxSelectX1: 0
             property real boxSelectY1: 0
@@ -897,7 +902,8 @@ Window {
                             x1: Math.min(viewport.areaX1, viewport.areaX2),
                             y1: Math.min(viewport.areaY1, viewport.areaY2),
                             x2: Math.max(viewport.areaX1, viewport.areaX2),
-                            y2: Math.max(viewport.areaY1, viewport.areaY2)
+                            y2: Math.max(viewport.areaY1, viewport.areaY2),
+                            stackOrder: viewport.nextStackOrder++
                         });
                         viewport.selectArea(areasModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -939,7 +945,8 @@ Window {
                             italic: textSettings.txtItalic,
                             underline: textSettings.txtUnderline,
                             textColor: textSettings.txtColor.toString(),
-                            content: ""
+                            content: "",
+                            stackOrder: viewport.nextStackOrder++
                         });
                         viewport.selectTb(textBoxesModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -974,7 +981,8 @@ Window {
                             y1: Math.min(viewport.imgY1, viewport.imgY2),
                             x2: Math.max(viewport.imgX1, viewport.imgX2),
                             y2: Math.max(viewport.imgY1, viewport.imgY2),
-                            filePath: imageSettings.selectedFilePath
+                            filePath: imageSettings.selectedFilePath,
+                            stackOrder: viewport.nextStackOrder++
                         });
                         viewport.selectImage(imagesModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -1009,7 +1017,8 @@ Window {
                             y1: Math.min(viewport.vidY1, viewport.vidY2),
                             x2: Math.max(viewport.vidX1, viewport.vidX2),
                             y2: Math.max(viewport.vidY1, viewport.vidY2),
-                            filePath: videoSettings.selectedFilePath
+                            filePath: videoSettings.selectedFilePath,
+                            stackOrder: viewport.nextStackOrder++
                         });
                         viewport.selectVideo(videosModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -1027,10 +1036,11 @@ Window {
                     y: model.y1 - 28
                     width: model.x2 - model.x1 + 56
                     height: model.y2 - model.y1 + 56
-                    z: 997
+                    z: 100 + model.stackOrder
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
                     property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedAreas.indexOf(index) !== -1
+                    property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "area" && viewport.relayerHoveredIndex === index
                     property real pressVpX: 0
                     property real pressVpY: 0
                     property real origX1: 0
@@ -1046,8 +1056,8 @@ Window {
                         width: parent.width - 56
                         height: parent.height - 56
                         color: areaDelegate.isActive && index === viewport.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent"
-                        border.color: areaDelegate.isActive ? "white" : "#666666"
-                        border.width: areaDelegate.isActive && index === viewport.hoveredAreaIndex ? 2 : 1
+                        border.color: (areaDelegate.isActive || areaDelegate.isRelayerHovered) ? "white" : "#666666"
+                        border.width: (areaDelegate.isActive && index === viewport.hoveredAreaIndex) || areaDelegate.isRelayerHovered ? 2 : 1
                         Behavior on color {
                             ColorAnimation {
                                 duration: 80
@@ -1112,6 +1122,26 @@ Window {
                             areasModel.setProperty(index, "y2", ny1 + h);
                         }
                         onReleased: viewport.elementDragging = false
+                    }
+
+                    // Relayer: hover to highlight, drag to change z-order
+                    MouseArea {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "relayer"
+                        hoverEnabled: true
+                        z: 2
+                        property real pressX: 0
+                        property real pressY: 0
+                        property int pressStack: 0
+                        onEntered: { viewport.relayerHoveredType = "area"; viewport.relayerHoveredIndex = index; }
+                        onExited: { if (viewport.relayerHoveredType === "area" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
+                        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onPositionChanged: function(mouse) {
+                            var delta = (mouse.x - pressX) - (mouse.y - pressY);
+                            areasModel.setProperty(index, "stackOrder", pressStack + Math.round(delta / 20));
+                        }
                     }
 
                     // Resize handles — 56x56 hit area, 8x8 visual dot, centered on shape corners/midpoints
@@ -1484,10 +1514,11 @@ Window {
                     y: model.y1 - 28
                     width: model.x2 - model.x1 + 56
                     height: model.y2 - model.y1 + 56
-                    z: 997
+                    z: 100 + model.stackOrder
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
                     property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedTbs.indexOf(index) !== -1
+                    property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "tb" && viewport.relayerHoveredIndex === index
                     property bool editing: false
                     onEditingChanged: viewport.textEditing = editing
                     onIsActiveChanged: if (!isActive && editing) {
@@ -1509,8 +1540,8 @@ Window {
                         width: parent.width - 56
                         height: parent.height - 56
                         color: "transparent"
-                        border.color: tbDelegate.isActive ? "white" : "#666666"
-                        border.width: 1
+                        border.color: (tbDelegate.isActive || tbDelegate.isRelayerHovered) ? "white" : "#666666"
+                        border.width: tbDelegate.isRelayerHovered ? 2 : 1
                         Rectangle {
                             anchors.fill: parent
                             anchors.margins: 1
@@ -1586,6 +1617,26 @@ Window {
                             }
                         }
                         onReleased: viewport.elementDragging = false
+                    }
+
+                    // Relayer: hover to highlight, drag to change z-order
+                    MouseArea {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "relayer"
+                        hoverEnabled: true
+                        z: 2
+                        property real pressX: 0
+                        property real pressY: 0
+                        property int pressStack: 0
+                        onEntered: { viewport.relayerHoveredType = "tb"; viewport.relayerHoveredIndex = index; }
+                        onExited: { if (viewport.relayerHoveredType === "tb" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
+                        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onPositionChanged: function(mouse) {
+                            var delta = (mouse.x - pressX) - (mouse.y - pressY);
+                            textBoxesModel.setProperty(index, "stackOrder", pressStack + Math.round(delta / 20));
+                        }
                     }
 
                     // Resize handles — 56x56 hit area, 8x8 visual dot, centered on shape corners/midpoints
@@ -1965,10 +2016,11 @@ Window {
                     y: model.y1 - 28
                     width: model.x2 - model.x1 + 56
                     height: model.y2 - model.y1 + 56
-                    z: 997
+                    z: 100 + model.stackOrder
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
                     property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedImages.indexOf(index) !== -1
+                    property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "image" && viewport.relayerHoveredIndex === index
                     property real pressVpX: 0
                     property real pressVpY: 0
                     property real origX1: 0
@@ -1987,19 +2039,20 @@ Window {
                         clip: true
                     }
 
-                    // Border — only when active/selected
+                    // Border — only when active/selected or relayer hovered
                     Rectangle {
                         x: 28; y: 28
                         width: parent.width - 56
                         height: parent.height - 56
+                        z: 1
                         color: "transparent"
-                        border.color: imgDelegate.isActive ? "white" : "transparent"
-                        border.width: 1
+                        border.color: (imgDelegate.isActive || imgDelegate.isRelayerHovered) ? "white" : "transparent"
+                        border.width: imgDelegate.isRelayerHovered ? 2 : 1
                         Rectangle {
                             anchors.fill: parent
                             anchors.margins: 1
                             color: "transparent"
-                            border.color: imgDelegate.isActive ? "black" : "transparent"
+                            border.color: (imgDelegate.isActive || imgDelegate.isRelayerHovered) ? "black" : "transparent"
                             border.width: 1
                         }
                     }
@@ -2042,6 +2095,26 @@ Window {
                             imagesModel.setProperty(index, "y2", ny1 + h);
                         }
                         onReleased: viewport.elementDragging = false
+                    }
+
+                    // Relayer: hover to highlight, drag to change z-order
+                    MouseArea {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "relayer"
+                        hoverEnabled: true
+                        z: 2
+                        property real pressX: 0
+                        property real pressY: 0
+                        property int pressStack: 0
+                        onEntered: { viewport.relayerHoveredType = "image"; viewport.relayerHoveredIndex = index; }
+                        onExited: { if (viewport.relayerHoveredType === "image" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
+                        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onPositionChanged: function(mouse) {
+                            var delta = (mouse.x - pressX) - (mouse.y - pressY);
+                            imagesModel.setProperty(index, "stackOrder", pressStack + Math.round(delta / 20));
+                        }
                     }
 
                     // Resize handles
@@ -2121,10 +2194,11 @@ Window {
                     y: model.y1 - 28
                     width: model.x2 - model.x1 + 56
                     height: model.y2 - model.y1 + 56
-                    z: 997
+                    z: 100 + model.stackOrder
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
                     property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedVideos.indexOf(index) !== -1
+                    property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "video" && viewport.relayerHoveredIndex === index
                     property real pressVpX: 0
                     property real pressVpY: 0
                     property real origX1: 0
@@ -2148,19 +2222,20 @@ Window {
                         height: parent.height - 56
                     }
 
-                    // Border — only when active/selected
+                    // Border — only when active/selected or relayer hovered
                     Rectangle {
                         x: 28; y: 28
                         width: parent.width - 56
                         height: parent.height - 56
+                        z: 1
                         color: "transparent"
-                        border.color: vidDelegate.isActive ? "white" : "transparent"
-                        border.width: 1
+                        border.color: (vidDelegate.isActive || vidDelegate.isRelayerHovered) ? "white" : "transparent"
+                        border.width: vidDelegate.isRelayerHovered ? 2 : 1
                         Rectangle {
                             anchors.fill: parent
                             anchors.margins: 1
                             color: "transparent"
-                            border.color: vidDelegate.isActive ? "black" : "transparent"
+                            border.color: (vidDelegate.isActive || vidDelegate.isRelayerHovered) ? "black" : "transparent"
                             border.width: 1
                         }
                     }
@@ -2203,6 +2278,26 @@ Window {
                             videosModel.setProperty(index, "y2", ny1 + h);
                         }
                         onReleased: viewport.elementDragging = false
+                    }
+
+                    // Relayer: hover to highlight, drag to change z-order
+                    MouseArea {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "relayer"
+                        hoverEnabled: true
+                        z: 2
+                        property real pressX: 0
+                        property real pressY: 0
+                        property int pressStack: 0
+                        onEntered: { viewport.relayerHoveredType = "video"; viewport.relayerHoveredIndex = index; }
+                        onExited: { if (viewport.relayerHoveredType === "video" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
+                        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onPositionChanged: function(mouse) {
+                            var delta = (mouse.x - pressX) - (mouse.y - pressY);
+                            videosModel.setProperty(index, "stackOrder", pressStack + Math.round(delta / 20));
+                        }
                     }
 
                     // Resize handles
