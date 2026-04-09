@@ -6469,6 +6469,7 @@ Window {
                     sceneEditor.visible = true;
                     sceneMenu2sceneEditor.visible = false;
                     sceneMenu.visible = false;
+                    buttonGrid.selectedTool = "select";
                 }
             }
         }
