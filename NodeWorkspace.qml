@@ -1108,8 +1108,10 @@ Item {
                             }
 
                             var dangerFactor = Math.min(1.0, root.wobbleAmplitude / 15.0);
-                            var hue = Math.floor(220 - dangerFactor * 220);
-                            ctx.strokeStyle = "hsl(" + hue + ", 100%, 70%)";
+                            var pr = Math.floor(0x99 + dangerFactor * (0xff - 0x99));
+                            var pg = Math.floor(0xaa + dangerFactor * (0x44 - 0xaa));
+                            var pb = Math.floor(0xff + dangerFactor * (0x44 - 0xff));
+                            ctx.strokeStyle = "rgb(" + pr + "," + pg + "," + pb + ")";
                             ctx.lineWidth = 2 + dangerFactor * 3;
                         } else {
                             ctx.moveTo(ax, ay);

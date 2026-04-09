@@ -677,6 +677,39 @@ Window {
             property real boxSelectX2: 0
             property real boxSelectY2: 0
 
+            // Delete tool state
+            property string deleteTargetType: ""
+            property int deleteTargetIndex: -1
+            property real deleteProgress: 0.0
+            property bool tempDestroyMode: false
+            readonly property string effectiveTool: tempDestroyMode ? "destroy" : buttonGrid.selectedTool
+
+            function cancelDelete() {
+                deleteTargetType = "";
+                deleteTargetIndex = -1;
+                deleteProgress = 0.0;
+                tempDestroyMode = false;
+            }
+
+            Timer {
+                id: deleteTimer
+                interval: 16
+                repeat: true
+                running: viewport.deleteTargetIndex !== -1
+                onTriggered: {
+                    viewport.deleteProgress += 16.0 / 600.0;
+                    if (viewport.deleteProgress >= 1.0) {
+                        var t = viewport.deleteTargetType;
+                        var i = viewport.deleteTargetIndex;
+                        viewport.cancelDelete();
+                        if (t === "area") areasModel.remove(i);
+                        else if (t === "tb") textBoxesModel.remove(i);
+                        else if (t === "image") imagesModel.remove(i);
+                        else if (t === "video") videosModel.remove(i);
+                    }
+                }
+            }
+
             function clearSelection() {
                 selectedAreas = [];
                 selectedTbs = [];
@@ -1048,6 +1081,7 @@ Window {
                     property real origX2: 0
                     property real origY2: 0
                     property real origAspect: 1
+                    property bool isBeingDeleted: (buttonGrid.selectedTool === "destroy" || viewport.tempDestroyMode) && viewport.deleteTargetType === "area" && viewport.deleteTargetIndex === index
 
                     // Visual border (inset by 28px to match model coordinates)
                     Rectangle {
@@ -1055,8 +1089,8 @@ Window {
                         y: 28
                         width: parent.width - 56
                         height: parent.height - 56
-                        color: areaDelegate.isActive && index === viewport.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent"
-                        border.color: (areaDelegate.isActive || areaDelegate.isRelayerHovered) ? "white" : "#666666"
+                        color: areaDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, viewport.deleteProgress * 0.6) : (areaDelegate.isActive && index === viewport.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent")
+                        border.color: areaDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewport.deleteProgress * 0.6) : ((areaDelegate.isActive || areaDelegate.isRelayerHovered) ? "white" : "#666666")
                         border.width: (areaDelegate.isActive && index === viewport.hoveredAreaIndex) || areaDelegate.isRelayerHovered ? 2 : 1
                         Behavior on color {
                             ColorAnimation {
@@ -1089,9 +1123,16 @@ Window {
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: areaDelegate.isSelect
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
                         cursorShape: areaDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
                         onPressed: function (mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                viewport.tempDestroyMode = true;
+                                viewport.deleteTargetType = "area";
+                                viewport.deleteTargetIndex = index;
+                                return;
+                            }
                             viewport.selectArea(index);
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
                             if (areaDelegate.isActive) {
@@ -1121,7 +1162,14 @@ Window {
                             areasModel.setProperty(index, "x2", nx1 + w);
                             areasModel.setProperty(index, "y2", ny1 + h);
                         }
-                        onReleased: viewport.elementDragging = false
+                        onReleased: function (mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                if (viewport.deleteTargetType === "area" && viewport.deleteTargetIndex === index)
+                                    viewport.cancelDelete();
+                                return;
+                            }
+                            viewport.elementDragging = false;
+                        }
                     }
 
                     // Relayer: hover to highlight, drag to change z-order
@@ -1143,6 +1191,17 @@ Window {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
                             areasModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
+                    }
+
+                    // Delete (destroy tool): click-and-hold to remove
+                    MouseArea {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "destroy"
+                        z: 3
+                        onPressed: { viewport.deleteTargetType = "area"; viewport.deleteTargetIndex = index; }
+                        onReleased: { if (viewport.deleteTargetType === "area" && viewport.deleteTargetIndex === index) viewport.cancelDelete(); }
                     }
 
                     // Resize handles — 56x56 hit area, 8x8 visual dot, centered on shape corners/midpoints
@@ -1533,6 +1592,7 @@ Window {
                     property real origX2: 0
                     property real origY2: 0
                     property real origAspect: 1
+                    property bool isBeingDeleted: (buttonGrid.selectedTool === "destroy" || viewport.tempDestroyMode) && viewport.deleteTargetType === "tb" && viewport.deleteTargetIndex === index
 
                     // Visual border (inset by 28px to match model coordinates)
                     Rectangle {
@@ -1540,8 +1600,8 @@ Window {
                         y: 28
                         width: parent.width - 56
                         height: parent.height - 56
-                        color: "transparent"
-                        border.color: (tbDelegate.isActive || tbDelegate.isRelayerHovered) ? "white" : "#666666"
+                        color: tbDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, viewport.deleteProgress * 0.6) : "transparent"
+                        border.color: tbDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewport.deleteProgress * 0.6) : ((tbDelegate.isActive || tbDelegate.isRelayerHovered) ? "white" : "#666666")
                         border.width: tbDelegate.isRelayerHovered ? 2 : 1
                         Rectangle {
                             anchors.fill: parent
@@ -1579,6 +1639,7 @@ Window {
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: !tbDelegate.editing
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
                         cursorShape: tbDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
                         onDoubleClicked: {
@@ -1588,6 +1649,12 @@ Window {
                             }
                         }
                         onPressed: function (mouse) {
+                            if (mouse.button === Qt.RightButton && tbDelegate.isSelect) {
+                                viewport.tempDestroyMode = true;
+                                viewport.deleteTargetType = "tb";
+                                viewport.deleteTargetIndex = index;
+                                return;
+                            }
                             viewport.selectTb(index);
                             if (tbDelegate.isSelect) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
@@ -1617,7 +1684,14 @@ Window {
                                 textBoxesModel.setProperty(index, "y2", ny1 + h);
                             }
                         }
-                        onReleased: viewport.elementDragging = false
+                        onReleased: function (mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                if (viewport.deleteTargetType === "tb" && viewport.deleteTargetIndex === index)
+                                    viewport.cancelDelete();
+                                return;
+                            }
+                            viewport.elementDragging = false;
+                        }
                     }
 
                     // Relayer: hover to highlight, drag to change z-order
@@ -1639,6 +1713,17 @@ Window {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
                             textBoxesModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
+                    }
+
+                    // Delete (destroy tool): click-and-hold to remove
+                    MouseArea {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "destroy"
+                        z: 3
+                        onPressed: { viewport.deleteTargetType = "tb"; viewport.deleteTargetIndex = index; }
+                        onReleased: { if (viewport.deleteTargetType === "tb" && viewport.deleteTargetIndex === index) viewport.cancelDelete(); }
                     }
 
                     // Resize handles — 56x56 hit area, 8x8 visual dot, centered on shape corners/midpoints
@@ -2031,6 +2116,7 @@ Window {
                     property real origX2: 0
                     property real origY2: 0
                     property real origAspect: 1
+                    property bool isBeingDeleted: (buttonGrid.selectedTool === "destroy" || viewport.tempDestroyMode) && viewport.deleteTargetType === "image" && viewport.deleteTargetIndex === index
 
                     // Image fill
                     Image {
@@ -2049,7 +2135,7 @@ Window {
                         height: parent.height - 56
                         z: 1
                         color: "transparent"
-                        border.color: (imgDelegate.isActive || imgDelegate.isRelayerHovered) ? "white" : "transparent"
+                        border.color: imgDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewport.deleteProgress * 0.6) : ((imgDelegate.isActive || imgDelegate.isRelayerHovered) ? "white" : "transparent")
                         border.width: imgDelegate.isRelayerHovered ? 2 : 1
                         Rectangle {
                             anchors.fill: parent
@@ -2060,15 +2146,31 @@ Window {
                         }
                     }
 
+                    // Red delete overlay
+                    Rectangle {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        z: 2
+                        color: Qt.rgba(1, 0, 0, imgDelegate.isBeingDeleted ? viewport.deleteProgress * 0.6 : 0)
+                    }
+
                     // Move
                     MouseArea {
                         x: 28; y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: imgDelegate.isSelect
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
                         cursorShape: imgDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
                         onPressed: function (mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                viewport.tempDestroyMode = true;
+                                viewport.deleteTargetType = "image";
+                                viewport.deleteTargetIndex = index;
+                                return;
+                            }
                             viewport.selectImage(index);
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
                             if (imgDelegate.isActive) {
@@ -2097,7 +2199,14 @@ Window {
                             imagesModel.setProperty(index, "x2", nx1 + w);
                             imagesModel.setProperty(index, "y2", ny1 + h);
                         }
-                        onReleased: viewport.elementDragging = false
+                        onReleased: function (mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                if (viewport.deleteTargetType === "image" && viewport.deleteTargetIndex === index)
+                                    viewport.cancelDelete();
+                                return;
+                            }
+                            viewport.elementDragging = false;
+                        }
                     }
 
                     // Relayer: hover to highlight, drag to change z-order
@@ -2119,6 +2228,17 @@ Window {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
                             imagesModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
+                    }
+
+                    // Delete (destroy tool): click-and-hold to remove
+                    MouseArea {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "destroy"
+                        z: 3
+                        onPressed: { viewport.deleteTargetType = "image"; viewport.deleteTargetIndex = index; }
+                        onReleased: { if (viewport.deleteTargetType === "image" && viewport.deleteTargetIndex === index) viewport.cancelDelete(); }
                     }
 
                     // Resize handles
@@ -2211,6 +2331,7 @@ Window {
                     property real origX2: 0
                     property real origY2: 0
                     property real origAspect: 1
+                    property bool isBeingDeleted: (buttonGrid.selectedTool === "destroy" || viewport.tempDestroyMode) && viewport.deleteTargetType === "video" && viewport.deleteTargetIndex === index
 
                     // Video fill
                     MediaPlayer {
@@ -2234,7 +2355,7 @@ Window {
                         height: parent.height - 56
                         z: 1
                         color: "transparent"
-                        border.color: (vidDelegate.isActive || vidDelegate.isRelayerHovered) ? "white" : "transparent"
+                        border.color: vidDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewport.deleteProgress * 0.6) : ((vidDelegate.isActive || vidDelegate.isRelayerHovered) ? "white" : "transparent")
                         border.width: vidDelegate.isRelayerHovered ? 2 : 1
                         Rectangle {
                             anchors.fill: parent
@@ -2245,15 +2366,31 @@ Window {
                         }
                     }
 
+                    // Red delete overlay
+                    Rectangle {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        z: 2
+                        color: Qt.rgba(1, 0, 0, vidDelegate.isBeingDeleted ? viewport.deleteProgress * 0.6 : 0)
+                    }
+
                     // Move
                     MouseArea {
                         x: 28; y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: vidDelegate.isSelect
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
                         cursorShape: vidDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
                         onPressed: function (mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                viewport.tempDestroyMode = true;
+                                viewport.deleteTargetType = "video";
+                                viewport.deleteTargetIndex = index;
+                                return;
+                            }
                             viewport.selectVideo(index);
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
                             if (vidDelegate.isActive) {
@@ -2282,7 +2419,14 @@ Window {
                             videosModel.setProperty(index, "x2", nx1 + w);
                             videosModel.setProperty(index, "y2", ny1 + h);
                         }
-                        onReleased: viewport.elementDragging = false
+                        onReleased: function (mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                if (viewport.deleteTargetType === "video" && viewport.deleteTargetIndex === index)
+                                    viewport.cancelDelete();
+                                return;
+                            }
+                            viewport.elementDragging = false;
+                        }
                     }
 
                     // Relayer: hover to highlight, drag to change z-order
@@ -2304,6 +2448,17 @@ Window {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
                             videosModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
+                    }
+
+                    // Delete (destroy tool): click-and-hold to remove
+                    MouseArea {
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "destroy"
+                        z: 3
+                        onPressed: { viewport.deleteTargetType = "video"; viewport.deleteTargetIndex = index; }
+                        onReleased: { if (viewport.deleteTargetType === "video" && viewport.deleteTargetIndex === index) viewport.cancelDelete(); }
                     }
 
                     // Resize handles
@@ -3057,19 +3212,19 @@ Window {
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
-                cursorShape: viewport.textEditing ? Qt.IBeamCursor : (["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor)
+                cursorShape: viewport.textEditing ? Qt.IBeamCursor : (["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(viewport.effectiveTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor)
                 z: 999
                 onPositionChanged: viewport.hoveredAreaIndex = viewport.findHoveredArea(mouseX, mouseY)
                 onExited: viewport.hoveredAreaIndex = -1
             }
 
             Image {
-                x: (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX)))))) + (buttonGrid.selectedTool === "select" ? -8 : 0)
-                y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY)))))) + (buttonGrid.selectedTool === "select" ? -1 : 0)
+                x: (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX)))))) + (viewport.effectiveTool === "select" ? -8 : 0)
+                y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY)))))) + (viewport.effectiveTool === "select" ? -1 : 0)
                 width: 36
                 height: 36
-                source: viewport.elementDragging ? "icons/pinch.svg" : (["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1 ? "icons/" + buttonGrid.selectedTool + ".svg" : "")
-                visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(buttonGrid.selectedTool) !== -1)
+                source: viewport.elementDragging ? "icons/pinch.svg" : (["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : "")
+                visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(viewport.effectiveTool) !== -1)
                 fillMode: Image.PreserveAspectFit
                 z: 1000
             }
@@ -3265,7 +3420,7 @@ Window {
                             height: 88
 
                             property bool hovered: false
-                            property bool toggled: buttonGrid.selectedTool === modelData
+                            property bool toggled: viewport.effectiveTool === modelData
                             property string iconSource: "icons/" + modelData + ".svg"
 
                             Rectangle {
