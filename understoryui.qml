@@ -702,10 +702,14 @@ Window {
                         var t = viewport.deleteTargetType;
                         var i = viewport.deleteTargetIndex;
                         viewport.cancelDelete();
-                        if (t === "area") areasModel.remove(i);
-                        else if (t === "tb") textBoxesModel.remove(i);
-                        else if (t === "image") imagesModel.remove(i);
-                        else if (t === "video") videosModel.remove(i);
+                        if (t === "area")
+                            areasModel.remove(i);
+                        else if (t === "tb")
+                            textBoxesModel.remove(i);
+                        else if (t === "image")
+                            imagesModel.remove(i);
+                        else if (t === "video")
+                            videosModel.remove(i);
                     }
                 }
             }
@@ -837,6 +841,73 @@ Window {
             property real vidY2: 0
             property bool videoDragging: false
 
+            // Background occlusion tracking — pauses the shader when opaque
+            // items fully cover the viewport, saving fragment shader cost.
+            property bool bgOccluded: false
+            // Increment this whenever an image or video is moved or resized
+            // to trigger a fresh occlusion check.
+            property int layoutRevision: 0
+            onLayoutRevisionChanged: checkOcclusion()
+
+            function checkOcclusion() {
+                var vw = viewport.width;
+                var vh = viewport.height;
+                var rects = [];
+
+                // Images are opaque unless they're a format that supports alpha
+                for (var i = 0; i < imagesModel.count; i++) {
+                    var img = imagesModel.get(i);
+                    var ext = img.filePath.toLowerCase();
+                    var hasAlpha = ext.endsWith(".png") || ext.endsWith(".gif") || ext.endsWith(".webp");
+                    if (!hasAlpha)
+                        rects.push(img);
+                }
+
+                // Videos are assumed opaque — most codecs have no alpha channel
+                for (var j = 0; j < videosModel.count; j++)
+                    rects.push(videosModel.get(j));
+
+                if (rects.length === 0) { bgOccluded = false; return; }
+
+                // Coordinate compression: build a grid from all rect boundaries
+                // clamped to the viewport, then check each cell for coverage.
+                var xs = [0, vw], ys = [0, vh];
+                for (var k = 0; k < rects.length; k++) {
+                    var r = rects[k];
+                    xs.push(Math.max(0, Math.min(vw, r.x1)), Math.max(0, Math.min(vw, r.x2)));
+                    ys.push(Math.max(0, Math.min(vh, r.y1)), Math.max(0, Math.min(vh, r.y2)));
+                }
+                xs = xs.filter(function(v,i,a){return a.indexOf(v)===i;}).sort(function(a,b){return a-b;});
+                ys = ys.filter(function(v,i,a){return a.indexOf(v)===i;}).sort(function(a,b){return a-b;});
+
+                var coveredArea = 0;
+                for (var xi = 0; xi < xs.length - 1; xi++) {
+                    var cx = (xs[xi] + xs[xi+1]) * 0.5;
+                    var cw = xs[xi+1] - xs[xi];
+                    for (var yi = 0; yi < ys.length - 1; yi++) {
+                        var cy = (ys[yi] + ys[yi+1]) * 0.5;
+                        var ch = ys[yi+1] - ys[yi];
+                        for (var ri = 0; ri < rects.length; ri++) {
+                            var rc = rects[ri];
+                            if (cx >= rc.x1 && cx < rc.x2 && cy >= rc.y1 && cy < rc.y2) {
+                                coveredArea += cw * ch;
+                                break;
+                            }
+                        }
+                    }
+                }
+                bgOccluded = (coveredArea >= vw * vh);
+            }
+
+            Connections {
+                target: imagesModel
+                function onCountChanged() { viewport.checkOcclusion(); }
+            }
+            Connections {
+                target: videosModel
+                function onCountChanged() { viewport.checkOcclusion(); }
+            }
+
             function findHoveredArea(px, py) {
                 if (buttonGrid.selectedTool !== "select")
                     return -1;
@@ -869,16 +940,18 @@ Window {
 
             ShaderEffect {
                 anchors.fill: parent
-                fragmentShader: "filmgrain.frag.qsb"
+                visible: !viewport.bgOccluded
+                fragmentShader: "cloudyeditorbg.frag.qsb"
                 property real time: 0
-                property real density: 4.0       // noise scale — lower = bigger blobs, higher = finer
-                property real driftSpeed: 0.06   // how fast the noise crawls
-                property real intensity: 0.28    // grain strength
+                property real scale: 25.0         // feature size — lower = bigger clouds, higher = finer
+                property real driftSpeed: 0.25   // how fast the noise evolves
+                property real intensity: 0.10    // contrast/strength of the effect
                 NumberAnimation on time {
-                    from: 0; to: 1000
+                    running: sceneEditor.visible && !viewport.bgOccluded
+                    from: 0
+                    to: 1000
                     duration: 1000000
                     loops: Animation.Infinite
-                    running: true
                 }
             }
 
@@ -1184,7 +1257,8 @@ Window {
 
                     // Relayer: hover to highlight, drag to change z-order
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: buttonGrid.selectedTool === "relayer"
@@ -1193,11 +1267,30 @@ Window {
                         property real pressX: 0
                         property real pressY: 0
                         property int pressStack: 0
-                        onEntered: { viewport.relayerHoveredType = "area"; viewport.relayerHoveredIndex = index; }
-                        onExited: { if (!pressed && viewport.relayerHoveredType === "area" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPressed: function(mouse) { viewport.relayerHoveredType = "area"; viewport.relayerHoveredIndex = index; pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
-                        onReleased: function(mouse) { if (!containsMouse) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPositionChanged: function(mouse) {
+                        onEntered: {
+                            viewport.relayerHoveredType = "area";
+                            viewport.relayerHoveredIndex = index;
+                        }
+                        onExited: {
+                            if (!pressed && viewport.relayerHoveredType === "area" && viewport.relayerHoveredIndex === index) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPressed: function (mouse) {
+                            viewport.relayerHoveredType = "area";
+                            viewport.relayerHoveredIndex = index;
+                            pressX = mouse.x;
+                            pressY = mouse.y;
+                            pressStack = model.stackOrder;
+                        }
+                        onReleased: function (mouse) {
+                            if (!containsMouse) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPositionChanged: function (mouse) {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
                             areasModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
@@ -1205,13 +1298,20 @@ Window {
 
                     // Delete (destroy tool): click-and-hold to remove
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: buttonGrid.selectedTool === "destroy"
                         z: 3
-                        onPressed: { viewport.deleteTargetType = "area"; viewport.deleteTargetIndex = index; }
-                        onReleased: { if (viewport.deleteTargetType === "area" && viewport.deleteTargetIndex === index) viewport.cancelDelete(); }
+                        onPressed: {
+                            viewport.deleteTargetType = "area";
+                            viewport.deleteTargetIndex = index;
+                        }
+                        onReleased: {
+                            if (viewport.deleteTargetType === "area" && viewport.deleteTargetIndex === index)
+                                viewport.cancelDelete();
+                        }
                     }
 
                     // Resize handles — 56x56 hit area, 8x8 visual dot, centered on shape corners/midpoints
@@ -1706,7 +1806,8 @@ Window {
 
                     // Relayer: hover to highlight, drag to change z-order
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: buttonGrid.selectedTool === "relayer"
@@ -1715,11 +1816,30 @@ Window {
                         property real pressX: 0
                         property real pressY: 0
                         property int pressStack: 0
-                        onEntered: { viewport.relayerHoveredType = "tb"; viewport.relayerHoveredIndex = index; }
-                        onExited: { if (!pressed && viewport.relayerHoveredType === "tb" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPressed: function(mouse) { viewport.relayerHoveredType = "tb"; viewport.relayerHoveredIndex = index; pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
-                        onReleased: function(mouse) { if (!containsMouse) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPositionChanged: function(mouse) {
+                        onEntered: {
+                            viewport.relayerHoveredType = "tb";
+                            viewport.relayerHoveredIndex = index;
+                        }
+                        onExited: {
+                            if (!pressed && viewport.relayerHoveredType === "tb" && viewport.relayerHoveredIndex === index) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPressed: function (mouse) {
+                            viewport.relayerHoveredType = "tb";
+                            viewport.relayerHoveredIndex = index;
+                            pressX = mouse.x;
+                            pressY = mouse.y;
+                            pressStack = model.stackOrder;
+                        }
+                        onReleased: function (mouse) {
+                            if (!containsMouse) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPositionChanged: function (mouse) {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
                             textBoxesModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
@@ -1727,13 +1847,20 @@ Window {
 
                     // Delete (destroy tool): click-and-hold to remove
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: buttonGrid.selectedTool === "destroy"
                         z: 3
-                        onPressed: { viewport.deleteTargetType = "tb"; viewport.deleteTargetIndex = index; }
-                        onReleased: { if (viewport.deleteTargetType === "tb" && viewport.deleteTargetIndex === index) viewport.cancelDelete(); }
+                        onPressed: {
+                            viewport.deleteTargetType = "tb";
+                            viewport.deleteTargetIndex = index;
+                        }
+                        onReleased: {
+                            if (viewport.deleteTargetType === "tb" && viewport.deleteTargetIndex === index)
+                                viewport.cancelDelete();
+                        }
                     }
 
                     // Resize handles — 56x56 hit area, 8x8 visual dot, centered on shape corners/midpoints
@@ -2130,7 +2257,8 @@ Window {
 
                     // Image fill
                     Image {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         source: model.filePath
@@ -2140,7 +2268,8 @@ Window {
 
                     // Border — only when active/selected or relayer hovered
                     Rectangle {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         z: 1
@@ -2158,7 +2287,8 @@ Window {
 
                     // Red delete overlay
                     Rectangle {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         z: 2
@@ -2167,7 +2297,8 @@ Window {
 
                     // Move
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: imgDelegate.isSelect
@@ -2196,7 +2327,8 @@ Window {
                             }
                         }
                         onPositionChanged: function (mouse) {
-                            if (!imgDelegate.isActive) return;
+                            if (!imgDelegate.isActive)
+                                return;
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
                             viewport.elementDragX = pt.x;
                             viewport.elementDragY = pt.y;
@@ -2221,7 +2353,8 @@ Window {
 
                     // Relayer: hover to highlight, drag to change z-order
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: buttonGrid.selectedTool === "relayer"
@@ -2230,11 +2363,30 @@ Window {
                         property real pressX: 0
                         property real pressY: 0
                         property int pressStack: 0
-                        onEntered: { viewport.relayerHoveredType = "image"; viewport.relayerHoveredIndex = index; }
-                        onExited: { if (!pressed && viewport.relayerHoveredType === "image" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPressed: function(mouse) { viewport.relayerHoveredType = "image"; viewport.relayerHoveredIndex = index; pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
-                        onReleased: function(mouse) { if (!containsMouse) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPositionChanged: function(mouse) {
+                        onEntered: {
+                            viewport.relayerHoveredType = "image";
+                            viewport.relayerHoveredIndex = index;
+                        }
+                        onExited: {
+                            if (!pressed && viewport.relayerHoveredType === "image" && viewport.relayerHoveredIndex === index) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPressed: function (mouse) {
+                            viewport.relayerHoveredType = "image";
+                            viewport.relayerHoveredIndex = index;
+                            pressX = mouse.x;
+                            pressY = mouse.y;
+                            pressStack = model.stackOrder;
+                        }
+                        onReleased: function (mouse) {
+                            if (!containsMouse) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPositionChanged: function (mouse) {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
                             imagesModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
@@ -2242,79 +2394,378 @@ Window {
 
                     // Delete (destroy tool): click-and-hold to remove
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: buttonGrid.selectedTool === "destroy"
                         z: 3
-                        onPressed: { viewport.deleteTargetType = "image"; viewport.deleteTargetIndex = index; }
-                        onReleased: { if (viewport.deleteTargetType === "image" && viewport.deleteTargetIndex === index) viewport.cancelDelete(); }
+                        onPressed: {
+                            viewport.deleteTargetType = "image";
+                            viewport.deleteTargetIndex = index;
+                        }
+                        onReleased: {
+                            if (viewport.deleteTargetType === "image" && viewport.deleteTargetIndex === index)
+                                viewport.cancelDelete();
+                        }
                     }
 
                     // Resize handles
                     // Top-left
-                    Item { x: 0; y: 0; width: 56; height: 56; visible: imgDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeFDiagCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); imgDelegate.pressVpX = pt.x; imgDelegate.pressVpY = pt.y; imgDelegate.origX1 = model.x1; imgDelegate.origY1 = model.y1; imgDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1); viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20)); var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20)); if (mouse.modifiers & Qt.ShiftModifier) { var nW = model.x2 - nx1, nH = model.y2 - ny1; if (nW / nH > imgDelegate.origAspect) { nW = nH * imgDelegate.origAspect; nx1 = model.x2 - nW; } else { nH = nW / imgDelegate.origAspect; ny1 = model.y2 - nH; } } imagesModel.setProperty(index, "x1", nx1); imagesModel.setProperty(index, "y1", ny1); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: 0
+                        y: 0
+                        width: 56
+                        height: 56
+                        visible: imgDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                imgDelegate.pressVpX = pt.x;
+                                imgDelegate.pressVpY = pt.y;
+                                imgDelegate.origX1 = model.x1;
+                                imgDelegate.origY1 = model.y1;
+                                imgDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                                var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20));
+                                var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = model.x2 - nx1, nH = model.y2 - ny1;
+                                    if (nW / nH > imgDelegate.origAspect) {
+                                        nW = nH * imgDelegate.origAspect;
+                                        nx1 = model.x2 - nW;
+                                    } else {
+                                        nH = nW / imgDelegate.origAspect;
+                                        ny1 = model.y2 - nH;
+                                    }
+                                }
+                                imagesModel.setProperty(index, "x1", nx1);
+                                imagesModel.setProperty(index, "y1", ny1);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Top-mid
-                    Item { x: parent.width / 2 - 14; y: 14; width: 28; height: 28; visible: imgDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeVerCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); imgDelegate.pressVpY = pt.y; imgDelegate.origY1 = model.y1; viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragY = pt.y; imagesModel.setProperty(index, "y1", Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20))); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width / 2 - 14
+                        y: 14
+                        width: 28
+                        height: 28
+                        visible: imgDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeVerCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                imgDelegate.pressVpY = pt.y;
+                                imgDelegate.origY1 = model.y1;
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragY = pt.y;
+                                imagesModel.setProperty(index, "y1", Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Top-right
-                    Item { x: parent.width - 56; y: 0; width: 56; height: 56; visible: imgDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeBDiagCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); imgDelegate.pressVpX = pt.x; imgDelegate.pressVpY = pt.y; imgDelegate.origX2 = model.x2; imgDelegate.origY1 = model.y1; imgDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1); viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; var nx2 = Math.min(viewport.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20)); var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20)); if (mouse.modifiers & Qt.ShiftModifier) { var nW = nx2 - model.x1, nH = model.y2 - ny1; if (nW / nH > imgDelegate.origAspect) { nW = nH * imgDelegate.origAspect; nx2 = model.x1 + nW; } else { nH = nW / imgDelegate.origAspect; ny1 = model.y2 - nH; } } imagesModel.setProperty(index, "x2", nx2); imagesModel.setProperty(index, "y1", ny1); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width - 56
+                        y: 0
+                        width: 56
+                        height: 56
+                        visible: imgDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                imgDelegate.pressVpX = pt.x;
+                                imgDelegate.pressVpY = pt.y;
+                                imgDelegate.origX2 = model.x2;
+                                imgDelegate.origY1 = model.y1;
+                                imgDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                                var nx2 = Math.min(viewport.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20));
+                                var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = nx2 - model.x1, nH = model.y2 - ny1;
+                                    if (nW / nH > imgDelegate.origAspect) {
+                                        nW = nH * imgDelegate.origAspect;
+                                        nx2 = model.x1 + nW;
+                                    } else {
+                                        nH = nW / imgDelegate.origAspect;
+                                        ny1 = model.y2 - nH;
+                                    }
+                                }
+                                imagesModel.setProperty(index, "x2", nx2);
+                                imagesModel.setProperty(index, "y1", ny1);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Right-mid
-                    Item { x: parent.width - 42; y: parent.height / 2 - 14; width: 28; height: 28; visible: imgDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeHorCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); imgDelegate.pressVpX = pt.x; imgDelegate.origX2 = model.x2; viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; imagesModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20))); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width - 42
+                        y: parent.height / 2 - 14
+                        width: 28
+                        height: 28
+                        visible: imgDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeHorCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                imgDelegate.pressVpX = pt.x;
+                                imgDelegate.origX2 = model.x2;
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                imagesModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Bottom-right
-                    Item { x: parent.width - 56; y: parent.height - 56; width: 56; height: 56; visible: imgDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeFDiagCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); imgDelegate.pressVpX = pt.x; imgDelegate.pressVpY = pt.y; imgDelegate.origX2 = model.x2; imgDelegate.origY2 = model.y2; imgDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1); viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; var nx2 = Math.min(viewport.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20)); var ny2 = Math.min(viewport.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20)); if (mouse.modifiers & Qt.ShiftModifier) { var nW = nx2 - model.x1, nH = ny2 - model.y1; if (nW / nH > imgDelegate.origAspect) { nW = nH * imgDelegate.origAspect; nx2 = model.x1 + nW; } else { nH = nW / imgDelegate.origAspect; ny2 = model.y1 + nH; } } imagesModel.setProperty(index, "x2", nx2); imagesModel.setProperty(index, "y2", ny2); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width - 56
+                        y: parent.height - 56
+                        width: 56
+                        height: 56
+                        visible: imgDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                imgDelegate.pressVpX = pt.x;
+                                imgDelegate.pressVpY = pt.y;
+                                imgDelegate.origX2 = model.x2;
+                                imgDelegate.origY2 = model.y2;
+                                imgDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                                var nx2 = Math.min(viewport.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20));
+                                var ny2 = Math.min(viewport.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = nx2 - model.x1, nH = ny2 - model.y1;
+                                    if (nW / nH > imgDelegate.origAspect) {
+                                        nW = nH * imgDelegate.origAspect;
+                                        nx2 = model.x1 + nW;
+                                    } else {
+                                        nH = nW / imgDelegate.origAspect;
+                                        ny2 = model.y1 + nH;
+                                    }
+                                }
+                                imagesModel.setProperty(index, "x2", nx2);
+                                imagesModel.setProperty(index, "y2", ny2);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Bottom-mid
-                    Item { x: parent.width / 2 - 14; y: parent.height - 42; width: 28; height: 28; visible: imgDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeVerCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); imgDelegate.pressVpY = pt.y; imgDelegate.origY2 = model.y2; viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragY = pt.y; imagesModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20))); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width / 2 - 14
+                        y: parent.height - 42
+                        width: 28
+                        height: 28
+                        visible: imgDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeVerCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                imgDelegate.pressVpY = pt.y;
+                                imgDelegate.origY2 = model.y2;
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragY = pt.y;
+                                imagesModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Bottom-left
-                    Item { x: 0; y: parent.height - 56; width: 56; height: 56; visible: imgDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeBDiagCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); imgDelegate.pressVpX = pt.x; imgDelegate.pressVpY = pt.y; imgDelegate.origX1 = model.x1; imgDelegate.origY2 = model.y2; imgDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1); viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20)); var ny2 = Math.min(viewport.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20)); if (mouse.modifiers & Qt.ShiftModifier) { var nW = model.x2 - nx1, nH = ny2 - model.y1; if (nW / nH > imgDelegate.origAspect) { nW = nH * imgDelegate.origAspect; nx1 = model.x2 - nW; } else { nH = nW / imgDelegate.origAspect; ny2 = model.y1 + nH; } } imagesModel.setProperty(index, "x1", nx1); imagesModel.setProperty(index, "y2", ny2); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: 0
+                        y: parent.height - 56
+                        width: 56
+                        height: 56
+                        visible: imgDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                imgDelegate.pressVpX = pt.x;
+                                imgDelegate.pressVpY = pt.y;
+                                imgDelegate.origX1 = model.x1;
+                                imgDelegate.origY2 = model.y2;
+                                imgDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                                var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20));
+                                var ny2 = Math.min(viewport.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = model.x2 - nx1, nH = ny2 - model.y1;
+                                    if (nW / nH > imgDelegate.origAspect) {
+                                        nW = nH * imgDelegate.origAspect;
+                                        nx1 = model.x2 - nW;
+                                    } else {
+                                        nH = nW / imgDelegate.origAspect;
+                                        ny2 = model.y1 + nH;
+                                    }
+                                }
+                                imagesModel.setProperty(index, "x1", nx1);
+                                imagesModel.setProperty(index, "y2", ny2);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Left-mid
-                    Item { x: 14; y: parent.height / 2 - 14; width: 28; height: 28; visible: imgDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeHorCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); imgDelegate.pressVpX = pt.x; imgDelegate.origX1 = model.x1; viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; imagesModel.setProperty(index, "x1", Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20))); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: 14
+                        y: parent.height / 2 - 14
+                        width: 28
+                        height: 28
+                        visible: imgDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeHorCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                imgDelegate.pressVpX = pt.x;
+                                imgDelegate.origX1 = model.x1;
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                imagesModel.setProperty(index, "x1", Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                 }
             }
@@ -2353,14 +2804,16 @@ Window {
                     }
                     VideoOutput {
                         id: vidOutput
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                     }
 
                     // Border — only when active/selected or relayer hovered
                     Rectangle {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         z: 1
@@ -2378,7 +2831,8 @@ Window {
 
                     // Red delete overlay
                     Rectangle {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         z: 2
@@ -2387,7 +2841,8 @@ Window {
 
                     // Move
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: vidDelegate.isSelect
@@ -2416,7 +2871,8 @@ Window {
                             }
                         }
                         onPositionChanged: function (mouse) {
-                            if (!vidDelegate.isActive) return;
+                            if (!vidDelegate.isActive)
+                                return;
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
                             viewport.elementDragX = pt.x;
                             viewport.elementDragY = pt.y;
@@ -2441,7 +2897,8 @@ Window {
 
                     // Relayer: hover to highlight, drag to change z-order
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: buttonGrid.selectedTool === "relayer"
@@ -2450,11 +2907,30 @@ Window {
                         property real pressX: 0
                         property real pressY: 0
                         property int pressStack: 0
-                        onEntered: { viewport.relayerHoveredType = "video"; viewport.relayerHoveredIndex = index; }
-                        onExited: { if (!pressed && viewport.relayerHoveredType === "video" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPressed: function(mouse) { viewport.relayerHoveredType = "video"; viewport.relayerHoveredIndex = index; pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
-                        onReleased: function(mouse) { if (!containsMouse) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPositionChanged: function(mouse) {
+                        onEntered: {
+                            viewport.relayerHoveredType = "video";
+                            viewport.relayerHoveredIndex = index;
+                        }
+                        onExited: {
+                            if (!pressed && viewport.relayerHoveredType === "video" && viewport.relayerHoveredIndex === index) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPressed: function (mouse) {
+                            viewport.relayerHoveredType = "video";
+                            viewport.relayerHoveredIndex = index;
+                            pressX = mouse.x;
+                            pressY = mouse.y;
+                            pressStack = model.stackOrder;
+                        }
+                        onReleased: function (mouse) {
+                            if (!containsMouse) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPositionChanged: function (mouse) {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
                             videosModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
@@ -2462,79 +2938,378 @@ Window {
 
                     // Delete (destroy tool): click-and-hold to remove
                     MouseArea {
-                        x: 28; y: 28
+                        x: 28
+                        y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         enabled: buttonGrid.selectedTool === "destroy"
                         z: 3
-                        onPressed: { viewport.deleteTargetType = "video"; viewport.deleteTargetIndex = index; }
-                        onReleased: { if (viewport.deleteTargetType === "video" && viewport.deleteTargetIndex === index) viewport.cancelDelete(); }
+                        onPressed: {
+                            viewport.deleteTargetType = "video";
+                            viewport.deleteTargetIndex = index;
+                        }
+                        onReleased: {
+                            if (viewport.deleteTargetType === "video" && viewport.deleteTargetIndex === index)
+                                viewport.cancelDelete();
+                        }
                     }
 
                     // Resize handles
                     // Top-left
-                    Item { x: 0; y: 0; width: 56; height: 56; visible: vidDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeFDiagCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); vidDelegate.pressVpX = pt.x; vidDelegate.pressVpY = pt.y; vidDelegate.origX1 = model.x1; vidDelegate.origY1 = model.y1; vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1); viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20)); var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20)); if (mouse.modifiers & Qt.ShiftModifier) { var nW = model.x2 - nx1, nH = model.y2 - ny1; if (nW / nH > vidDelegate.origAspect) { nW = nH * vidDelegate.origAspect; nx1 = model.x2 - nW; } else { nH = nW / vidDelegate.origAspect; ny1 = model.y2 - nH; } } videosModel.setProperty(index, "x1", nx1); videosModel.setProperty(index, "y1", ny1); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: 0
+                        y: 0
+                        width: 56
+                        height: 56
+                        visible: vidDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                vidDelegate.pressVpX = pt.x;
+                                vidDelegate.pressVpY = pt.y;
+                                vidDelegate.origX1 = model.x1;
+                                vidDelegate.origY1 = model.y1;
+                                vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                                var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20));
+                                var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = model.x2 - nx1, nH = model.y2 - ny1;
+                                    if (nW / nH > vidDelegate.origAspect) {
+                                        nW = nH * vidDelegate.origAspect;
+                                        nx1 = model.x2 - nW;
+                                    } else {
+                                        nH = nW / vidDelegate.origAspect;
+                                        ny1 = model.y2 - nH;
+                                    }
+                                }
+                                videosModel.setProperty(index, "x1", nx1);
+                                videosModel.setProperty(index, "y1", ny1);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Top-mid
-                    Item { x: parent.width / 2 - 14; y: 14; width: 28; height: 28; visible: vidDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeVerCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); vidDelegate.pressVpY = pt.y; vidDelegate.origY1 = model.y1; viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragY = pt.y; videosModel.setProperty(index, "y1", Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20))); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width / 2 - 14
+                        y: 14
+                        width: 28
+                        height: 28
+                        visible: vidDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeVerCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                vidDelegate.pressVpY = pt.y;
+                                vidDelegate.origY1 = model.y1;
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragY = pt.y;
+                                videosModel.setProperty(index, "y1", Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Top-right
-                    Item { x: parent.width - 56; y: 0; width: 56; height: 56; visible: vidDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeBDiagCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); vidDelegate.pressVpX = pt.x; vidDelegate.pressVpY = pt.y; vidDelegate.origX2 = model.x2; vidDelegate.origY1 = model.y1; vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1); viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; var nx2 = Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20)); var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20)); if (mouse.modifiers & Qt.ShiftModifier) { var nW = nx2 - model.x1, nH = model.y2 - ny1; if (nW / nH > vidDelegate.origAspect) { nW = nH * vidDelegate.origAspect; nx2 = model.x1 + nW; } else { nH = nW / vidDelegate.origAspect; ny1 = model.y2 - nH; } } videosModel.setProperty(index, "x2", nx2); videosModel.setProperty(index, "y1", ny1); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width - 56
+                        y: 0
+                        width: 56
+                        height: 56
+                        visible: vidDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                vidDelegate.pressVpX = pt.x;
+                                vidDelegate.pressVpY = pt.y;
+                                vidDelegate.origX2 = model.x2;
+                                vidDelegate.origY1 = model.y1;
+                                vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                                var nx2 = Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20));
+                                var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = nx2 - model.x1, nH = model.y2 - ny1;
+                                    if (nW / nH > vidDelegate.origAspect) {
+                                        nW = nH * vidDelegate.origAspect;
+                                        nx2 = model.x1 + nW;
+                                    } else {
+                                        nH = nW / vidDelegate.origAspect;
+                                        ny1 = model.y2 - nH;
+                                    }
+                                }
+                                videosModel.setProperty(index, "x2", nx2);
+                                videosModel.setProperty(index, "y1", ny1);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Right-mid
-                    Item { x: parent.width - 42; y: parent.height / 2 - 14; width: 28; height: 28; visible: vidDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeHorCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); vidDelegate.pressVpX = pt.x; vidDelegate.origX2 = model.x2; viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; videosModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20))); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width - 42
+                        y: parent.height / 2 - 14
+                        width: 28
+                        height: 28
+                        visible: vidDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeHorCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                vidDelegate.pressVpX = pt.x;
+                                vidDelegate.origX2 = model.x2;
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                videosModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Bottom-right
-                    Item { x: parent.width - 56; y: parent.height - 56; width: 56; height: 56; visible: vidDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeFDiagCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); vidDelegate.pressVpX = pt.x; vidDelegate.pressVpY = pt.y; vidDelegate.origX2 = model.x2; vidDelegate.origY2 = model.y2; vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1); viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; var nx2 = Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20)); var ny2 = Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20)); if (mouse.modifiers & Qt.ShiftModifier) { var nW = nx2 - model.x1, nH = ny2 - model.y1; if (nW / nH > vidDelegate.origAspect) { nW = nH * vidDelegate.origAspect; nx2 = model.x1 + nW; } else { nH = nW / vidDelegate.origAspect; ny2 = model.y1 + nH; } } videosModel.setProperty(index, "x2", nx2); videosModel.setProperty(index, "y2", ny2); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width - 56
+                        y: parent.height - 56
+                        width: 56
+                        height: 56
+                        visible: vidDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                vidDelegate.pressVpX = pt.x;
+                                vidDelegate.pressVpY = pt.y;
+                                vidDelegate.origX2 = model.x2;
+                                vidDelegate.origY2 = model.y2;
+                                vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                                var nx2 = Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20));
+                                var ny2 = Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = nx2 - model.x1, nH = ny2 - model.y1;
+                                    if (nW / nH > vidDelegate.origAspect) {
+                                        nW = nH * vidDelegate.origAspect;
+                                        nx2 = model.x1 + nW;
+                                    } else {
+                                        nH = nW / vidDelegate.origAspect;
+                                        ny2 = model.y1 + nH;
+                                    }
+                                }
+                                videosModel.setProperty(index, "x2", nx2);
+                                videosModel.setProperty(index, "y2", ny2);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Bottom-mid
-                    Item { x: parent.width / 2 - 14; y: parent.height - 42; width: 28; height: 28; visible: vidDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeVerCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); vidDelegate.pressVpY = pt.y; vidDelegate.origY2 = model.y2; viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragY = pt.y; videosModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20))); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: parent.width / 2 - 14
+                        y: parent.height - 42
+                        width: 28
+                        height: 28
+                        visible: vidDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeVerCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                vidDelegate.pressVpY = pt.y;
+                                vidDelegate.origY2 = model.y2;
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragY = pt.y;
+                                videosModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Bottom-left
-                    Item { x: 0; y: parent.height - 56; width: 56; height: 56; visible: vidDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeBDiagCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); vidDelegate.pressVpX = pt.x; vidDelegate.pressVpY = pt.y; vidDelegate.origX1 = model.x1; vidDelegate.origY2 = model.y2; vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1); viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20)); var ny2 = Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20)); if (mouse.modifiers & Qt.ShiftModifier) { var nW = model.x2 - nx1, nH = ny2 - model.y1; if (nW / nH > vidDelegate.origAspect) { nW = nH * vidDelegate.origAspect; nx1 = model.x2 - nW; } else { nH = nW / vidDelegate.origAspect; ny2 = model.y1 + nH; } } videosModel.setProperty(index, "x1", nx1); videosModel.setProperty(index, "y2", ny2); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: 0
+                        y: parent.height - 56
+                        width: 56
+                        height: 56
+                        visible: vidDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                vidDelegate.pressVpX = pt.x;
+                                vidDelegate.pressVpY = pt.y;
+                                vidDelegate.origX1 = model.x1;
+                                vidDelegate.origY2 = model.y2;
+                                vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                                var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20));
+                                var ny2 = Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = model.x2 - nx1, nH = ny2 - model.y1;
+                                    if (nW / nH > vidDelegate.origAspect) {
+                                        nW = nH * vidDelegate.origAspect;
+                                        nx1 = model.x2 - nW;
+                                    } else {
+                                        nH = nW / vidDelegate.origAspect;
+                                        ny2 = model.y1 + nH;
+                                    }
+                                }
+                                videosModel.setProperty(index, "x1", nx1);
+                                videosModel.setProperty(index, "y2", ny2);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                     // Left-mid
-                    Item { x: 14; y: parent.height / 2 - 14; width: 28; height: 28; visible: vidDelegate.isActive && viewport.selectionCount === 1; z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.SizeHorCursor
-                            onPressed: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); vidDelegate.pressVpX = pt.x; vidDelegate.origX1 = model.x1; viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y; }
-                            onPositionChanged: function (mouse) { var pt = mapToItem(viewport, mouse.x, mouse.y); viewport.elementDragX = pt.x; videosModel.setProperty(index, "x1", Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20))); }
-                            onReleased: viewport.elementDragging = false }
+                    Item {
+                        x: 14
+                        y: parent.height / 2 - 14
+                        width: 28
+                        height: 28
+                        visible: vidDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "white"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeHorCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                vidDelegate.pressVpX = pt.x;
+                                vidDelegate.origX1 = model.x1;
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                videosModel.setProperty(index, "x1", Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
                     }
                 }
             }
@@ -3652,7 +4427,8 @@ Window {
                             Image {
                                 id: dropImageIcon
                                 anchors.centerIn: parent
-                                width: 48; height: 48
+                                width: 48
+                                height: 48
                                 source: "icons/dropimage.svg"
                                 fillMode: Image.PreserveAspectFit
                                 visible: imageSettings.selectedFilePath === ""
@@ -3678,7 +4454,7 @@ Window {
                                 anchors.fill: parent
                                 onDropped: drop => {
                                     if (drop.hasUrls)
-                                        imageSettings.selectedFilePath = drop.urls[0].toString()
+                                        imageSettings.selectedFilePath = drop.urls[0].toString();
                                 }
                             }
                         }
@@ -3726,7 +4502,8 @@ Window {
                             Image {
                                 id: dropVideoIcon
                                 anchors.centerIn: parent
-                                width: 48; height: 48
+                                width: 48
+                                height: 48
                                 source: "icons/dropvideo.svg"
                                 fillMode: Image.PreserveAspectFit
                                 visible: videoSettings.selectedFilePath === ""
@@ -3752,7 +4529,7 @@ Window {
                                 anchors.fill: parent
                                 onDropped: drop => {
                                     if (drop.hasUrls)
-                                        videoSettings.selectedFilePath = drop.urls[0].toString()
+                                        videoSettings.selectedFilePath = drop.urls[0].toString();
                                 }
                             }
                         }
