@@ -3030,15 +3030,13 @@ Window {
                                 viewport.elementDragY = pt.y;
                                 var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20));
                                 var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20));
-                                if (mouse.modifiers & Qt.ShiftModifier) {
-                                    var nW = model.x2 - nx1, nH = model.y2 - ny1;
-                                    if (nW / nH > vidDelegate.origAspect) {
-                                        nW = nH * vidDelegate.origAspect;
-                                        nx1 = model.x2 - nW;
-                                    } else {
-                                        nH = nW / vidDelegate.origAspect;
-                                        ny1 = model.y2 - nH;
-                                    }
+                                var nW = model.x2 - nx1, nH = model.y2 - ny1;
+                                if (nW / nH > vidDelegate.origAspect) {
+                                    nW = nH * vidDelegate.origAspect;
+                                    nx1 = model.x2 - nW;
+                                } else {
+                                    nH = nW / vidDelegate.origAspect;
+                                    ny1 = model.y2 - nH;
                                 }
                                 videosModel.setProperty(index, "x1", nx1);
                                 videosModel.setProperty(index, "y1", ny1);
@@ -3070,6 +3068,9 @@ Window {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 vidDelegate.pressVpY = pt.y;
                                 vidDelegate.origY1 = model.y1;
+                                vidDelegate.origX1 = model.x1;
+                                vidDelegate.origX2 = model.x2;
+                                vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
                                 viewport.elementDragging = true;
                                 viewport.elementDragX = pt.x;
                                 viewport.elementDragY = pt.y;
@@ -3077,7 +3078,13 @@ Window {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewport.elementDragY = pt.y;
-                                videosModel.setProperty(index, "y1", Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20)));
+                                var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20));
+                                var nH = model.y2 - ny1;
+                                var nW = nH * vidDelegate.origAspect;
+                                var cx = (vidDelegate.origX1 + vidDelegate.origX2) / 2;
+                                videosModel.setProperty(index, "x1", Math.max(0, cx - nW / 2));
+                                videosModel.setProperty(index, "x2", Math.min(viewport.width, cx + nW / 2));
+                                videosModel.setProperty(index, "y1", ny1);
                             }
                             onReleased: viewport.elementDragging = false
                         }
@@ -3119,15 +3126,13 @@ Window {
                                 viewport.elementDragY = pt.y;
                                 var nx2 = Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20));
                                 var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20));
-                                if (mouse.modifiers & Qt.ShiftModifier) {
-                                    var nW = nx2 - model.x1, nH = model.y2 - ny1;
-                                    if (nW / nH > vidDelegate.origAspect) {
-                                        nW = nH * vidDelegate.origAspect;
-                                        nx2 = model.x1 + nW;
-                                    } else {
-                                        nH = nW / vidDelegate.origAspect;
-                                        ny1 = model.y2 - nH;
-                                    }
+                                var nW = nx2 - model.x1, nH = model.y2 - ny1;
+                                if (nW / nH > vidDelegate.origAspect) {
+                                    nW = nH * vidDelegate.origAspect;
+                                    nx2 = model.x1 + nW;
+                                } else {
+                                    nH = nW / vidDelegate.origAspect;
+                                    ny1 = model.y2 - nH;
                                 }
                                 videosModel.setProperty(index, "x2", nx2);
                                 videosModel.setProperty(index, "y1", ny1);
@@ -3159,6 +3164,9 @@ Window {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 vidDelegate.pressVpX = pt.x;
                                 vidDelegate.origX2 = model.x2;
+                                vidDelegate.origY1 = model.y1;
+                                vidDelegate.origY2 = model.y2;
+                                vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
                                 viewport.elementDragging = true;
                                 viewport.elementDragX = pt.x;
                                 viewport.elementDragY = pt.y;
@@ -3166,7 +3174,13 @@ Window {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewport.elementDragX = pt.x;
-                                videosModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20)));
+                                var nx2 = Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20));
+                                var nW = nx2 - model.x1;
+                                var nH = nW / vidDelegate.origAspect;
+                                var cy = (vidDelegate.origY1 + vidDelegate.origY2) / 2;
+                                videosModel.setProperty(index, "y1", Math.max(0, cy - nH / 2));
+                                videosModel.setProperty(index, "y2", Math.min(viewport.height, cy + nH / 2));
+                                videosModel.setProperty(index, "x2", nx2);
                             }
                             onReleased: viewport.elementDragging = false
                         }
@@ -3208,15 +3222,13 @@ Window {
                                 viewport.elementDragY = pt.y;
                                 var nx2 = Math.min(viewport.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20));
                                 var ny2 = Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20));
-                                if (mouse.modifiers & Qt.ShiftModifier) {
-                                    var nW = nx2 - model.x1, nH = ny2 - model.y1;
-                                    if (nW / nH > vidDelegate.origAspect) {
-                                        nW = nH * vidDelegate.origAspect;
-                                        nx2 = model.x1 + nW;
-                                    } else {
-                                        nH = nW / vidDelegate.origAspect;
-                                        ny2 = model.y1 + nH;
-                                    }
+                                var nW = nx2 - model.x1, nH = ny2 - model.y1;
+                                if (nW / nH > vidDelegate.origAspect) {
+                                    nW = nH * vidDelegate.origAspect;
+                                    nx2 = model.x1 + nW;
+                                } else {
+                                    nH = nW / vidDelegate.origAspect;
+                                    ny2 = model.y1 + nH;
                                 }
                                 videosModel.setProperty(index, "x2", nx2);
                                 videosModel.setProperty(index, "y2", ny2);
@@ -3248,6 +3260,9 @@ Window {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 vidDelegate.pressVpY = pt.y;
                                 vidDelegate.origY2 = model.y2;
+                                vidDelegate.origX1 = model.x1;
+                                vidDelegate.origX2 = model.x2;
+                                vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
                                 viewport.elementDragging = true;
                                 viewport.elementDragX = pt.x;
                                 viewport.elementDragY = pt.y;
@@ -3255,7 +3270,13 @@ Window {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewport.elementDragY = pt.y;
-                                videosModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20)));
+                                var ny2 = Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20));
+                                var nH = ny2 - model.y1;
+                                var nW = nH * vidDelegate.origAspect;
+                                var cx = (vidDelegate.origX1 + vidDelegate.origX2) / 2;
+                                videosModel.setProperty(index, "x1", Math.max(0, cx - nW / 2));
+                                videosModel.setProperty(index, "x2", Math.min(viewport.width, cx + nW / 2));
+                                videosModel.setProperty(index, "y2", ny2);
                             }
                             onReleased: viewport.elementDragging = false
                         }
@@ -3297,15 +3318,13 @@ Window {
                                 viewport.elementDragY = pt.y;
                                 var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20));
                                 var ny2 = Math.min(viewport.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20));
-                                if (mouse.modifiers & Qt.ShiftModifier) {
-                                    var nW = model.x2 - nx1, nH = ny2 - model.y1;
-                                    if (nW / nH > vidDelegate.origAspect) {
-                                        nW = nH * vidDelegate.origAspect;
-                                        nx1 = model.x2 - nW;
-                                    } else {
-                                        nH = nW / vidDelegate.origAspect;
-                                        ny2 = model.y1 + nH;
-                                    }
+                                var nW = model.x2 - nx1, nH = ny2 - model.y1;
+                                if (nW / nH > vidDelegate.origAspect) {
+                                    nW = nH * vidDelegate.origAspect;
+                                    nx1 = model.x2 - nW;
+                                } else {
+                                    nH = nW / vidDelegate.origAspect;
+                                    ny2 = model.y1 + nH;
                                 }
                                 videosModel.setProperty(index, "x1", nx1);
                                 videosModel.setProperty(index, "y2", ny2);
@@ -3337,6 +3356,9 @@ Window {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 vidDelegate.pressVpX = pt.x;
                                 vidDelegate.origX1 = model.x1;
+                                vidDelegate.origY1 = model.y1;
+                                vidDelegate.origY2 = model.y2;
+                                vidDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
                                 viewport.elementDragging = true;
                                 viewport.elementDragX = pt.x;
                                 viewport.elementDragY = pt.y;
@@ -3344,7 +3366,13 @@ Window {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewport.elementDragX = pt.x;
-                                videosModel.setProperty(index, "x1", Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20)));
+                                var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20));
+                                var nW = model.x2 - nx1;
+                                var nH = nW / vidDelegate.origAspect;
+                                var cy = (vidDelegate.origY1 + vidDelegate.origY2) / 2;
+                                videosModel.setProperty(index, "y1", Math.max(0, cy - nH / 2));
+                                videosModel.setProperty(index, "y2", Math.min(viewport.height, cy + nH / 2));
+                                videosModel.setProperty(index, "x1", nx1);
                             }
                             onReleased: viewport.elementDragging = false
                         }
