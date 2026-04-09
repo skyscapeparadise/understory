@@ -1136,11 +1136,12 @@ Window {
                         property real pressY: 0
                         property int pressStack: 0
                         onEntered: { viewport.relayerHoveredType = "area"; viewport.relayerHoveredIndex = index; }
-                        onExited: { if (viewport.relayerHoveredType === "area" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onExited: { if (!pressed && viewport.relayerHoveredType === "area" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
+                        onPressed: function(mouse) { viewport.relayerHoveredType = "area"; viewport.relayerHoveredIndex = index; pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onReleased: function(mouse) { if (!containsMouse) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
                         onPositionChanged: function(mouse) {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
-                            areasModel.setProperty(index, "stackOrder", pressStack + Math.round(delta / 20));
+                            areasModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
                     }
 
@@ -1631,11 +1632,12 @@ Window {
                         property real pressY: 0
                         property int pressStack: 0
                         onEntered: { viewport.relayerHoveredType = "tb"; viewport.relayerHoveredIndex = index; }
-                        onExited: { if (viewport.relayerHoveredType === "tb" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onExited: { if (!pressed && viewport.relayerHoveredType === "tb" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
+                        onPressed: function(mouse) { viewport.relayerHoveredType = "tb"; viewport.relayerHoveredIndex = index; pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onReleased: function(mouse) { if (!containsMouse) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
                         onPositionChanged: function(mouse) {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
-                            textBoxesModel.setProperty(index, "stackOrder", pressStack + Math.round(delta / 20));
+                            textBoxesModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
                     }
 
@@ -2017,6 +2019,7 @@ Window {
                     width: model.x2 - model.x1 + 56
                     height: model.y2 - model.y1 + 56
                     z: 100 + model.stackOrder
+                    layer.enabled: true
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
                     property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedImages.indexOf(index) !== -1
@@ -2109,11 +2112,12 @@ Window {
                         property real pressY: 0
                         property int pressStack: 0
                         onEntered: { viewport.relayerHoveredType = "image"; viewport.relayerHoveredIndex = index; }
-                        onExited: { if (viewport.relayerHoveredType === "image" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onExited: { if (!pressed && viewport.relayerHoveredType === "image" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
+                        onPressed: function(mouse) { viewport.relayerHoveredType = "image"; viewport.relayerHoveredIndex = index; pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onReleased: function(mouse) { if (!containsMouse) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
                         onPositionChanged: function(mouse) {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
-                            imagesModel.setProperty(index, "stackOrder", pressStack + Math.round(delta / 20));
+                            imagesModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
                     }
 
@@ -2195,6 +2199,7 @@ Window {
                     width: model.x2 - model.x1 + 56
                     height: model.y2 - model.y1 + 56
                     z: 100 + model.stackOrder
+                    layer.enabled: true
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
                     property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedVideos.indexOf(index) !== -1
@@ -2292,11 +2297,12 @@ Window {
                         property real pressY: 0
                         property int pressStack: 0
                         onEntered: { viewport.relayerHoveredType = "video"; viewport.relayerHoveredIndex = index; }
-                        onExited: { if (viewport.relayerHoveredType === "video" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
-                        onPressed: function(mouse) { pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onExited: { if (!pressed && viewport.relayerHoveredType === "video" && viewport.relayerHoveredIndex === index) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
+                        onPressed: function(mouse) { viewport.relayerHoveredType = "video"; viewport.relayerHoveredIndex = index; pressX = mouse.x; pressY = mouse.y; pressStack = model.stackOrder; }
+                        onReleased: function(mouse) { if (!containsMouse) { viewport.relayerHoveredType = ""; viewport.relayerHoveredIndex = -1; } }
                         onPositionChanged: function(mouse) {
                             var delta = (mouse.x - pressX) - (mouse.y - pressY);
-                            videosModel.setProperty(index, "stackOrder", pressStack + Math.round(delta / 20));
+                            videosModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
                         }
                     }
 
