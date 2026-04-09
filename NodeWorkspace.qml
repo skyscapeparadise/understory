@@ -61,6 +61,19 @@ Item {
     property int wobblingLinkIndex: -1
     property real wobblePhase: 0.0
     property real wobbleAmplitude: 0.0
+    property real wobbleClickX: 0.0
+    property real wobbleClickY: 0.0
+
+    // link snap (retract) state — runs after wobble completes
+    property bool snapping: false
+    property int snappingLinkIndex: -1
+    property real snapProgress: 0.0
+    property real snapX: 0.0
+    property real snapY: 0.0
+    property real snapAX: 0.0
+    property real snapAY: 0.0
+    property real snapBX: 0.0
+    property real snapBY: 0.0
 
     function showAll() {
         if (nodesModel.count === 0) return
@@ -133,7 +146,39 @@ Item {
             root.wobbleAmplitude += (15.0 / (600 / 16)); // Max amplitude 15 over 0.6 second
             if (root.wobbleAmplitude >= 15.0) {
                 var toDelete = root.wobblingLinkIndex;
+                // Record node screen positions for the snap animation
+                var lnk = linksModel.get(toDelete);
+                var nA = nodesModel.get(lnk.a);
+                var nB = nodesModel.get(lnk.b);
+                root.snapAX = nA.x * root.zoom + root.panX;
+                root.snapAY = nA.y * root.zoom + root.panY;
+                root.snapBX = nB.x * root.zoom + root.panX;
+                root.snapBY = nB.y * root.zoom + root.panY;
+                root.snapX = root.wobbleClickX;
+                root.snapY = root.wobbleClickY;
+                root.snappingLinkIndex = toDelete;
+                root.snapProgress = 0.0;
+                root.snapping = true;
                 root.cancelWobble();
+                // Deletion happens in snapTimer once retraction completes
+            } else {
+                root.requestRedraw();
+            }
+        }
+    }
+
+    Timer {
+        id: snapTimer
+        interval: 16
+        repeat: true
+        running: root.snapping
+        onTriggered: {
+            root.snapProgress += 16.0 / 250.0;
+            if (root.snapProgress >= 1.0) {
+                var toDelete = root.snappingLinkIndex;
+                root.snapping = false;
+                root.snappingLinkIndex = -1;
+                root.snapProgress = 0.0;
                 root.deleteLink(toDelete);
             } else {
                 root.requestRedraw();
@@ -175,10 +220,12 @@ Item {
         }
     }
 
-    function beginWobble(idx) {
+    function beginWobble(idx, clickX, clickY) {
         wobblingLinkIndex = idx;
         wobblePhase = 0;
         wobbleAmplitude = 0;
+        wobbleClickX = clickX;
+        wobbleClickY = clickY;
         requestRedraw();
     }
 
@@ -970,7 +1017,7 @@ Item {
                     if (mouse.button === Qt.RightButton) {
                         var hitLink = root.findLinkAt(mouse.x, mouse.y);
                         if (hitLink !== -1) {
-                            root.beginWobble(hitLink);
+                            root.beginWobble(hitLink, mouse.x, mouse.y);
                         }
                     } else if (mouse.button === Qt.MiddleButton) {
                         isPanning = true;
@@ -1069,6 +1116,7 @@ Item {
                 // draw permanent links
                 ctx.save();
                 for (var i = 0; i < linksModel.count; ++i) {
+                    if (i === root.snappingLinkIndex) continue; // drawn separately as retraction stubs
                     var linkRec = linksModel.get(i);
                     var aIdx = linkRec.a;
                     var bIdx = linkRec.b;
@@ -1112,7 +1160,7 @@ Item {
                             var pg = Math.floor(0xaa + dangerFactor * (0x44 - 0xaa));
                             var pb = Math.floor(0xff + dangerFactor * (0x44 - 0xff));
                             ctx.strokeStyle = "rgb(" + pr + "," + pg + "," + pb + ")";
-                            ctx.lineWidth = 2 + dangerFactor * 3;
+                            ctx.lineWidth = 2 + dangerFactor * 1;
                         } else {
                             ctx.moveTo(ax, ay);
                             ctx.lineTo(bx, by);
@@ -1123,6 +1171,28 @@ Item {
                         ctx.stroke();
                     }
                 }
+
+                // draw snap retraction stubs
+                if (root.snapping) {
+                    var eased = 1.0 - Math.pow(1.0 - root.snapProgress, 2.0); // ease-out: fast start, decelerates into nodes
+                    ctx.strokeStyle = "#ff4444";
+                    ctx.lineWidth = 2;
+                    // Stub A: tip starts at snap point, retracts toward node A
+                    var tipAX = root.snapX + (root.snapAX - root.snapX) * eased;
+                    var tipAY = root.snapY + (root.snapAY - root.snapY) * eased;
+                    ctx.beginPath();
+                    ctx.moveTo(root.snapAX, root.snapAY);
+                    ctx.lineTo(tipAX, tipAY);
+                    ctx.stroke();
+                    // Stub B: tip starts at snap point, retracts toward node B
+                    var tipBX = root.snapX + (root.snapBX - root.snapX) * eased;
+                    var tipBY = root.snapY + (root.snapBY - root.snapY) * eased;
+                    ctx.beginPath();
+                    ctx.moveTo(root.snapBX, root.snapBY);
+                    ctx.lineTo(tipBX, tipBY);
+                    ctx.stroke();
+                }
+
                 ctx.restore();
 
                 // draw magenta dashed temp link
