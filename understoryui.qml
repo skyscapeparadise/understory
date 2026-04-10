@@ -684,6 +684,11 @@ Window {
             property bool tempDestroyMode: false
             readonly property string effectiveTool: tempDestroyMode ? "destroy" : buttonGrid.selectedTool
 
+            property string dropPendingImagePath: ""
+            property string dropPendingVideoPath: ""
+            property real dropX: 0
+            property real dropY: 0
+
             function cancelDelete() {
                 deleteTargetType = "";
                 deleteTargetIndex = -1;
@@ -4055,6 +4060,102 @@ Window {
                 title: "Select video file"
                 nameFilters: ["Video files (*.mp4 *.mov *.avi *.mkv *.webm *.m4v)"]
                 onAccepted: videoSettings.selectedFilePath = selectedFile.toString()
+            }
+
+            // Probe: resolves natural dimensions of a drag-dropped image
+            Image {
+                id: viewportImageProbe
+                source: viewport.dropPendingImagePath
+                visible: false
+                width: 0
+                height: 0
+                onStatusChanged: {
+                    if (status === Image.Ready && implicitWidth > 0 && implicitHeight > 0) {
+                        var aspect = implicitWidth / implicitHeight;
+                        var defaultW = Math.min(320, viewport.width * 0.5);
+                        var defaultH = defaultW / aspect;
+                        if (defaultH > viewport.height * 0.5) {
+                            defaultH = viewport.height * 0.5;
+                            defaultW = defaultH * aspect;
+                        }
+                        var x1 = Math.max(0, Math.min(viewport.dropX - defaultW / 2, viewport.width - defaultW));
+                        var y1 = Math.max(0, Math.min(viewport.dropY - defaultH / 2, viewport.height - defaultH));
+                        imagesModel.append({
+                            x1: x1, y1: y1,
+                            x2: x1 + defaultW, y2: y1 + defaultH,
+                            filePath: viewport.dropPendingImagePath,
+                            stackOrder: viewport.nextStackOrder++
+                        });
+                        viewport.selectImage(imagesModel.count - 1);
+                        buttonGrid.selectedTool = "select";
+                        viewport.dropPendingImagePath = "";
+                    } else if (status === Image.Error || status === Image.Null) {
+                        viewport.dropPendingImagePath = "";
+                    }
+                }
+            }
+
+            // Probe: resolves natural dimensions of a drag-dropped video
+            MediaPlayer {
+                id: viewportVideoProbe
+                source: viewport.dropPendingVideoPath
+                onMediaStatusChanged: status => {
+                    if (status === MediaPlayer.LoadedMedia || status === MediaPlayer.BufferedMedia) {
+                        var res = metaData.value(MediaMetaData.Resolution);
+                        var aspect = (res && res.width > 0 && res.height > 0) ? res.width / res.height : 16 / 9;
+                        var defaultW = Math.min(320, viewport.width * 0.5);
+                        var defaultH = defaultW / aspect;
+                        if (defaultH > viewport.height * 0.5) {
+                            defaultH = viewport.height * 0.5;
+                            defaultW = defaultH * aspect;
+                        }
+                        var x1 = Math.max(0, Math.min(viewport.dropX - defaultW / 2, viewport.width - defaultW));
+                        var y1 = Math.max(0, Math.min(viewport.dropY - defaultH / 2, viewport.height - defaultH));
+                        videosModel.append({
+                            x1: x1, y1: y1,
+                            x2: x1 + defaultW, y2: y1 + defaultH,
+                            filePath: viewport.dropPendingVideoPath,
+                            stackOrder: viewport.nextStackOrder++
+                        });
+                        viewport.selectVideo(videosModel.count - 1);
+                        buttonGrid.selectedTool = "select";
+                        viewport.dropPendingVideoPath = "";
+                    } else if (status === MediaPlayer.NoMedia || status === MediaPlayer.InvalidMedia) {
+                        viewport.dropPendingVideoPath = "";
+                    }
+                }
+            }
+
+            // Drag-and-drop media files directly into the viewport
+            DropArea {
+                anchors.fill: parent
+                z: 997
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: "white"
+                    opacity: parent.containsDrag ? 0.06 : 0
+                    Behavior on opacity { NumberAnimation { duration: 80 } }
+                }
+
+                onDropped: drop => {
+                    if (!drop.hasUrls) return;
+                    var url = drop.urls[0].toString();
+                    var lower = url.toLowerCase();
+                    var imageExts = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg"];
+                    var videoExts = [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"];
+                    var isImage = imageExts.some(ext => lower.endsWith(ext));
+                    var isVideo = !isImage && videoExts.some(ext => lower.endsWith(ext));
+                    if (isImage) {
+                        viewport.dropX = drop.x;
+                        viewport.dropY = drop.y;
+                        viewport.dropPendingImagePath = url;
+                    } else if (isVideo) {
+                        viewport.dropX = drop.x;
+                        viewport.dropY = drop.y;
+                        viewport.dropPendingVideoPath = url;
+                    }
+                }
             }
 
             // Tool cursor
