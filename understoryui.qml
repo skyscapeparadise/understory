@@ -4436,6 +4436,11 @@ Window {
                                         buttonGrid.selectedTool = modelData;
                                     else if (nonCreation.indexOf(modelData) === -1)
                                         buttonGrid.selectedTool = "select";
+                                    if (nonCreation.indexOf(modelData) === -1) {
+                                        sceneEditorButtons.variablesOpen = false;
+                                        sceneEditorButtons.conditionsOpen = false;
+                                        sceneEditorButtons.navigationOpen = false;
+                                    }
                                 }
                                 onEntered: hovered = true
                                 onExited: hovered = false
