@@ -4082,11 +4082,11 @@ Window {
 
             Rectangle {
                 id: navigationViewportOverlay
-                visible: buttonGrid.selectedTool === "navigation"
+                visible: sceneEditorButtons.navigationOpen
                 anchors.fill: parent
                 radius: 20
                 color: Qt.rgba(0, 0, 0, 0.6)
-                opacity: buttonGrid.selectedTool === "navigation" ? 1 : 0
+                opacity: sceneEditorButtons.navigationOpen ? 1 : 0
                 z: 998
 
                 Behavior on opacity {
@@ -4338,6 +4338,9 @@ Window {
                 columnSpacing: 4
 
                 property bool timelineOpen: false
+                property bool conditionsOpen: false
+                property bool variablesOpen: false
+                property bool navigationOpen: false
 
                 Repeater {
                     model: ["conditions", "variables", "timeline", "close scene"]
@@ -4349,7 +4352,7 @@ Window {
 
                         property bool hovered: false
                         property bool togglable: modelData === "conditions" || modelData === "variables"
-                        property bool toggled: modelData === "timeline" ? sceneEditorButtons.timelineOpen : (togglable && buttonGrid.selectedTool === modelData)
+                        property bool toggled: modelData === "timeline" ? sceneEditorButtons.timelineOpen : (modelData === "conditions" ? sceneEditorButtons.conditionsOpen : (modelData === "variables" ? sceneEditorButtons.variablesOpen : false))
                         property bool pressed: false
 
                         Rectangle {
@@ -4387,7 +4390,10 @@ Window {
 
                             onClicked: {
                                 if (togglable) {
-                                    buttonGrid.selectedTool = editorBtn.toggled ? "" : modelData;
+                                    if (modelData === "conditions")
+                                        sceneEditorButtons.conditionsOpen = !sceneEditorButtons.conditionsOpen;
+                                    else if (modelData === "variables")
+                                        sceneEditorButtons.variablesOpen = !sceneEditorButtons.variablesOpen;
                                 } else if (modelData === "timeline") {
                                     var opening = !sceneEditorButtons.timelineOpen;
                                     sceneEditorButtons.timelineOpen = opening;
@@ -4429,7 +4435,7 @@ Window {
                 width: 377
                 color: "transparent"
                 border.color: "white"
-                border.width: navigationSettings.visible ? 0 : 2
+                border.width: sceneEditorButtons.navigationOpen ? 0 : 2
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 86
                 anchors.left: parent.left
@@ -5436,7 +5442,7 @@ Window {
 
                 Rectangle {
                     id: navigationSettings
-                    visible: buttonGrid.selectedTool === "navigation"
+                    visible: sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -5676,7 +5682,7 @@ Window {
 
                 Rectangle {
                     id: sceneSettings
-                    visible: buttonGrid.selectedTool === "conditions"
+                    visible: sceneEditorButtons.conditionsOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -5699,7 +5705,7 @@ Window {
 
                 Rectangle {
                     id: sceneScript
-                    visible: buttonGrid.selectedTool === "variables"
+                    visible: sceneEditorButtons.variablesOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -6202,7 +6208,7 @@ Window {
 
                 Rectangle {
                     id: sceneNameSettings
-                    visible: ["select", "newlink", "relayer", "destroy"].indexOf(buttonGrid.selectedTool) !== -1
+                    visible: ["select", "newlink", "relayer", "destroy"].indexOf(buttonGrid.selectedTool) !== -1 && !sceneEditorButtons.conditionsOpen && !sceneEditorButtons.variablesOpen && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -6303,7 +6309,7 @@ Window {
                 anchors.leftMargin: 14
 
                 property bool hovered: false
-                property bool toggled: buttonGrid.selectedTool === "navigation"
+                property bool toggled: sceneEditorButtons.navigationOpen
 
                 Rectangle {
                     anchors.fill: parent
@@ -6346,7 +6352,7 @@ Window {
                     onExited: navigationButton.hovered = false
 
                     onClicked: {
-                        buttonGrid.selectedTool = navigationButton.toggled ? "" : "navigation";
+                        sceneEditorButtons.navigationOpen = !sceneEditorButtons.navigationOpen;
                     }
                 }
             }
@@ -6470,6 +6476,9 @@ Window {
                     sceneMenu2sceneEditor.visible = false;
                     sceneMenu.visible = false;
                     buttonGrid.selectedTool = "select";
+                    sceneEditorButtons.conditionsOpen = false;
+                    sceneEditorButtons.variablesOpen = false;
+                    sceneEditorButtons.navigationOpen = false;
                 }
             }
         }
