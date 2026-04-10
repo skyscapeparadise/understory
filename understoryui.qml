@@ -696,6 +696,22 @@ Window {
                 tempDestroyMode = false;
             }
 
+            function removeIndexFromSelection(type, idx) {
+                var arr, prop;
+                if (type === "area")       { arr = selectedAreas.slice();  prop = "selectedAreas"; }
+                else if (type === "tb")    { arr = selectedTbs.slice();    prop = "selectedTbs"; }
+                else if (type === "image") { arr = selectedImages.slice(); prop = "selectedImages"; }
+                else if (type === "video") { arr = selectedVideos.slice(); prop = "selectedVideos"; }
+                else return;
+                var pos = arr.indexOf(idx);
+                if (pos !== -1) arr.splice(pos, 1);
+                for (var k = 0; k < arr.length; k++) {
+                    if (arr[k] > idx) arr[k]--;
+                }
+                viewport[prop] = arr;
+                selectionRevision++;
+            }
+
             Timer {
                 id: deleteTimer
                 interval: 16
@@ -707,6 +723,7 @@ Window {
                         var t = viewport.deleteTargetType;
                         var i = viewport.deleteTargetIndex;
                         viewport.cancelDelete();
+                        viewport.removeIndexFromSelection(t, i);
                         if (t === "area")
                             areasModel.remove(i);
                         else if (t === "tb")
@@ -6309,7 +6326,7 @@ Window {
 
                 Rectangle {
                     id: sceneNameSettings
-                    visible: ["select", "newlink", "relayer", "destroy"].indexOf(buttonGrid.selectedTool) !== -1 && !sceneEditorButtons.conditionsOpen && !sceneEditorButtons.variablesOpen && !sceneEditorButtons.navigationOpen
+                    visible: ["select", "newlink", "relayer", "destroy"].indexOf(buttonGrid.selectedTool) !== -1 && !sceneEditorButtons.conditionsOpen && !sceneEditorButtons.variablesOpen && !sceneEditorButtons.navigationOpen && !(buttonGrid.selectedTool === "select" && viewport.selectionCount > 0)
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
