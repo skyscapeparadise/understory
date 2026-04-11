@@ -663,8 +663,9 @@ Window {
             property var selectedTbs: []
             property var selectedImages: []
             property var selectedVideos: []
+            property var selectedShaders: []
             property int selectionRevision: 0
-            readonly property int selectionCount: selectedAreas.length + selectedTbs.length + selectedImages.length + selectedVideos.length
+            readonly property int selectionCount: selectedAreas.length + selectedTbs.length + selectedImages.length + selectedVideos.length + selectedShaders.length
 
             // Stack/z-order state
             property int nextStackOrder: 0
@@ -698,10 +699,11 @@ Window {
 
             function removeIndexFromSelection(type, idx) {
                 var arr, prop;
-                if (type === "area")       { arr = selectedAreas.slice();  prop = "selectedAreas"; }
-                else if (type === "tb")    { arr = selectedTbs.slice();    prop = "selectedTbs"; }
-                else if (type === "image") { arr = selectedImages.slice(); prop = "selectedImages"; }
-                else if (type === "video") { arr = selectedVideos.slice(); prop = "selectedVideos"; }
+                if (type === "area")        { arr = selectedAreas.slice();   prop = "selectedAreas"; }
+                else if (type === "tb")     { arr = selectedTbs.slice();     prop = "selectedTbs"; }
+                else if (type === "image")  { arr = selectedImages.slice();  prop = "selectedImages"; }
+                else if (type === "video")  { arr = selectedVideos.slice();  prop = "selectedVideos"; }
+                else if (type === "shader") { arr = selectedShaders.slice(); prop = "selectedShaders"; }
                 else return;
                 var pos = arr.indexOf(idx);
                 if (pos !== -1) arr.splice(pos, 1);
@@ -732,6 +734,8 @@ Window {
                             imagesModel.remove(i);
                         else if (t === "video")
                             videosModel.remove(i);
+                        else if (t === "shader")
+                            shadersModel.remove(i);
                     }
                 }
             }
@@ -741,6 +745,7 @@ Window {
                 selectedTbs = [];
                 selectedImages = [];
                 selectedVideos = [];
+                selectedShaders = [];
                 selectionRevision++;
             }
             function selectArea(idx) {
@@ -748,6 +753,7 @@ Window {
                 selectedTbs = [];
                 selectedImages = [];
                 selectedVideos = [];
+                selectedShaders = [];
                 selectionRevision++;
             }
             function selectTb(idx) {
@@ -755,6 +761,7 @@ Window {
                 selectedTbs = [idx];
                 selectedImages = [];
                 selectedVideos = [];
+                selectedShaders = [];
                 selectionRevision++;
             }
             function selectImage(idx) {
@@ -762,6 +769,7 @@ Window {
                 selectedTbs = [];
                 selectedImages = [idx];
                 selectedVideos = [];
+                selectedShaders = [];
                 selectionRevision++;
             }
             function selectVideo(idx) {
@@ -769,12 +777,21 @@ Window {
                 selectedTbs = [];
                 selectedImages = [];
                 selectedVideos = [idx];
+                selectedShaders = [];
+                selectionRevision++;
+            }
+            function selectShader(idx) {
+                selectedAreas = [];
+                selectedTbs = [];
+                selectedImages = [];
+                selectedVideos = [];
+                selectedShaders = [idx];
                 selectionRevision++;
             }
             function applyBoxSelect(rx1, ry1, rx2, ry2) {
                 var bx1 = Math.min(rx1, rx2), bx2 = Math.max(rx1, rx2);
                 var by1 = Math.min(ry1, ry2), by2 = Math.max(ry1, ry2);
-                var newAreas = [], newTbs = [], newImgs = [], newVids = [];
+                var newAreas = [], newTbs = [], newImgs = [], newVids = [], newShaders = [];
                 for (var i = 0; i < areasModel.count; i++) {
                     var a = areasModel.get(i);
                     if (a.x2 > bx1 && a.x1 < bx2 && a.y2 > by1 && a.y1 < by2)
@@ -795,10 +812,16 @@ Window {
                     if (v.x2 > bx1 && v.x1 < bx2 && v.y2 > by1 && v.y1 < by2)
                         newVids.push(l);
                 }
+                for (var m = 0; m < shadersModel.count; m++) {
+                    var sh = shadersModel.get(m);
+                    if (sh.x2 > bx1 && sh.x1 < bx2 && sh.y2 > by1 && sh.y1 < by2)
+                        newShaders.push(m);
+                }
                 selectedAreas = newAreas;
                 selectedTbs = newTbs;
                 selectedImages = newImgs;
                 selectedVideos = newVids;
+                selectedShaders = newShaders;
                 selectionRevision++;
             }
             function groupBounds() {
@@ -833,6 +856,13 @@ Window {
                     gx2 = Math.max(gx2, v.x2);
                     gy2 = Math.max(gy2, v.y2);
                 }
+                for (var m = 0; m < selectedShaders.length; m++) {
+                    var sh = shadersModel.get(selectedShaders[m]);
+                    gx1 = Math.min(gx1, sh.x1);
+                    gy1 = Math.min(gy1, sh.y1);
+                    gx2 = Math.max(gx2, sh.x2);
+                    gy2 = Math.max(gy2, sh.y2);
+                }
                 return {
                     x1: gx1,
                     y1: gy1,
@@ -862,6 +892,16 @@ Window {
             property real vidX2: 0
             property real vidY2: 0
             property bool videoDragging: false
+
+            ListModel {
+                id: shadersModel
+            }
+            property real shaderX1: 0
+            property real shaderY1: 0
+            property real shaderX2: 0
+            property real shaderY2: 0
+            property bool shaderDragging: false
+            property var pendingShaderBounds: null
 
             // Background occlusion tracking — pauses the shader when opaque
             // items fully cover the viewport, saving fragment shader cost.
@@ -1198,6 +1238,63 @@ Window {
                         });
                         viewport.selectVideo(videosModel.count - 1);
                         buttonGrid.selectedTool = "select";
+                    }
+                }
+            }
+
+            // New shader drag: click and drag to define a shader box
+            MouseArea {
+                anchors.fill: parent
+                enabled: buttonGrid.selectedTool === "newshader"
+                z: 998
+
+                onPressed: function (mouse) {
+                    viewport.shaderX1 = viewport.snapX(mouseX);
+                    viewport.shaderY1 = viewport.snapY(mouseY);
+                    viewport.shaderX2 = viewport.shaderX1;
+                    viewport.shaderY2 = viewport.shaderY1;
+                    viewport.shaderDragging = true;
+                }
+                onPositionChanged: function (mouse) {
+                    if (!viewport.shaderDragging) return;
+                    if (mouse.modifiers & Qt.ShiftModifier) {
+                        // Shift: constrain to square
+                        var dx = mouse.x - viewport.shaderX1;
+                        var dy = mouse.y - viewport.shaderY1;
+                        var side = Math.max(Math.abs(dx), Math.abs(dy));
+                        viewport.shaderX2 = viewport.snapX(viewport.shaderX1 + (dx >= 0 ? side : -side));
+                        viewport.shaderY2 = viewport.snapY(viewport.shaderY1 + (dy >= 0 ? side : -side));
+                    } else {
+                        viewport.shaderX2 = viewport.snapX(mouse.x);
+                        viewport.shaderY2 = viewport.snapY(mouse.y);
+                    }
+                }
+                onReleased: {
+                    if (!viewport.shaderDragging) return;
+                    viewport.shaderDragging = false;
+                    var w = Math.abs(viewport.shaderX2 - viewport.shaderX1);
+                    var h = Math.abs(viewport.shaderY2 - viewport.shaderY1);
+                    if (w > 2 && h > 2) {
+                        var bounds = {
+                            x1: Math.min(viewport.shaderX1, viewport.shaderX2),
+                            y1: Math.min(viewport.shaderY1, viewport.shaderY2),
+                            x2: Math.max(viewport.shaderX1, viewport.shaderX2),
+                            y2: Math.max(viewport.shaderY1, viewport.shaderY2)
+                        };
+                        if (newshaderSettings.fragFilePath === "") {
+                            viewport.pendingShaderBounds = bounds;
+                            shaderPickerDialog.open();
+                        } else {
+                            shadersModel.append({
+                                x1: bounds.x1, y1: bounds.y1,
+                                x2: bounds.x2, y2: bounds.y2,
+                                fragPath: newshaderSettings.fragFilePath,
+                                vertPath: newshaderSettings.vertFilePath,
+                                stackOrder: viewport.nextStackOrder++
+                            });
+                            viewport.selectShader(shadersModel.count - 1);
+                            buttonGrid.selectedTool = "select";
+                        }
                     }
                 }
             }
@@ -3463,6 +3560,411 @@ Window {
                 }
             }
 
+            // Completed shaders
+            Repeater {
+                model: shadersModel
+                delegate: Item {
+                    id: shaderDelegate
+                    x: model.x1 - 28
+                    y: model.y1 - 28
+                    width: model.x2 - model.x1 + 56
+                    height: model.y2 - model.y1 + 56
+                    z: 100 + model.stackOrder
+                    layer.enabled: true
+
+                    property bool isSelect: buttonGrid.selectedTool === "select"
+                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedShaders.indexOf(index) !== -1
+                    property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "shader" && viewport.relayerHoveredIndex === index
+                    property real pressVpX: 0
+                    property real pressVpY: 0
+                    property real origX1: 0
+                    property real origY1: 0
+                    property real origX2: 0
+                    property real origY2: 0
+                    property real origAspect: 1
+                    property bool isBeingDeleted: (buttonGrid.selectedTool === "destroy" || viewport.tempDestroyMode) && viewport.deleteTargetType === "shader" && viewport.deleteTargetIndex === index
+
+                    // Shader fill
+                    ShaderEffect {
+                        x: 28
+                        y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        visible: model.fragPath !== ""
+                        fragmentShader: model.fragPath
+                        vertexShader: model.vertPath
+                        property real time: 0
+                        NumberAnimation on time {
+                            from: 0; to: 1000000
+                            duration: 1000000000
+                            loops: Animation.Infinite
+                            running: true
+                        }
+                    }
+
+                    // Border — only when active/selected or relayer hovered
+                    Rectangle {
+                        x: 28
+                        y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        z: 1
+                        color: "transparent"
+                        border.color: shaderDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewport.deleteProgress * 0.6) : ((shaderDelegate.isActive || shaderDelegate.isRelayerHovered) ? "white" : "transparent")
+                        border.width: shaderDelegate.isRelayerHovered ? 2 : 1
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            color: "transparent"
+                            border.color: (shaderDelegate.isActive || shaderDelegate.isRelayerHovered) ? "black" : "transparent"
+                            border.width: 1
+                        }
+                    }
+
+                    // Red delete overlay
+                    Rectangle {
+                        x: 28
+                        y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        z: 2
+                        color: Qt.rgba(1, 0, 0, shaderDelegate.isBeingDeleted ? viewport.deleteProgress * 0.6 : 0)
+                    }
+
+                    // Move
+                    MouseArea {
+                        x: 28
+                        y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: shaderDelegate.isSelect
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        z: 2
+                        cursorShape: shaderDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
+                        onPressed: function (mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                viewport.tempDestroyMode = true;
+                                viewport.deleteTargetType = "shader";
+                                viewport.deleteTargetIndex = index;
+                                return;
+                            }
+                            viewport.selectShader(index);
+                            var pt = mapToItem(viewport, mouse.x, mouse.y);
+                            if (shaderDelegate.isActive) {
+                                shaderDelegate.pressVpX = pt.x;
+                                shaderDelegate.pressVpY = pt.y;
+                                shaderDelegate.origX1 = model.x1;
+                                shaderDelegate.origY1 = model.y1;
+                                shaderDelegate.origX2 = model.x2;
+                                shaderDelegate.origY2 = model.y2;
+                                viewport.elementDragging = true;
+                                viewport.elementDragX = pt.x;
+                                viewport.elementDragY = pt.y;
+                            }
+                        }
+                        onPositionChanged: function (mouse) {
+                            if (!shaderDelegate.isActive) return;
+                            var pt = mapToItem(viewport, mouse.x, mouse.y);
+                            viewport.elementDragX = pt.x;
+                            viewport.elementDragY = pt.y;
+                            var dx = pt.x - shaderDelegate.pressVpX, dy = pt.y - shaderDelegate.pressVpY;
+                            var w = shaderDelegate.origX2 - shaderDelegate.origX1, h = shaderDelegate.origY2 - shaderDelegate.origY1;
+                            var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + dx, viewport.width - w));
+                            var ny1 = Math.max(0, Math.min(shaderDelegate.origY1 + dy, viewport.height - h));
+                            shadersModel.setProperty(index, "x1", nx1);
+                            shadersModel.setProperty(index, "y1", ny1);
+                            shadersModel.setProperty(index, "x2", nx1 + w);
+                            shadersModel.setProperty(index, "y2", ny1 + h);
+                        }
+                        onReleased: function (mouse) {
+                            if (mouse.button === Qt.RightButton) {
+                                if (viewport.deleteTargetType === "shader" && viewport.deleteTargetIndex === index)
+                                    viewport.cancelDelete();
+                                return;
+                            }
+                            viewport.elementDragging = false;
+                        }
+                    }
+
+                    // Relayer
+                    MouseArea {
+                        x: 28
+                        y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "relayer"
+                        hoverEnabled: true
+                        z: 2
+                        property real pressX: 0
+                        property real pressY: 0
+                        property int pressStack: 0
+                        onEntered: {
+                            viewport.relayerHoveredType = "shader";
+                            viewport.relayerHoveredIndex = index;
+                        }
+                        onExited: {
+                            if (!pressed && viewport.relayerHoveredType === "shader" && viewport.relayerHoveredIndex === index) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPressed: function (mouse) {
+                            viewport.relayerHoveredType = "shader";
+                            viewport.relayerHoveredIndex = index;
+                            pressX = mouse.x;
+                            pressY = mouse.y;
+                            pressStack = model.stackOrder;
+                        }
+                        onReleased: function (mouse) {
+                            if (!containsMouse) {
+                                viewport.relayerHoveredType = "";
+                                viewport.relayerHoveredIndex = -1;
+                            }
+                        }
+                        onPositionChanged: function (mouse) {
+                            var delta = (mouse.x - pressX) - (mouse.y - pressY);
+                            shadersModel.setProperty(index, "stackOrder", Math.max(-99, Math.min(890, pressStack + Math.round(delta / 20))));
+                        }
+                    }
+
+                    // Delete (destroy tool)
+                    MouseArea {
+                        x: 28
+                        y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "destroy"
+                        z: 3
+                        onPressed: {
+                            viewport.deleteTargetType = "shader";
+                            viewport.deleteTargetIndex = index;
+                        }
+                        onReleased: {
+                            if (viewport.deleteTargetType === "shader" && viewport.deleteTargetIndex === index)
+                                viewport.cancelDelete();
+                        }
+                    }
+
+                    // Resize handles
+                    // Top-left
+                    Item {
+                        x: 0; y: 0; width: 56; height: 56
+                        visible: shaderDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                shaderDelegate.pressVpX = pt.x; shaderDelegate.pressVpY = pt.y;
+                                shaderDelegate.origX1 = model.x1; shaderDelegate.origY1 = model.y1;
+                                shaderDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                                var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + pt.x - shaderDelegate.pressVpX, model.x2 - 20));
+                                var ny1 = Math.max(0, Math.min(shaderDelegate.origY1 + pt.y - shaderDelegate.pressVpY, model.y2 - 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = model.x2 - nx1, nH = model.y2 - ny1;
+                                    if (nW / nH > shaderDelegate.origAspect) { nW = nH * shaderDelegate.origAspect; nx1 = model.x2 - nW; }
+                                    else { nH = nW / shaderDelegate.origAspect; ny1 = model.y2 - nH; }
+                                }
+                                shadersModel.setProperty(index, "x1", nx1);
+                                shadersModel.setProperty(index, "y1", ny1);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Top-mid
+                    Item {
+                        x: parent.width / 2 - 14; y: 14; width: 28; height: 28
+                        visible: shaderDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeVerCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                shaderDelegate.pressVpY = pt.y; shaderDelegate.origY1 = model.y1;
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragY = pt.y;
+                                shadersModel.setProperty(index, "y1", Math.max(0, Math.min(shaderDelegate.origY1 + pt.y - shaderDelegate.pressVpY, model.y2 - 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Top-right
+                    Item {
+                        x: parent.width - 56; y: 0; width: 56; height: 56
+                        visible: shaderDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                shaderDelegate.pressVpX = pt.x; shaderDelegate.pressVpY = pt.y;
+                                shaderDelegate.origX2 = model.x2; shaderDelegate.origY1 = model.y1;
+                                shaderDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                                var nx2 = Math.min(viewport.width, Math.max(shaderDelegate.origX2 + pt.x - shaderDelegate.pressVpX, model.x1 + 20));
+                                var ny1 = Math.max(0, Math.min(shaderDelegate.origY1 + pt.y - shaderDelegate.pressVpY, model.y2 - 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = nx2 - model.x1, nH = model.y2 - ny1;
+                                    if (nW / nH > shaderDelegate.origAspect) { nW = nH * shaderDelegate.origAspect; nx2 = model.x1 + nW; }
+                                    else { nH = nW / shaderDelegate.origAspect; ny1 = model.y2 - nH; }
+                                }
+                                shadersModel.setProperty(index, "x2", nx2);
+                                shadersModel.setProperty(index, "y1", ny1);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Right-mid
+                    Item {
+                        x: parent.width - 42; y: parent.height / 2 - 14; width: 28; height: 28
+                        visible: shaderDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeHorCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                shaderDelegate.pressVpX = pt.x; shaderDelegate.origX2 = model.x2;
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                shadersModel.setProperty(index, "x2", Math.min(viewport.width, Math.max(shaderDelegate.origX2 + pt.x - shaderDelegate.pressVpX, model.x1 + 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Bottom-right
+                    Item {
+                        x: parent.width - 56; y: parent.height - 56; width: 56; height: 56
+                        visible: shaderDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeFDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                shaderDelegate.pressVpX = pt.x; shaderDelegate.pressVpY = pt.y;
+                                shaderDelegate.origX2 = model.x2; shaderDelegate.origY2 = model.y2;
+                                shaderDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                                var nx2 = Math.min(viewport.width, Math.max(shaderDelegate.origX2 + pt.x - shaderDelegate.pressVpX, model.x1 + 20));
+                                var ny2 = Math.min(viewport.height, Math.max(shaderDelegate.origY2 + pt.y - shaderDelegate.pressVpY, model.y1 + 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = nx2 - model.x1, nH = ny2 - model.y1;
+                                    if (nW / nH > shaderDelegate.origAspect) { nW = nH * shaderDelegate.origAspect; nx2 = model.x1 + nW; }
+                                    else { nH = nW / shaderDelegate.origAspect; ny2 = model.y1 + nH; }
+                                }
+                                shadersModel.setProperty(index, "x2", nx2);
+                                shadersModel.setProperty(index, "y2", ny2);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Bottom-mid
+                    Item {
+                        x: parent.width / 2 - 14; y: parent.height - 42; width: 28; height: 28
+                        visible: shaderDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeVerCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                shaderDelegate.pressVpY = pt.y; shaderDelegate.origY2 = model.y2;
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragY = pt.y;
+                                shadersModel.setProperty(index, "y2", Math.min(viewport.height, Math.max(shaderDelegate.origY2 + pt.y - shaderDelegate.pressVpY, model.y1 + 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Bottom-left
+                    Item {
+                        x: 0; y: parent.height - 56; width: 56; height: 56
+                        visible: shaderDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeBDiagCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                shaderDelegate.pressVpX = pt.x; shaderDelegate.pressVpY = pt.y;
+                                shaderDelegate.origX1 = model.x1; shaderDelegate.origY2 = model.y2;
+                                shaderDelegate.origAspect = (model.x2 - model.x1) / (model.y2 - model.y1);
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                                var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + pt.x - shaderDelegate.pressVpX, model.x2 - 20));
+                                var ny2 = Math.min(viewport.height, Math.max(shaderDelegate.origY2 + pt.y - shaderDelegate.pressVpY, model.y1 + 20));
+                                if (mouse.modifiers & Qt.ShiftModifier) {
+                                    var nW = model.x2 - nx1, nH = ny2 - model.y1;
+                                    if (nW / nH > shaderDelegate.origAspect) { nW = nH * shaderDelegate.origAspect; nx1 = model.x2 - nW; }
+                                    else { nH = nW / shaderDelegate.origAspect; ny2 = model.y1 + nH; }
+                                }
+                                shadersModel.setProperty(index, "x1", nx1);
+                                shadersModel.setProperty(index, "y2", ny2);
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                    // Left-mid
+                    Item {
+                        x: 14; y: parent.height / 2 - 14; width: 28; height: 28
+                        visible: shaderDelegate.isActive && viewport.selectionCount === 1
+                        z: 3
+                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.SizeHorCursor
+                            onPressed: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                shaderDelegate.pressVpX = pt.x; shaderDelegate.origX1 = model.x1;
+                                viewport.elementDragging = true; viewport.elementDragX = pt.x; viewport.elementDragY = pt.y;
+                            }
+                            onPositionChanged: function (mouse) {
+                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                                viewport.elementDragX = pt.x;
+                                shadersModel.setProperty(index, "x1", Math.max(0, Math.min(shaderDelegate.origX1 + pt.x - shaderDelegate.pressVpX, model.x2 - 20)));
+                            }
+                            onReleased: viewport.elementDragging = false
+                        }
+                    }
+                }
+            }
+
             // In-progress rubber-band (only visible while dragging)
             Rectangle {
                 visible: viewport.areaDragging
@@ -3470,6 +3972,27 @@ Window {
                 y: Math.min(viewport.areaY1, viewport.areaY2)
                 width: Math.abs(viewport.areaX2 - viewport.areaX1)
                 height: Math.abs(viewport.areaY2 - viewport.areaY1)
+                color: "transparent"
+                border.color: "white"
+                border.width: 1
+                z: 998
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    color: "transparent"
+                    border.color: "black"
+                    border.width: 1
+                }
+            }
+
+            // In-progress shader rubber-band
+            Rectangle {
+                visible: viewport.shaderDragging
+                x: Math.min(viewport.shaderX1, viewport.shaderX2)
+                y: Math.min(viewport.shaderY1, viewport.shaderY2)
+                width: Math.abs(viewport.shaderX2 - viewport.shaderX1)
+                height: Math.abs(viewport.shaderY2 - viewport.shaderY1)
                 color: "transparent"
                 border.color: "white"
                 border.width: 1
@@ -3586,6 +4109,17 @@ Window {
                             y2: v.y2
                         });
                     }
+                    for (var m = 0; m < viewport.selectedShaders.length; m++) {
+                        var sh = shadersModel.get(viewport.selectedShaders[m]);
+                        snaps.push({
+                            type: "shader",
+                            idx: viewport.selectedShaders[m],
+                            x1: sh.x1,
+                            y1: sh.y1,
+                            x2: sh.x2,
+                            y2: sh.y2
+                        });
+                    }
                     snapshots = snaps;
                     snapGroupBounds = {
                         x1: gbX1,
@@ -3625,6 +4159,11 @@ Window {
                             videosModel.setProperty(s.idx, "y1", s.y1 + cdy);
                             videosModel.setProperty(s.idx, "x2", s.x2 + cdx);
                             videosModel.setProperty(s.idx, "y2", s.y2 + cdy);
+                        } else if (s.type === "shader") {
+                            shadersModel.setProperty(s.idx, "x1", s.x1 + cdx);
+                            shadersModel.setProperty(s.idx, "y1", s.y1 + cdy);
+                            shadersModel.setProperty(s.idx, "x2", s.x2 + cdx);
+                            shadersModel.setProperty(s.idx, "y2", s.y2 + cdy);
                         }
                     }
                 }
@@ -3666,6 +4205,11 @@ Window {
                             videosModel.setProperty(s.idx, "y1", ny1);
                             videosModel.setProperty(s.idx, "x2", nx2);
                             videosModel.setProperty(s.idx, "y2", ny2);
+                        } else if (s.type === "shader") {
+                            shadersModel.setProperty(s.idx, "x1", nx1);
+                            shadersModel.setProperty(s.idx, "y1", ny1);
+                            shadersModel.setProperty(s.idx, "x2", nx2);
+                            shadersModel.setProperty(s.idx, "y2", ny2);
                         }
                     }
                 }
@@ -4079,6 +4623,50 @@ Window {
                 onAccepted: videoSettings.selectedFilePath = selectedFile.toString()
             }
 
+            FileDialog {
+                id: fragFileDialog
+                title: "Select compiled fragment shader"
+                nameFilters: ["Compiled fragment shaders (*.frag.qsb)"]
+                onAccepted: newshaderSettings.fragFilePath = selectedFile.toString()
+            }
+
+            FileDialog {
+                id: vertFileDialog
+                title: "Select compiled vertex shader"
+                nameFilters: ["Compiled vertex shaders (*.vert.qsb)"]
+                onAccepted: newshaderSettings.vertFilePath = selectedFile.toString()
+            }
+
+            FileDialog {
+                id: shaderPickerDialog
+                title: "Select shader file(s)"
+                fileMode: FileDialog.OpenFiles
+                nameFilters: ["Compiled shaders (*.frag.qsb *.vert.qsb)"]
+                onAccepted: {
+                    for (var i = 0; i < selectedFiles.length; i++) {
+                        var path = selectedFiles[i].toString();
+                        if (path.endsWith(".frag.qsb"))
+                            newshaderSettings.fragFilePath = path;
+                        else if (path.endsWith(".vert.qsb"))
+                            newshaderSettings.vertFilePath = path;
+                    }
+                    if (viewport.pendingShaderBounds && newshaderSettings.fragFilePath !== "") {
+                        var b = viewport.pendingShaderBounds;
+                        shadersModel.append({
+                            x1: b.x1, y1: b.y1,
+                            x2: b.x2, y2: b.y2,
+                            fragPath: newshaderSettings.fragFilePath,
+                            vertPath: newshaderSettings.vertFilePath,
+                            stackOrder: viewport.nextStackOrder++
+                        });
+                        viewport.selectShader(shadersModel.count - 1);
+                        buttonGrid.selectedTool = "select";
+                    }
+                    viewport.pendingShaderBounds = null;
+                }
+                onRejected: viewport.pendingShaderBounds = null
+            }
+
             // Probe: resolves natural dimensions of a drag-dropped image
             Image {
                 id: viewportImageProbe
@@ -4188,8 +4776,8 @@ Window {
             }
 
             Image {
-                x: (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX)))))) + (viewport.effectiveTool === "select" ? -8 : 0)
-                y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY)))))) + (viewport.effectiveTool === "select" ? -1 : 0)
+                x: (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.shaderDragging ? viewport.shaderX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX))))))) + (viewport.effectiveTool === "select" ? -8 : 0)
+                y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.shaderDragging ? viewport.shaderY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY))))))) + (viewport.effectiveTool === "select" ? -1 : 0)
                 width: 36
                 height: 36
                 source: viewport.elementDragging ? "icons/pinch.svg" : (["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : "")
@@ -4653,9 +5241,10 @@ Window {
 
                             Image {
                                 id: dropImageIcon
-                                anchors.centerIn: parent
-                                width: 48
-                                height: 48
+                                anchors.fill: parent
+                                anchors.margins: 9
+                                sourceSize.width: 256
+                                sourceSize.height: 256
                                 source: "icons/dropimage.svg"
                                 fillMode: Image.PreserveAspectFit
                                 visible: imageSettings.selectedFilePath === ""
@@ -4743,9 +5332,10 @@ Window {
 
                             Image {
                                 id: dropVideoIcon
-                                anchors.centerIn: parent
-                                width: 48
-                                height: 48
+                                anchors.fill: parent
+                                anchors.margins: 9
+                                sourceSize.width: 256
+                                sourceSize.height: 256
                                 source: "icons/dropvideo.svg"
                                 fillMode: Image.PreserveAspectFit
                                 visible: videoSettings.selectedFilePath === ""
@@ -4976,7 +5566,7 @@ Window {
 
                                 TextInput {
                                     anchors.fill: parent
-                                    anchors.margins: 4
+                                    anchors.margins: 9
                                     color: "white"
                                     font.pixelSize: 11
                                     horizontalAlignment: TextInput.AlignHCenter
@@ -5351,7 +5941,7 @@ Window {
                                 radius: 4
                                 TextInput {
                                     anchors.fill: parent
-                                    anchors.margins: 4
+                                    anchors.margins: 9
                                     color: "white"
                                     font.pixelSize: 11
                                     horizontalAlignment: TextInput.AlignHCenter
@@ -5521,6 +6111,21 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
+                    property string fragFilePath: ""
+                    property string vertFilePath: ""
+                    property bool showUncompiledWarning: false
+
+                    Timer {
+                        id: shaderWarningTimer
+                        interval: 10000
+                        onTriggered: newshaderSettings.showUncompiledWarning = false
+                    }
+
+                    function warnUncompiled() {
+                        newshaderSettings.showUncompiledWarning = true;
+                        shaderWarningTimer.restart();
+                    }
+
                     Text {
                         id: newshaderSettingsHeading
                         text: "new shader"
@@ -5531,6 +6136,122 @@ Window {
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                    }
+
+                    Text {
+                        visible: newshaderSettings.showUncompiledWarning
+                        text: "Please compile shader\nwith QSB."
+                        font.pixelSize: 11
+                        color: "white"
+                        horizontalAlignment: Text.AlignRight
+                        anchors.top: parent.top
+                        anchors.topMargin: 18
+                        anchors.right: parent.right
+                        anchors.rightMargin: 20
+                    }
+
+                    Row {
+                        anchors.top: newshaderSettingsHeading.bottom
+                        anchors.topMargin: 12
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        spacing: 8
+
+                        // Fragment shader drop zone
+                        Rectangle {
+                            width: (parent.width - parent.spacing) / 2
+                            height: 80
+                            color: "black"
+                            radius: 4
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 9
+                                sourceSize.width: 256
+                                sourceSize.height: 256
+                                source: "icons/dropfrag.svg"
+                                fillMode: Image.PreserveAspectFit
+                                visible: newshaderSettings.fragFilePath === ""
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: newshaderSettings.fragFilePath !== "" ? newshaderSettings.fragFilePath.replace(/.*\//, "") : ""
+                                color: "#aaa"
+                                font.pixelSize: 11
+                                elide: Text.ElideLeft
+                                width: parent.width - 16
+                                horizontalAlignment: Text.AlignHCenter
+                                visible: newshaderSettings.fragFilePath !== ""
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: fragFileDialog.open()
+                            }
+
+                            DropArea {
+                                anchors.fill: parent
+                                onDropped: drop => {
+                                    if (!drop.hasUrls) return;
+                                    var path = drop.urls[0].toString();
+                                    if (path.endsWith(".frag.qsb")) {
+                                        newshaderSettings.fragFilePath = path;
+                                    } else if (path.endsWith(".frag")) {
+                                        newshaderSettings.warnUncompiled();
+                                    }
+                                }
+                            }
+                        }
+
+                        // Vertex shader drop zone
+                        Rectangle {
+                            width: (parent.width - parent.spacing) / 2
+                            height: 80
+                            color: "black"
+                            radius: 4
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 9
+                                sourceSize.width: 256
+                                sourceSize.height: 256
+                                source: "icons/dropvert.svg"
+                                fillMode: Image.PreserveAspectFit
+                                visible: newshaderSettings.vertFilePath === ""
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: newshaderSettings.vertFilePath !== "" ? newshaderSettings.vertFilePath.replace(/.*\//, "") : ""
+                                color: "#aaa"
+                                font.pixelSize: 11
+                                elide: Text.ElideLeft
+                                width: parent.width - 16
+                                horizontalAlignment: Text.AlignHCenter
+                                visible: newshaderSettings.vertFilePath !== ""
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: vertFileDialog.open()
+                            }
+
+                            DropArea {
+                                anchors.fill: parent
+                                onDropped: drop => {
+                                    if (!drop.hasUrls) return;
+                                    var path = drop.urls[0].toString();
+                                    if (path.endsWith(".vert.qsb")) {
+                                        newshaderSettings.vertFilePath = path;
+                                    } else if (path.endsWith(".vert")) {
+                                        newshaderSettings.warnUncompiled();
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -6089,7 +6810,7 @@ Window {
                                             TextInput {
                                                 id: nameInput
                                                 anchors.fill: parent
-                                                anchors.margins: 4
+                                                anchors.margins: 9
                                                 color: "white"
                                                 font.pixelSize: 11
                                                 clip: true
@@ -6127,7 +6848,7 @@ Window {
                                                 TextInput {
                                                     id: numberInput
                                                     anchors.fill: parent
-                                                    anchors.margins: 4
+                                                    anchors.margins: 9
                                                     color: "white"
                                                     font.pixelSize: 11
                                                     clip: true
@@ -6161,7 +6882,7 @@ Window {
                                                 TextInput {
                                                     id: textValueInput
                                                     anchors.fill: parent
-                                                    anchors.margins: 4
+                                                    anchors.margins: 9
                                                     color: "white"
                                                     font.pixelSize: 11
                                                     clip: true
