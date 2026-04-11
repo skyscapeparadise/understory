@@ -4181,7 +4181,7 @@ Window {
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
-                cursorShape: viewport.textEditing ? Qt.IBeamCursor : (["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(viewport.effectiveTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor)
+                cursorShape: viewport.textEditing ? Qt.IBeamCursor : (["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor)
                 z: 999
                 onPositionChanged: viewport.hoveredAreaIndex = viewport.findHoveredArea(mouseX, mouseY)
                 onExited: viewport.hoveredAreaIndex = -1
@@ -4192,8 +4192,8 @@ Window {
                 y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY)))))) + (viewport.effectiveTool === "select" ? -1 : 0)
                 width: 36
                 height: 36
-                source: viewport.elementDragging ? "icons/pinch.svg" : (["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : "")
-                visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"].indexOf(viewport.effectiveTool) !== -1)
+                source: viewport.elementDragging ? "icons/pinch.svg" : (["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : "")
+                visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1)
                 fillMode: Image.PreserveAspectFit
                 z: 1000
             }
@@ -4362,8 +4362,9 @@ Window {
             }
 
             Rectangle {
+                id: toolPalette
                 width: 405
-                height: 200
+                height: 152
                 color: "transparent"
 
                 anchors.top: parent.top
@@ -4373,24 +4374,31 @@ Window {
                 GridLayout {
                     id: buttonGrid
                     anchors.horizontalCenter: parent.horizontalCenter
-                    columns: 4
+                    columns: 5
                     rowSpacing: 8
-                    columnSpacing: 8
+                    columnSpacing: 4
 
                     property string selectedTool: "select"
                     property color activeIconColor: "#477B78"
 
                     Repeater {
-                        model: ["select", "newlink", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo"]
+                        model: ["select", "simulate", "relayer", "destroy", "preview", "newarea", "newtext", "newimage", "newvideo", "newshader"]
 
                         delegate: Item {
                             id: buttonRoot
-                            width: 88
-                            height: 88
+                            width: 72
+                            height: 72
 
                             property bool hovered: false
-                            property bool toggled: viewport.effectiveTool === modelData
+                            property bool flashing: false
+                            property bool toggled: flashing || (modelData !== "preview" && viewport.effectiveTool === modelData)
                             property string iconSource: "icons/" + modelData + ".svg"
+
+                            Timer {
+                                id: flashTimer
+                                interval: 150
+                                onTriggered: buttonRoot.flashing = false
+                            }
 
                             Rectangle {
                                 anchors.fill: parent
@@ -4408,8 +4416,8 @@ Window {
                             Image {
                                 id: svgIcon
                                 anchors.centerIn: parent
-                                width: 70
-                                height: 70
+                                width: 56
+                                height: 56
                                 fillMode: Image.PreserveAspectFit
                                 source: iconSource
                                 visible: false
@@ -4431,7 +4439,13 @@ Window {
                                 hoverEnabled: true
 
                                 onClicked: {
-                                    var nonCreation = ["select", "newlink", "relayer", "destroy"];
+                                    if (modelData === "preview") {
+                                        buttonRoot.flashing = true;
+                                        flashTimer.restart();
+                                        // TODO: launch preview
+                                        return;
+                                    }
+                                    var nonCreation = ["select", "simulate", "relayer", "destroy"];
                                     if (buttonGrid.selectedTool !== modelData)
                                         buttonGrid.selectedTool = modelData;
                                     else if (nonCreation.indexOf(modelData) === -1)
@@ -4551,16 +4565,15 @@ Window {
 
             Rectangle {
                 id: toolSettingsArea
-                x: 0
-                y: 0
                 radius: 12
-                height: 240
                 width: 377
                 color: "transparent"
                 border.color: "white"
                 border.width: sceneEditorButtons.navigationOpen ? 0 : 2
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 86
+                anchors.top: toolPalette.bottom
+                anchors.topMargin: 14
+                anchors.bottom: sceneEditorButtons.top
+                anchors.bottomMargin: 14
                 anchors.left: parent.left
                 anchors.leftMargin: 14
 
@@ -5501,15 +5514,36 @@ Window {
                 }
 
                 Rectangle {
-                    id: newlinkSettings
-                    visible: buttonGrid.selectedTool === "newlink"
+                    id: newshaderSettings
+                    visible: buttonGrid.selectedTool === "newshader"
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
                     color: "transparent"
 
                     Text {
-                        id: newlinkSettingsHeading
+                        id: newshaderSettingsHeading
+                        text: "new shader"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "white"
+                        anchors.top: parent.top
+                        anchors.topMargin: 20
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                    }
+                }
+
+                Rectangle {
+                    id: simulateSettings
+                    visible: buttonGrid.selectedTool === "simulate"
+                    height: parent.height
+                    width: parent.width
+                    radius: parent.radius
+                    color: "transparent"
+
+                    Text {
+                        id: simulateSettingsHeading
                         text: "simulate"
                         font.pixelSize: 24
                         font.bold: true
@@ -6331,13 +6365,13 @@ Window {
 
                 Rectangle {
                     id: sceneNameSettings
-                    visible: ["select", "newlink", "relayer", "destroy"].indexOf(buttonGrid.selectedTool) !== -1 && !sceneEditorButtons.conditionsOpen && !sceneEditorButtons.variablesOpen && !sceneEditorButtons.navigationOpen && !(buttonGrid.selectedTool === "select" && viewport.selectionCount > 0)
+                    visible: ["select", "simulate", "relayer", "destroy"].indexOf(buttonGrid.selectedTool) !== -1 && !sceneEditorButtons.conditionsOpen && !sceneEditorButtons.variablesOpen && !sceneEditorButtons.navigationOpen && !(buttonGrid.selectedTool === "select" && viewport.selectionCount > 0)
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
                     color: "transparent"
 
-                    readonly property var toolDisplayNames: ({ "select": "select", "newlink": "simulate", "relayer": "stack", "destroy": "delete" })
+                    readonly property var toolDisplayNames: ({ "select": "select", "simulate": "simulate", "relayer": "stack", "destroy": "delete" })
 
                     Text {
                         text: sceneNameSettings.toolDisplayNames[buttonGrid.selectedTool] || ""
