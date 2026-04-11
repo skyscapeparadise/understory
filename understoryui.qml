@@ -4667,6 +4667,46 @@ Window {
                 onRejected: viewport.pendingShaderBounds = null
             }
 
+            FileDialog {
+                id: selectImageSwapDialog
+                title: "Select image file"
+                nameFilters: ["Image files (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.svg)"]
+                onAccepted: {
+                    if (selectSettings.hasActiveImage)
+                        imagesModel.setProperty(viewport.selectedImages[0], "filePath", selectedFile.toString());
+                }
+            }
+
+            FileDialog {
+                id: selectVideoSwapDialog
+                title: "Select video file"
+                nameFilters: ["Video files (*.mp4 *.mov *.avi *.mkv *.webm *.m4v)"]
+                onAccepted: {
+                    if (selectSettings.hasActiveVideo)
+                        videosModel.setProperty(viewport.selectedVideos[0], "filePath", selectedFile.toString());
+                }
+            }
+
+            FileDialog {
+                id: selectFragSwapDialog
+                title: "Select compiled fragment shader"
+                nameFilters: ["Compiled fragment shaders (*.frag.qsb)"]
+                onAccepted: {
+                    if (selectSettings.hasActiveShader)
+                        shadersModel.setProperty(viewport.selectedShaders[0], "fragPath", selectedFile.toString());
+                }
+            }
+
+            FileDialog {
+                id: selectVertSwapDialog
+                title: "Select compiled vertex shader"
+                nameFilters: ["Compiled vertex shaders (*.vert.qsb)"]
+                onAccepted: {
+                    if (selectSettings.hasActiveShader)
+                        shadersModel.setProperty(viewport.selectedShaders[0], "vertPath", selectedFile.toString());
+                }
+            }
+
             // Probe: resolves natural dimensions of a drag-dropped image
             Image {
                 id: viewportImageProbe
@@ -5247,13 +5287,13 @@ Window {
                                 sourceSize.height: 256
                                 source: "icons/dropimage.svg"
                                 fillMode: Image.PreserveAspectFit
-                                visible: imageSettings.selectedFilePath === ""
+                                opacity: imageSettings.selectedFilePath !== "" ? 0.3 : 1.0
                             }
 
                             Text {
                                 anchors.centerIn: parent
                                 text: imageSettings.selectedFilePath !== "" ? imageSettings.selectedFilePath.replace(/.*\//, "") : ""
-                                color: "#aaa"
+                                color: "white"
                                 font.pixelSize: 11
                                 elide: Text.ElideLeft
                                 width: parent.width - 16
@@ -5338,13 +5378,13 @@ Window {
                                 sourceSize.height: 256
                                 source: "icons/dropvideo.svg"
                                 fillMode: Image.PreserveAspectFit
-                                visible: videoSettings.selectedFilePath === ""
+                                opacity: videoSettings.selectedFilePath !== "" ? 0.3 : 1.0
                             }
 
                             Text {
                                 anchors.centerIn: parent
                                 text: videoSettings.selectedFilePath !== "" ? videoSettings.selectedFilePath.replace(/.*\//, "") : ""
-                                color: "#aaa"
+                                color: "white"
                                 font.pixelSize: 11
                                 elide: Text.ElideLeft
                                 width: parent.width - 16
@@ -5722,8 +5762,11 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
-                    readonly property bool hasActiveArea: (viewport.selectionRevision >= 0) && viewport.selectedAreas.length === 1 && viewport.selectedTbs.length === 0
-                    readonly property bool hasActiveTb: (viewport.selectionRevision >= 0) && viewport.selectedTbs.length === 1
+                    readonly property bool hasActiveArea: (viewport.selectionRevision >= 0) && viewport.selectedAreas.length === 1 && viewport.selectionCount === 1
+                    readonly property bool hasActiveTb: (viewport.selectionRevision >= 0) && viewport.selectedTbs.length === 1 && viewport.selectionCount === 1
+                    readonly property bool hasActiveImage: (viewport.selectionRevision >= 0) && viewport.selectedImages.length === 1 && viewport.selectionCount === 1
+                    readonly property bool hasActiveVideo: (viewport.selectionRevision >= 0) && viewport.selectedVideos.length === 1 && viewport.selectionCount === 1
+                    readonly property bool hasActiveShader: (viewport.selectionRevision >= 0) && viewport.selectedShaders.length === 1 && viewport.selectionCount === 1
 
                     // Local state for editing the active text box's formatting
                     readonly property var fontFamilies: Qt.fontFamilies()
@@ -5769,7 +5812,7 @@ Window {
 
                     Text {
                         id: selectSettingsHeading
-                        text: selectSettings.hasActiveArea ? "area" : (selectSettings.hasActiveTb ? "text" : "select")
+                        text: selectSettings.hasActiveArea ? "area" : (selectSettings.hasActiveTb ? "text" : (selectSettings.hasActiveImage ? "image" : (selectSettings.hasActiveVideo ? "video" : (selectSettings.hasActiveShader ? "shader" : "select"))))
                         font.pixelSize: 24
                         font.bold: true
                         color: "white"
@@ -6101,6 +6144,211 @@ Window {
                             selectSettings.applyTbFormatting();
                         }
                     }
+
+                    // Image swap — visible when a single image is selected
+                    Column {
+                        visible: selectSettings.hasActiveImage
+                        anchors.top: selectSettingsHeading.bottom
+                        anchors.topMargin: 12
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        spacing: 8
+
+                        Rectangle {
+                            width: parent.width
+                            height: 80
+                            color: "black"
+                            radius: 4
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 9
+                                sourceSize.width: 256
+                                sourceSize.height: 256
+                                source: "icons/dropimage.svg"
+                                fillMode: Image.PreserveAspectFit
+                                opacity: 0.3
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: selectSettings.hasActiveImage ? imagesModel.get(viewport.selectedImages[0]).filePath.replace(/.*\//, "") : ""
+                                color: "white"
+                                font.pixelSize: 11
+                                elide: Text.ElideLeft
+                                width: parent.width - 16
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: selectImageSwapDialog.open()
+                            }
+
+                            DropArea {
+                                anchors.fill: parent
+                                onDropped: drop => {
+                                    if (drop.hasUrls && selectSettings.hasActiveImage)
+                                        imagesModel.setProperty(viewport.selectedImages[0], "filePath", drop.urls[0].toString());
+                                }
+                            }
+                        }
+                    }
+
+                    // Video swap — visible when a single video is selected
+                    Column {
+                        visible: selectSettings.hasActiveVideo
+                        anchors.top: selectSettingsHeading.bottom
+                        anchors.topMargin: 12
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        spacing: 8
+
+                        Rectangle {
+                            width: parent.width
+                            height: 80
+                            color: "black"
+                            radius: 4
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 9
+                                sourceSize.width: 256
+                                sourceSize.height: 256
+                                source: "icons/dropvideo.svg"
+                                fillMode: Image.PreserveAspectFit
+                                opacity: 0.3
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: selectSettings.hasActiveVideo ? videosModel.get(viewport.selectedVideos[0]).filePath.replace(/.*\//, "") : ""
+                                color: "white"
+                                font.pixelSize: 11
+                                elide: Text.ElideLeft
+                                width: parent.width - 16
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: selectVideoSwapDialog.open()
+                            }
+
+                            DropArea {
+                                anchors.fill: parent
+                                onDropped: drop => {
+                                    if (drop.hasUrls && selectSettings.hasActiveVideo)
+                                        videosModel.setProperty(viewport.selectedVideos[0], "filePath", drop.urls[0].toString());
+                                }
+                            }
+                        }
+                    }
+
+                    // Shader swap — visible when a single shader is selected
+                    Item {
+                        visible: selectSettings.hasActiveShader
+                        anchors.top: selectSettingsHeading.bottom
+                        anchors.topMargin: 12
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        height: 80
+
+                        Rectangle {
+                            width: (parent.width - 8) / 2
+                            height: 80
+                            color: "black"
+                            radius: 4
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 9
+                                sourceSize.width: 256
+                                sourceSize.height: 256
+                                source: "icons/dropfrag.svg"
+                                fillMode: Image.PreserveAspectFit
+                                opacity: 0.3
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: selectSettings.hasActiveShader ? shadersModel.get(viewport.selectedShaders[0]).fragPath.replace(/.*\//, "") : ""
+                                color: "white"
+                                font.pixelSize: 11
+                                elide: Text.ElideLeft
+                                width: parent.width - 16
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: selectFragSwapDialog.open()
+                            }
+
+                            DropArea {
+                                anchors.fill: parent
+                                onDropped: drop => {
+                                    if (!drop.hasUrls || !selectSettings.hasActiveShader) return;
+                                    var path = drop.urls[0].toString();
+                                    if (path.endsWith(".frag.qsb"))
+                                        shadersModel.setProperty(viewport.selectedShaders[0], "fragPath", path);
+                                    else if (path.endsWith(".frag"))
+                                        newshaderSettings.warnUncompiled();
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            x: (parent.width - 8) / 2 + 8
+                            width: (parent.width - 8) / 2
+                            height: 80
+                            color: "black"
+                            radius: 4
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 9
+                                sourceSize.width: 256
+                                sourceSize.height: 256
+                                source: "icons/dropvert.svg"
+                                fillMode: Image.PreserveAspectFit
+                                opacity: 0.3
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: selectSettings.hasActiveShader ? shadersModel.get(viewport.selectedShaders[0]).vertPath.replace(/.*\//, "") : ""
+                                color: "white"
+                                font.pixelSize: 11
+                                elide: Text.ElideLeft
+                                width: parent.width - 16
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: selectVertSwapDialog.open()
+                            }
+
+                            DropArea {
+                                anchors.fill: parent
+                                onDropped: drop => {
+                                    if (!drop.hasUrls || !selectSettings.hasActiveShader) return;
+                                    var path = drop.urls[0].toString();
+                                    if (path.endsWith(".vert.qsb"))
+                                        shadersModel.setProperty(viewport.selectedShaders[0], "vertPath", path);
+                                    else if (path.endsWith(".vert"))
+                                        newshaderSettings.warnUncompiled();
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Rectangle {
@@ -6173,13 +6421,13 @@ Window {
                                 sourceSize.height: 256
                                 source: "icons/dropfrag.svg"
                                 fillMode: Image.PreserveAspectFit
-                                visible: newshaderSettings.fragFilePath === ""
+                                opacity: newshaderSettings.fragFilePath !== "" ? 0.3 : 1.0
                             }
 
                             Text {
                                 anchors.centerIn: parent
                                 text: newshaderSettings.fragFilePath !== "" ? newshaderSettings.fragFilePath.replace(/.*\//, "") : ""
-                                color: "#aaa"
+                                color: "white"
                                 font.pixelSize: 11
                                 elide: Text.ElideLeft
                                 width: parent.width - 16
@@ -6220,13 +6468,13 @@ Window {
                                 sourceSize.height: 256
                                 source: "icons/dropvert.svg"
                                 fillMode: Image.PreserveAspectFit
-                                visible: newshaderSettings.vertFilePath === ""
+                                opacity: newshaderSettings.vertFilePath !== "" ? 0.3 : 1.0
                             }
 
                             Text {
                                 anchors.centerIn: parent
                                 text: newshaderSettings.vertFilePath !== "" ? newshaderSettings.vertFilePath.replace(/.*\//, "") : ""
-                                color: "#aaa"
+                                color: "white"
                                 font.pixelSize: 11
                                 elide: Text.ElideLeft
                                 width: parent.width - 16
@@ -7082,6 +7330,7 @@ Window {
                             }
                         }
                     }
+
                 }
 
                 Rectangle {
