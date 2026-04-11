@@ -1000,6 +1000,87 @@ Window {
                 return clamped;
             }
 
+            // --- Shader uniform helpers ---
+            function buildUniformsList(rawUniforms) {
+                var list = [];
+                for (var i = 0; i < rawUniforms.length; i++) {
+                    var u = rawUniforms[i];
+                    list.push({name: u.name, type: u.type, value: uniformDefault(u.type)});
+                }
+                return list;
+            }
+            function uniformDefault(type) {
+                if (type === "float" || type === "int") return 0.0;
+                if (type === "vec2") return [0.0, 0.0];
+                if (type === "vec3") return [0.0, 0.0, 0.0];
+                if (type === "vec4") return [0.0, 0.0, 0.0, 1.0];
+                return null;
+            }
+            function qmlTypeForUniform(type) {
+                if (type === "float" || type === "int") return "real";
+                if (type === "vec2") return "vector2d";
+                if (type === "vec3") return "vector3d";
+                if (type === "vec4") return "vector4d";
+                return "var";
+            }
+            function qmlValueForUniform(type, value) {
+                if (type === "float" || type === "int")
+                    return (value !== null && value !== undefined) ? value : 0.0;
+                var v2, v3, v4;
+                if (type === "vec2") {
+                    v2 = Array.isArray(value) ? value : [0.0, 0.0];
+                    return "Qt.vector2d(" + v2[0] + ", " + v2[1] + ")";
+                }
+                if (type === "vec3") {
+                    v3 = Array.isArray(value) ? value : [0.0, 0.0, 0.0];
+                    return "Qt.vector3d(" + v3[0] + ", " + v3[1] + ", " + v3[2] + ")";
+                }
+                if (type === "vec4") {
+                    v4 = Array.isArray(value) ? value : [0.0, 0.0, 0.0, 1.0];
+                    return "Qt.vector4d(" + v4[0] + ", " + v4[1] + ", " + v4[2] + ", " + v4[3] + ")";
+                }
+                return "null";
+            }
+            // Build a QML ShaderEffect string with per-shader property declarations.
+            function buildShaderQml(fragPath, vertPath, uniformsJson) {
+                var uniforms;
+                try { uniforms = JSON.parse(uniformsJson || "[]"); } catch(e) { uniforms = []; }
+                var qml = "import QtQuick 2.15\nShaderEffect {\n";
+                qml += "    anchors.fill: parent\n";
+                qml += "    fragmentShader: \"" + fragPath + "\"\n";
+                if (vertPath && vertPath !== "")
+                    qml += "    vertexShader: \"" + vertPath + "\"\n";
+                for (var i = 0; i < uniforms.length; i++) {
+                    var u = uniforms[i];
+                    if (u.name === "time") {
+                        qml += "    property real time: 0\n";
+                        qml += "    NumberAnimation on time { from: 0; to: 1000000; duration: 1000000000; loops: Animation.Infinite; running: true }\n";
+                    } else if (u.type !== "sampler2D") {
+                        qml += "    property " + qmlTypeForUniform(u.type) + " " + u.name + ": " + qmlValueForUniform(u.type, u.value) + "\n";
+                    }
+                }
+                qml += "}\n";
+                return qml;
+            }
+            // Convert comma-separated text to a QML-typed value (for live ShaderEffect update).
+            function parseUniformToQml(type, text) {
+                var parts = text.toString().split(",").map(function(s) { return parseFloat(s.trim()) || 0; });
+                if (type === "float" || type === "int") return parseFloat(text) || 0;
+                if (type === "vec2") return Qt.vector2d(parts[0] || 0, parts[1] || 0);
+                if (type === "vec3") return Qt.vector3d(parts[0] || 0, parts[1] || 0, parts[2] || 0);
+                if (type === "vec4") return Qt.vector4d(parts[0] || 0, parts[1] || 0, parts[2] || 0, parts[3] || 0);
+                return null;
+            }
+            // Convert comma-separated text to a serialisable array/scalar (for storing in model).
+            function parseUniformToArray(type, text) {
+                var parts = text.toString().split(",").map(function(s) { return parseFloat(s.trim()) || 0; });
+                if (type === "float" || type === "int") return parseFloat(text) || 0;
+                if (type === "vec2") return [parts[0] || 0, parts[1] || 0];
+                if (type === "vec3") return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
+                if (type === "vec4") return [parts[0] || 0, parts[1] || 0, parts[2] || 0, parts[3] || 0];
+                return null;
+            }
+
             ShaderEffect {
                 anchors.fill: parent
                 visible: !viewport.bgOccluded
@@ -1290,7 +1371,8 @@ Window {
                                 x2: bounds.x2, y2: bounds.y2,
                                 fragPath: newshaderSettings.fragFilePath,
                                 vertPath: newshaderSettings.vertFilePath,
-                                stackOrder: viewport.nextStackOrder++
+                                stackOrder: viewport.nextStackOrder++,
+                                uniformsJson: newshaderSettings.buildCurrentUniformsList()
                             });
                             viewport.selectShader(shadersModel.count - 1);
                             buttonGrid.selectedTool = "select";
@@ -3562,6 +3644,7 @@ Window {
 
             // Completed shaders
             Repeater {
+                id: shadersRepeater
                 model: shadersModel
                 delegate: Item {
                     id: shaderDelegate
@@ -3570,7 +3653,6 @@ Window {
                     width: model.x2 - model.x1 + 56
                     height: model.y2 - model.y1 + 56
                     z: 100 + model.stackOrder
-                    layer.enabled: true
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
                     property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedShaders.indexOf(index) !== -1
@@ -3584,22 +3666,64 @@ Window {
                     property real origAspect: 1
                     property bool isBeingDeleted: (buttonGrid.selectedTool === "destroy" || viewport.tempDestroyMode) && viewport.deleteTargetType === "shader" && viewport.deleteTargetIndex === index
 
-                    // Shader fill
-                    ShaderEffect {
-                        x: 28
-                        y: 28
+                    // Expose the dynamic ShaderEffect so select-settings can update uniforms.
+                    property var dynamicShaderEffect: shaderEffectContainer.dynamicEffect
+
+                    // Shader fill — recreated via Qt.createQmlObject() whenever the frag path
+                    // changes, so per-shader uniform properties are correctly declared.
+                    Item {
+                        id: shaderEffectContainer
+                        x: 28; y: 28
                         width: parent.width - 56
                         height: parent.height - 56
                         visible: model.fragPath !== ""
-                        fragmentShader: model.fragPath
-                        vertexShader: model.vertPath
-                        property real time: 0
-                        NumberAnimation on time {
-                            from: 0; to: 1000000
-                            duration: 1000000000
-                            loops: Animation.Infinite
-                            running: true
+
+                        property var dynamicEffect: null
+
+                        function rebuild() {
+                            if (dynamicEffect) { dynamicEffect.destroy(); dynamicEffect = null; }
+                            if (model.fragPath === "") return;
+                            var qmlStr = viewport.buildShaderQml(model.fragPath, model.vertPath, model.uniformsJson);
+                            try {
+                                dynamicEffect = Qt.createQmlObject(qmlStr, shaderEffectContainer, "dynShader");
+                            } catch(e) {
+                                console.warn("ShaderEffect build failed:", e.message);
+                            }
                         }
+
+                        function applyUniformValues() {
+                            if (!dynamicEffect) return;
+                            var uniforms;
+                            try { uniforms = JSON.parse(model.uniformsJson || "[]"); } catch(e) { return; }
+                            for (var i = 0; i < uniforms.length; i++) {
+                                var u = uniforms[i];
+                                if (u.name === "time" || u.type === "sampler2D") continue;
+                                var textVal = Array.isArray(u.value) ? u.value.join(", ") :
+                                              (u.value !== null && u.value !== undefined ? u.value.toString() : "0");
+                                try { dynamicEffect[u.name] = viewport.parseUniformToQml(u.type, textVal); } catch(e) {}
+                            }
+                        }
+
+                        // Full rebuild when the shader file changes.
+                        property string watchedFragPath: model.fragPath
+                        onWatchedFragPathChanged: rebuildTimer.restart()
+
+                        // Live-update uniforms without restarting the animation when only values change.
+                        property string watchedUniformsJson: model.uniformsJson
+                        onWatchedUniformsJsonChanged: {
+                            if (dynamicEffect)
+                                applyUniformValues();
+                            else
+                                rebuildTimer.restart();
+                        }
+
+                        Timer {
+                            id: rebuildTimer
+                            interval: 0
+                            onTriggered: shaderEffectContainer.rebuild()
+                        }
+
+                        Component.onCompleted: rebuild()
                     }
 
                     // Border — only when active/selected or relayer hovered
@@ -4657,7 +4781,8 @@ Window {
                             x2: b.x2, y2: b.y2,
                             fragPath: newshaderSettings.fragFilePath,
                             vertPath: newshaderSettings.vertFilePath,
-                            stackOrder: viewport.nextStackOrder++
+                            stackOrder: viewport.nextStackOrder++,
+                            uniformsJson: newshaderSettings.buildCurrentUniformsList()
                         });
                         viewport.selectShader(shadersModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -4692,8 +4817,13 @@ Window {
                 title: "Select compiled fragment shader"
                 nameFilters: ["Compiled fragment shaders (*.frag.qsb)"]
                 onAccepted: {
-                    if (selectSettings.hasActiveShader)
-                        shadersModel.setProperty(viewport.selectedShaders[0], "fragPath", selectedFile.toString());
+                    if (selectSettings.hasActiveShader) {
+                        var path = selectedFile.toString();
+                        var idx = viewport.selectedShaders[0];
+                        shadersModel.setProperty(idx, "fragPath", path);
+                        shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(viewport.buildUniformsList(shaderInspector.inspectShader(path))));
+                        selectSettings.refreshShaderUniforms();
+                    }
                 }
             }
 
@@ -5768,6 +5898,24 @@ Window {
                     readonly property bool hasActiveVideo: (viewport.selectionRevision >= 0) && viewport.selectedVideos.length === 1 && viewport.selectionCount === 1
                     readonly property bool hasActiveShader: (viewport.selectionRevision >= 0) && viewport.selectedShaders.length === 1 && viewport.selectionCount === 1
 
+                    // Uniform list for the currently selected shader (excludes time, which is auto-animated).
+                    property var shaderUniforms: []
+                    function refreshShaderUniforms() {
+                        if (hasActiveShader) {
+                            var idx = viewport.selectedShaders[0];
+                            var data = shadersModel.get(idx);
+                            var all;
+                            try { all = JSON.parse(data.uniformsJson || "[]"); } catch(e) { all = []; }
+                            shaderUniforms = all.filter(function(u) { return u.name !== "time" && u.type !== "sampler2D"; });
+                        } else {
+                            shaderUniforms = [];
+                        }
+                    }
+                    Connections {
+                        target: viewport
+                        function onSelectionRevisionChanged() { selectSettings.refreshShaderUniforms(); }
+                    }
+
                     // Local state for editing the active text box's formatting
                     readonly property var fontFamilies: Qt.fontFamilies()
                     property int tbFamilyIndex: 0
@@ -6251,6 +6399,7 @@ Window {
 
                     // Shader swap — visible when a single shader is selected
                     Item {
+                        id: shaderSwapItem
                         visible: selectSettings.hasActiveShader
                         anchors.top: selectSettingsHeading.bottom
                         anchors.topMargin: 12
@@ -6296,9 +6445,12 @@ Window {
                                 onDropped: drop => {
                                     if (!drop.hasUrls || !selectSettings.hasActiveShader) return;
                                     var path = drop.urls[0].toString();
-                                    if (path.endsWith(".frag.qsb"))
-                                        shadersModel.setProperty(viewport.selectedShaders[0], "fragPath", path);
-                                    else if (path.endsWith(".frag"))
+                                    if (path.endsWith(".frag.qsb")) {
+                                        var idx = viewport.selectedShaders[0];
+                                        shadersModel.setProperty(idx, "fragPath", path);
+                                        shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(viewport.buildUniformsList(shaderInspector.inspectShader(path))));
+                                        selectSettings.refreshShaderUniforms();
+                                    } else if (path.endsWith(".frag"))
                                         newshaderSettings.warnUncompiled();
                                 }
                             }
@@ -6349,6 +6501,81 @@ Window {
                             }
                         }
                     }
+
+                    // Editable uniform fields for the selected shader.
+                    Column {
+                        visible: selectSettings.hasActiveShader && selectSettings.shaderUniforms.length > 0
+                        anchors.top: shaderSwapItem.bottom
+                        anchors.topMargin: 10
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        spacing: 5
+
+                        Repeater {
+                            model: selectSettings.shaderUniforms
+                            delegate: Row {
+                                width: parent.width
+                                height: 26
+                                spacing: 6
+
+                                Text {
+                                    text: modelData.name
+                                    width: 72
+                                    color: "#aaa"
+                                    font.pixelSize: 11
+                                    height: parent.height
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+
+                                Rectangle {
+                                    width: parent.width - 78
+                                    height: 26
+                                    color: "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    radius: 4
+
+                                    TextInput {
+                                        anchors.fill: parent
+                                        anchors.margins: 5
+                                        color: "white"
+                                        font.pixelSize: 11
+                                        clip: true
+                                        selectByMouse: true
+                                        text: {
+                                            var v = modelData.value;
+                                            if (v === null || v === undefined) return "0";
+                                            if (Array.isArray(v)) return v.join(", ");
+                                            return v.toString();
+                                        }
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: {
+                                            var name = modelData.name;
+                                            var type = modelData.type;
+                                            var idx = viewport.selectedShaders[0];
+                                            var qmlVal = viewport.parseUniformToQml(type, text);
+                                            var arrVal = viewport.parseUniformToArray(type, text);
+                                            // Update model for persistence.
+                                            var uniforms;
+                                            try { uniforms = JSON.parse(shadersModel.get(idx).uniformsJson || "[]"); } catch(e) { uniforms = []; }
+                                            for (var i = 0; i < uniforms.length; i++) {
+                                                if (uniforms[i].name === name) { uniforms[i].value = arrVal; break; }
+                                            }
+                                            shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(uniforms));
+                                            // Push to live ShaderEffect without a full rebuild.
+                                            var del = shadersRepeater.itemAt(idx);
+                                            if (del && del.dynamicShaderEffect)
+                                                del.dynamicShaderEffect[name] = qmlVal;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Rectangle {
@@ -6362,6 +6589,46 @@ Window {
                     property string fragFilePath: ""
                     property string vertFilePath: ""
                     property bool showUncompiledWarning: false
+                    property var rawUniforms: []  // full list from inspectShader, including time
+
+                    ListModel { id: uniformFieldsModel }  // one entry per non-time uniform shown in UI
+
+                    // Call inspectShader when frag path is set and populate the uniform fields model.
+                    onFragFilePathChanged: {
+                        uniformFieldsModel.clear();
+                        if (fragFilePath !== "") {
+                            rawUniforms = shaderInspector.inspectShader(fragFilePath);
+                            for (var i = 0; i < rawUniforms.length; i++) {
+                                var u = rawUniforms[i];
+                                if (u.name === "time" || u.type === "sampler2D") continue;
+                                var def = viewport.uniformDefault(u.type);
+                                var defText = def === null ? "" : (Array.isArray(def) ? def.join(", ") : def.toString());
+                                uniformFieldsModel.append({uName: u.name, uType: u.type, uText: defText});
+                            }
+                        } else {
+                            rawUniforms = [];
+                        }
+                    }
+
+                    // Build the uniformsJson to store in the model when a shader is created.
+                    function buildCurrentUniformsList() {
+                        var list = [];
+                        for (var k = 0; k < rawUniforms.length; k++) {
+                            var u = rawUniforms[k];
+                            if (u.name === "time") {
+                                list.push({name: "time", type: "float", value: 0.0});
+                            } else if (u.type !== "sampler2D") {
+                                var fieldIdx = 0;
+                                for (var fi = 0; fi < uniformFieldsModel.count; fi++) {
+                                    if (uniformFieldsModel.get(fi).uName === u.name) { fieldIdx = fi; break; }
+                                }
+                                var field = uniformFieldsModel.count > 0 ? uniformFieldsModel.get(fieldIdx) : null;
+                                var txt = field ? field.uText : "0";
+                                list.push({name: u.name, type: u.type, value: viewport.parseUniformToArray(u.type, txt)});
+                            }
+                        }
+                        return JSON.stringify(list);
+                    }
 
                     Timer {
                         id: shaderWarningTimer
@@ -6399,6 +6666,7 @@ Window {
                     }
 
                     Row {
+                        id: shaderDropZonesRow
                         anchors.top: newshaderSettingsHeading.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
@@ -6496,6 +6764,59 @@ Window {
                                         newshaderSettings.vertFilePath = path;
                                     } else if (path.endsWith(".vert")) {
                                         newshaderSettings.warnUncompiled();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Editable default values for detected uniforms.
+                    Column {
+                        visible: uniformFieldsModel.count > 0
+                        anchors.top: shaderDropZonesRow.bottom
+                        anchors.topMargin: 10
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        spacing: 5
+
+                        Repeater {
+                            model: uniformFieldsModel
+                            delegate: Row {
+                                width: parent.width
+                                height: 26
+                                spacing: 6
+
+                                Text {
+                                    text: model.uName
+                                    width: 72
+                                    color: "#aaa"
+                                    font.pixelSize: 11
+                                    height: parent.height
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+
+                                Rectangle {
+                                    width: parent.width - 78
+                                    height: 26
+                                    color: "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    radius: 4
+
+                                    TextInput {
+                                        anchors.fill: parent
+                                        anchors.margins: 5
+                                        color: "white"
+                                        font.pixelSize: 11
+                                        clip: true
+                                        selectByMouse: true
+                                        text: model.uText
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: uniformFieldsModel.setProperty(index, "uText", text)
                                     }
                                 }
                             }
