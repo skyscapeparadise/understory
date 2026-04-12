@@ -1264,6 +1264,7 @@ Window {
                         });
                         viewport.selectImage(imagesModel.count - 1);
                         buttonGrid.selectedTool = "select";
+                        imageSettings.selectedFilePath = "";
                     }
                 }
             }
@@ -1319,6 +1320,7 @@ Window {
                         });
                         viewport.selectVideo(videosModel.count - 1);
                         buttonGrid.selectedTool = "select";
+                        videoSettings.selectedFilePath = "";
                     }
                 }
             }
@@ -1376,6 +1378,8 @@ Window {
                             });
                             viewport.selectShader(shadersModel.count - 1);
                             buttonGrid.selectedTool = "select";
+                            newshaderSettings.fragFilePath = "";
+                            newshaderSettings.vertFilePath = "";
                         }
                     }
                 }
@@ -4786,6 +4790,8 @@ Window {
                         });
                         viewport.selectShader(shadersModel.count - 1);
                         buttonGrid.selectedTool = "select";
+                        newshaderSettings.fragFilePath = "";
+                        newshaderSettings.vertFilePath = "";
                     }
                     viewport.pendingShaderBounds = null;
                 }
@@ -5424,8 +5430,9 @@ Window {
                                 anchors.centerIn: parent
                                 text: imageSettings.selectedFilePath !== "" ? imageSettings.selectedFilePath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 11
-                                elide: Text.ElideLeft
+                                font.pixelSize: 14
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideNone
                                 width: parent.width - 16
                                 horizontalAlignment: Text.AlignHCenter
                                 visible: imageSettings.selectedFilePath !== ""
@@ -5515,8 +5522,9 @@ Window {
                                 anchors.centerIn: parent
                                 text: videoSettings.selectedFilePath !== "" ? videoSettings.selectedFilePath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 11
-                                elide: Text.ElideLeft
+                                font.pixelSize: 14
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideNone
                                 width: parent.width - 16
                                 horizontalAlignment: Text.AlignHCenter
                                 visible: videoSettings.selectedFilePath !== ""
@@ -6324,8 +6332,9 @@ Window {
                                 anchors.centerIn: parent
                                 text: selectSettings.hasActiveImage ? imagesModel.get(viewport.selectedImages[0]).filePath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 11
-                                elide: Text.ElideLeft
+                                font.pixelSize: 14
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideNone
                                 width: parent.width - 16
                                 horizontalAlignment: Text.AlignHCenter
                             }
@@ -6376,8 +6385,9 @@ Window {
                                 anchors.centerIn: parent
                                 text: selectSettings.hasActiveVideo ? videosModel.get(viewport.selectedVideos[0]).filePath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 11
-                                elide: Text.ElideLeft
+                                font.pixelSize: 14
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideNone
                                 width: parent.width - 16
                                 horizontalAlignment: Text.AlignHCenter
                             }
@@ -6429,8 +6439,9 @@ Window {
                                 anchors.centerIn: parent
                                 text: selectSettings.hasActiveShader ? shadersModel.get(viewport.selectedShaders[0]).fragPath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 11
-                                elide: Text.ElideLeft
+                                font.pixelSize: 14
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideNone
                                 width: parent.width - 16
                                 horizontalAlignment: Text.AlignHCenter
                             }
@@ -6477,8 +6488,9 @@ Window {
                                 anchors.centerIn: parent
                                 text: selectSettings.hasActiveShader ? shadersModel.get(viewport.selectedShaders[0]).vertPath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 11
-                                elide: Text.ElideLeft
+                                font.pixelSize: 14
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideNone
                                 width: parent.width - 16
                                 horizontalAlignment: Text.AlignHCenter
                             }
@@ -6696,8 +6708,9 @@ Window {
                                 anchors.centerIn: parent
                                 text: newshaderSettings.fragFilePath !== "" ? newshaderSettings.fragFilePath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 11
-                                elide: Text.ElideLeft
+                                font.pixelSize: 14
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideNone
                                 width: parent.width - 16
                                 horizontalAlignment: Text.AlignHCenter
                                 visible: newshaderSettings.fragFilePath !== ""
@@ -6743,8 +6756,9 @@ Window {
                                 anchors.centerIn: parent
                                 text: newshaderSettings.vertFilePath !== "" ? newshaderSettings.vertFilePath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 11
-                                elide: Text.ElideLeft
+                                font.pixelSize: 14
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideNone
                                 width: parent.width - 16
                                 horizontalAlignment: Text.AlignHCenter
                                 visible: newshaderSettings.vertFilePath !== ""
