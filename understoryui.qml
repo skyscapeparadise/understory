@@ -1010,10 +1010,10 @@ Window {
                 return list;
             }
             function uniformDefault(type) {
-                if (type === "float" || type === "int") return 0.0;
-                if (type === "vec2") return [0.0, 0.0];
-                if (type === "vec3") return [0.0, 0.0, 0.0];
-                if (type === "vec4") return [0.0, 0.0, 0.0, 1.0];
+                if (type === "float" || type === "int") return 1.0;
+                if (type === "vec2") return [1.0, 1.0];
+                if (type === "vec3") return [1.0, 1.0, 1.0];
+                if (type === "vec4") return [1.0, 1.0, 1.0, 1.0];
                 return null;
             }
             function qmlTypeForUniform(type) {
@@ -1028,15 +1028,15 @@ Window {
                     return (value !== null && value !== undefined) ? value : 0.0;
                 var v2, v3, v4;
                 if (type === "vec2") {
-                    v2 = Array.isArray(value) ? value : [0.0, 0.0];
+                    v2 = Array.isArray(value) ? value : [1.0, 1.0];
                     return "Qt.vector2d(" + v2[0] + ", " + v2[1] + ")";
                 }
                 if (type === "vec3") {
-                    v3 = Array.isArray(value) ? value : [0.0, 0.0, 0.0];
+                    v3 = Array.isArray(value) ? value : [1.0, 1.0, 1.0];
                     return "Qt.vector3d(" + v3[0] + ", " + v3[1] + ", " + v3[2] + ")";
                 }
                 if (type === "vec4") {
-                    v4 = Array.isArray(value) ? value : [0.0, 0.0, 0.0, 1.0];
+                    v4 = Array.isArray(value) ? value : [1.0, 1.0, 1.0, 1.0];
                     return "Qt.vector4d(" + v4[0] + ", " + v4[1] + ", " + v4[2] + ", " + v4[3] + ")";
                 }
                 return "null";
