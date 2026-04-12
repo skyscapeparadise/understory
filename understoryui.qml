@@ -6665,6 +6665,8 @@ Window {
                                 property string uType: modelData.type
                                 property var uValue: modelData.value
 
+                                readonly property bool isScalar: uType === "float" || uType === "int"
+
                                 Text {
                                     text: uName
                                     width: 72
@@ -6675,8 +6677,55 @@ Window {
                                     elide: Text.ElideRight
                                 }
 
+                                Slider {
+                                    id: selectUniformSlider
+                                    visible: isScalar
+                                    width: parent.width - 139
+                                    height: parent.height
+                                    from: 0; to: 1
+                                    stepSize: 0
+                                    Component.onCompleted: {
+                                        var v = parseFloat(uValue);
+                                        if (isNaN(v) || v <= 0) value = 0;
+                                        else if (v >= 100) value = 1;
+                                        else value = Math.pow(v / 100.0, 0.2);
+                                    }
+                                    onMoved: {
+                                        var expanded = parseFloat((Math.pow(value, 5) * 100.0).toFixed(4));
+                                        var name = uName;
+                                        var idx = viewport.selectedShaders[0];
+                                        var uniforms;
+                                        try { uniforms = JSON.parse(shadersModel.get(idx).uniformsJson || "[]"); } catch(e) { uniforms = []; }
+                                        for (var i = 0; i < uniforms.length; i++) {
+                                            if (uniforms[i].name === name) { uniforms[i].value = expanded; break; }
+                                        }
+                                        shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(uniforms));
+                                        var del = shadersRepeater.itemAt(idx);
+                                        if (del && del.dynamicShaderEffect)
+                                            del.dynamicShaderEffect[name] = expanded;
+                                        selectNumericField.text = expanded.toString();
+                                    }
+                                    background: Rectangle {
+                                        x: selectUniformSlider.leftPadding
+                                        y: selectUniformSlider.topPadding + selectUniformSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 200; implicitHeight: 4
+                                        width: selectUniformSlider.availableWidth; height: 4
+                                        radius: 2; color: "#333"
+                                        Rectangle {
+                                            width: selectUniformSlider.visualPosition * parent.width
+                                            height: parent.height; color: "#5DA9A4"; radius: 2
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: selectUniformSlider.leftPadding + selectUniformSlider.visualPosition * (selectUniformSlider.availableWidth - width)
+                                        y: selectUniformSlider.topPadding + selectUniformSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 12; implicitHeight: 12; radius: 6
+                                        color: selectUniformSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                    }
+                                }
+
                                 Rectangle {
-                                    width: parent.width - 78
+                                    width: isScalar ? 55 : (parent.width - 78)
                                     height: 26
                                     color: uType === "sampler2D" ? "black" : "transparent"
                                     border.color: "white"
@@ -6726,17 +6775,19 @@ Window {
 
                                     // Numeric input (float/vec)
                                     TextInput {
+                                        id: selectNumericField
                                         visible: uType !== "sampler2D"
                                         anchors.fill: parent
-                                        anchors.margins: 5
+                                        anchors.margins: 3
                                         color: "white"
                                         font.pixelSize: 11
                                         clip: true
                                         selectByMouse: true
                                         text: {
                                             if (uValue === null || uValue === undefined) return "1";
-                                            if (Array.isArray(uValue)) return uValue.join(", ");
-                                            return uValue.toString();
+                                            if (Array.isArray(uValue)) return uValue.map(function(n) { return parseFloat(Number(n).toFixed(4)); }).join(", ");
+                                            var v = Number(uValue);
+                                            return isNaN(v) ? uValue.toString() : parseFloat(v.toFixed(4)).toString();
                                         }
                                         Keys.onReturnPressed: focus = false
                                         Keys.onEscapePressed: focus = false
@@ -6744,6 +6795,14 @@ Window {
                                             var name = uName;
                                             var type = uType;
                                             var idx = viewport.selectedShaders[0];
+                                            // Sync slider position for scalar types
+                                            if (isScalar) {
+                                                var v = parseFloat(text);
+                                                if (!isNaN(v)) {
+                                                    var pos = v >= 100 ? 1.0 : (v <= 0 ? 0.0 : Math.pow(v / 100.0, 0.2));
+                                                    selectUniformSlider.value = pos;
+                                                }
+                                            }
                                             var qmlVal = viewport.parseUniformToQml(type, text);
                                             var arrVal = viewport.parseUniformToArray(type, text);
                                             var uniforms;
@@ -6994,6 +7053,8 @@ Window {
                                 property string uText: model.uText
                                 property int uIndex: index
 
+                                readonly property bool isScalar: uType === "float" || uType === "int"
+
                                 Text {
                                     text: uName
                                     width: 72
@@ -7004,8 +7065,45 @@ Window {
                                     elide: Text.ElideRight
                                 }
 
+                                Slider {
+                                    id: newShaderUniformSlider
+                                    visible: isScalar
+                                    width: parent.width - 139
+                                    height: parent.height
+                                    from: 0; to: 1
+                                    stepSize: 0
+                                    Component.onCompleted: {
+                                        var v = parseFloat(uText);
+                                        if (isNaN(v) || v <= 0) value = 0;
+                                        else if (v >= 100) value = 1;
+                                        else value = Math.pow(v / 100.0, 0.2);
+                                    }
+                                    onMoved: {
+                                        var expanded = parseFloat((Math.pow(value, 5) * 100.0).toFixed(4));
+                                        uniformFieldsModel.setProperty(uIndex, "uText", expanded.toString());
+                                        newShaderNumericField.text = expanded.toString();
+                                    }
+                                    background: Rectangle {
+                                        x: newShaderUniformSlider.leftPadding
+                                        y: newShaderUniformSlider.topPadding + newShaderUniformSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 200; implicitHeight: 4
+                                        width: newShaderUniformSlider.availableWidth; height: 4
+                                        radius: 2; color: "#333"
+                                        Rectangle {
+                                            width: newShaderUniformSlider.visualPosition * parent.width
+                                            height: parent.height; color: "#5DA9A4"; radius: 2
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: newShaderUniformSlider.leftPadding + newShaderUniformSlider.visualPosition * (newShaderUniformSlider.availableWidth - width)
+                                        y: newShaderUniformSlider.topPadding + newShaderUniformSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 12; implicitHeight: 12; radius: 6
+                                        color: newShaderUniformSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                    }
+                                }
+
                                 Rectangle {
-                                    width: parent.width - 78
+                                    width: isScalar ? 55 : (parent.width - 78)
                                     height: 26
                                     color: uType === "sampler2D" ? "black" : "transparent"
                                     border.color: "white"
@@ -7045,9 +7143,10 @@ Window {
 
                                     // Numeric input (float/vec)
                                     TextInput {
+                                        id: newShaderNumericField
                                         visible: uType !== "sampler2D"
                                         anchors.fill: parent
-                                        anchors.margins: 5
+                                        anchors.margins: 3
                                         color: "white"
                                         font.pixelSize: 11
                                         clip: true
@@ -7055,7 +7154,16 @@ Window {
                                         text: uText
                                         Keys.onReturnPressed: focus = false
                                         Keys.onEscapePressed: focus = false
-                                        onEditingFinished: uniformFieldsModel.setProperty(uIndex, "uText", text)
+                                        onEditingFinished: {
+                                            if (isScalar) {
+                                                var v = parseFloat(text);
+                                                if (!isNaN(v)) {
+                                                    var pos = v >= 100 ? 1.0 : (v <= 0 ? 0.0 : Math.pow(v / 100.0, 0.2));
+                                                    newShaderUniformSlider.value = pos;
+                                                }
+                                            }
+                                            uniformFieldsModel.setProperty(uIndex, "uText", text);
+                                        }
                                     }
                                 }
                             }
