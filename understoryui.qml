@@ -13,6 +13,7 @@ Window {
     height: 540
     title: qsTr("understory")
     color: "black"
+    flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint | Qt.MSWindowsFixedSizeDialogHint
 
     FontLoader {
         id: monaSans
@@ -27,16 +28,43 @@ Window {
     property int yanimationduration: 0
     property real sceneEditorEntryX: 0
 
+    // flags to distinguish programmatic animations from user resize attempts
+    property bool widthAnimating: false
+    property bool heightAnimating: false
+    property bool snapBackWidth: false
+    property bool snapBackHeight: false
+    property int lockedWidth: 960
+    property int lockedHeight: 540
+
+    onWidthChanged: {
+        if (!widthAnimating && !snapBackWidth) {
+            snapBackWidth = true
+            width = lockedWidth
+            snapBackWidth = false
+        }
+    }
+
+    onHeightChanged: {
+        if (!heightAnimating && !snapBackHeight) {
+            snapBackHeight = true
+            height = lockedHeight
+            snapBackHeight = false
+        }
+    }
+
     // animate any change to `width`
     Behavior on width {
+        enabled: !mainWindow.snapBackWidth
         SequentialAnimation {
+            PropertyAction { target: mainWindow; property: "widthAnimating"; value: true }
             NumberAnimation {
                 duration: 1000
                 easing.type: Easing.InOutQuad
             }
-
             ScriptAction {
                 script: {
+                    mainWindow.lockedWidth = mainWindow.width
+                    mainWindow.widthAnimating = false
                     if (sceneEditor2sceneMenu.windowSizeCompleteTrigger) {
                         console.log("ScriptAction triggered");
                         sceneEditor2sceneMenu.visible = true;
@@ -57,9 +85,19 @@ Window {
 
     // animate any change to `height`
     Behavior on height {
-        NumberAnimation {
-            duration: 1000
-            easing.type: Easing.InOutQuad
+        enabled: !mainWindow.snapBackHeight
+        SequentialAnimation {
+            PropertyAction { target: mainWindow; property: "heightAnimating"; value: true }
+            NumberAnimation {
+                duration: 1000
+                easing.type: Easing.InOutQuad
+            }
+            ScriptAction {
+                script: {
+                    mainWindow.lockedHeight = mainWindow.height
+                    mainWindow.heightAnimating = false
+                }
+            }
         }
     }
 
