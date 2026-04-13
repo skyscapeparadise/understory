@@ -6669,7 +6669,7 @@ Window {
 
                                 Text {
                                     text: uName
-                                    width: 72
+                                    width: 108
                                     color: "#aaa"
                                     font.pixelSize: 11
                                     height: parent.height
@@ -6680,7 +6680,7 @@ Window {
                                 Slider {
                                     id: selectUniformSlider
                                     visible: isScalar
-                                    width: parent.width - 139
+                                    width: parent.width - 175
                                     height: parent.height
                                     from: 0; to: 1
                                     stepSize: 0
@@ -6725,7 +6725,7 @@ Window {
                                 }
 
                                 Rectangle {
-                                    width: isScalar ? 55 : (parent.width - 78)
+                                    width: isScalar ? 55 : (parent.width - 114)
                                     height: 26
                                     color: uType === "sampler2D" ? "black" : "transparent"
                                     border.color: "white"
@@ -7057,7 +7057,7 @@ Window {
 
                                 Text {
                                     text: uName
-                                    width: 72
+                                    width: 108
                                     color: "#aaa"
                                     font.pixelSize: 11
                                     height: parent.height
@@ -7068,7 +7068,7 @@ Window {
                                 Slider {
                                     id: newShaderUniformSlider
                                     visible: isScalar
-                                    width: parent.width - 139
+                                    width: parent.width - 175
                                     height: parent.height
                                     from: 0; to: 1
                                     stepSize: 0
@@ -7103,7 +7103,7 @@ Window {
                                 }
 
                                 Rectangle {
-                                    width: isScalar ? 55 : (parent.width - 78)
+                                    width: isScalar ? 55 : (parent.width - 114)
                                     height: 26
                                     color: uType === "sampler2D" ? "black" : "transparent"
                                     border.color: "white"
