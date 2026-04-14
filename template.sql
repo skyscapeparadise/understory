@@ -47,7 +47,8 @@ CREATE TABLE scenes (
     -- canvas defaults (inherit from story if null)
     bg_color TEXT,
     duration_ms INTEGER,  -- null = indefinite/interactive
-    meta TEXT
+    meta TEXT,
+    thumbnail BLOB  -- PNG snapshot captured on close-scene
 );
 
 -- which sounds play in which scenes (junction)

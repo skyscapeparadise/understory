@@ -228,19 +228,51 @@ Window {
                         width: 270
                         height: 150
                         radius: 30
-                        color: "transparent"
-                        border.color: "white"
-                        border.width: 4
+                        color: "black"
+                        // border drawn as child overlay so it renders above the thumbnail
+                        clip: true
+                        layer.enabled: true
 
                         property bool hovered: false
                         property bool isLast: index === storyManager.recentStories.length
                         property var storyData: isLast ? null : storyManager.recentStories[index]
+                        property string thumbPath: (!isLast && storyData && storyData.thumbPath) ? storyData.thumbPath : ""
+
+                        // Thumbnail fill — clipped to rounded corners via OpacityMask
+                        Item {
+                            id: storyMenuStoryThumbClip
+                            anchors.fill: parent
+                            visible: parent.thumbPath !== ""
+                            layer.enabled: true
+                            layer.effect: OpacityMask {
+                                maskSource: Rectangle {
+                                    width: storyMenuStoryThumbClip.width
+                                    height: storyMenuStoryThumbClip.height
+                                    radius: 30
+                                    color: "white"
+                                }
+                            }
+                            Image {
+                                anchors.fill: parent
+                                source: parent.parent.thumbPath !== "" ? ("file://" + parent.parent.thumbPath) : ""
+                                fillMode: Image.PreserveAspectCrop
+                                cache: false
+                            }
+                        }
+
+                        // Dimming overlay on hover
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "black"
+                            opacity: parent.hovered && !parent.isLast ? 0.35 : 0.0
+                            Behavior on opacity { NumberAnimation { duration: 120 } }
+                        }
 
                         MouseArea {
                             anchors.fill: parent
                             hoverEnabled: true
-                            onEntered: hovered = true
-                            onExited: hovered = false
+                            onEntered: parent.hovered = true
+                            onExited: parent.hovered = false
                             onClicked: {
                                 if (isLast) {
                                     saveStoryDialog.pendingAction = "new";
@@ -261,7 +293,7 @@ Window {
                             text: "+"
                             font.pixelSize: 64
                             color: "white"
-                            visible: hovered && isLast
+                            visible: parent.hovered && parent.isLast
                         }
 
                         // Filename label in lower third of existing-story cards
@@ -276,6 +308,17 @@ Window {
                             elide: Text.ElideMiddle
                             width: parent.width - 24
                             horizontalAlignment: Text.AlignHCenter
+                            style: Text.Outline
+                            styleColor: "black"
+                        }
+
+                        // Border overlay — rendered last so it always appears above the thumbnail
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "transparent"
+                            border.color: "white"
+                            border.width: 4
+                            radius: 30
                         }
                     }
                 }
@@ -511,17 +554,24 @@ Window {
 
         ListModel {
             id: scenesRectModel
-            // Populated by reloadScenes(). Each entry: { sceneId, sceneName }.
+            // Populated by reloadScenes(). Each entry: { sceneId, sceneName, thumbnailRev }.
             // The last entry always has sceneId: -1 (the "+" new-scene card).
-            ListElement { sceneId: -1; sceneName: "" }
+            // ALL roles must appear here so they are registered before any append().
+            ListElement { sceneId: -1; sceneName: ""; thumbnailRev: 0 }
         }
 
         function reloadScenes() {
             scenesRectModel.clear();
             var scenes = storyManager.getScenes();
-            for (var i = 0; i < scenes.length; i++)
-                scenesRectModel.append({ sceneId: scenes[i].id, sceneName: scenes[i].name });
-            scenesRectModel.append({ sceneId: -1, sceneName: "" });
+            for (var i = 0; i < scenes.length; i++) {
+                var rev = storyManager.hasThumbnail(scenes[i].id) ? 1 : 0;
+                scenesRectModel.append({
+                    sceneId: scenes[i].id,
+                    sceneName: scenes[i].name,
+                    thumbnailRev: rev
+                });
+            }
+            scenesRectModel.append({ sceneId: -1, sceneName: "", thumbnailRev: 0 });
         }
 
         Connections {
@@ -558,12 +608,46 @@ Window {
                         width: 270
                         height: 150
                         radius: 30
-                        color: "transparent"
-                        border.color: "white"
-                        border.width: 4
+                        color: "black"
+                        // border is drawn as a child overlay so it renders above the thumbnail
+                        clip: true
+                        layer.enabled: true
 
                         property bool hovered: false
                         property bool isLast: model.sceneId === -1
+
+                        // Thumbnail fill — wrapped in a layer+OpacityMask Item so the
+                        // image is clipped to the card's rounded corners.
+                        Item {
+                            id: sceneMenuThumbClip
+                            anchors.fill: parent
+                            visible: !isLast && model.thumbnailRev > 0
+                            layer.enabled: true
+                            layer.effect: OpacityMask {
+                                maskSource: Rectangle {
+                                    width: sceneMenuThumbClip.width
+                                    height: sceneMenuThumbClip.height
+                                    radius: 30
+                                    color: "white"
+                                }
+                            }
+                            Image {
+                                anchors.fill: parent
+                                source: (!isLast && model.thumbnailRev > 0)
+                                    ? ("image://thumbnails/" + model.sceneId + "?rev=" + model.thumbnailRev)
+                                    : ""
+                                fillMode: Image.PreserveAspectCrop
+                                cache: false
+                            }
+                        }
+
+                        // Dimming overlay on hover (existing scenes)
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "black"
+                            opacity: hovered && !isLast ? 0.25 : 0.0
+                            Behavior on opacity { NumberAnimation { duration: 120 } }
+                        }
 
                         MouseArea {
                             anchors.fill: parent
@@ -575,7 +659,7 @@ Window {
                                     var newId = storyManager.createScene("new scene");
                                     if (newId !== -1) {
                                         scenesRectModel.insert(scenesRectModel.count - 1,
-                                            { sceneId: newId, sceneName: "new scene" });
+                                            { sceneId: newId, sceneName: "new scene", thumbnailRev: 0 });
                                         mainWindow.currentSceneId = newId;
                                         viewport.clearForNewScene();
                                         sceneMenu2sceneEditor.visible = true;
@@ -611,6 +695,17 @@ Window {
                             elide: Text.ElideMiddle
                             width: parent.width - 24
                             horizontalAlignment: Text.AlignHCenter
+                            style: Text.Outline
+                            styleColor: "black"
+                        }
+
+                        // Border overlay — rendered last so it always appears above the thumbnail
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "transparent"
+                            border.color: "white"
+                            border.width: 4
+                            radius: 30
                         }
                     }
                 }
@@ -1318,6 +1413,29 @@ Window {
                 }
                 return JSON.stringify(elements);
             }
+
+            // Capture a 540×300 thumbnail of the scene content with a black background.
+            // Uses an off-screen ShaderEffectSource (thumbnailCaptureSurface) so the visible
+            // viewport never changes — no flash. Saves to DB and updates the scene card model.
+            // Calls onDone() when finished (or immediately if sceneId === -1).
+            function captureAndSaveThumbnail(sceneId, onDone) {
+                if (sceneId === -1) { onDone(); return; }
+                var tempPath = "/tmp/understory_thumb_" + sceneId + ".png";
+                thumbnailCaptureSurface.grabToImage(function(result) {
+                    result.saveToFile(tempPath);
+                    storyManager.saveThumbnail(sceneId, tempPath);
+                    storyManager.saveStoryThumbnail(tempPath);
+                    for (var i = 0; i < scenesRectModel.count; i++) {
+                        if (scenesRectModel.get(i).sceneId === sceneId) {
+                            var rev = (scenesRectModel.get(i).thumbnailRev || 0) + 1;
+                            scenesRectModel.setProperty(i, "thumbnailRev", rev);
+                            break;
+                        }
+                    }
+                    onDone();
+                }, Qt.size(540, 300));
+            }
+
             // Convert comma-separated text to a serialisable array/scalar (for storing in model).
             function parseUniformToArray(type, text) {
                 var parts = text.toString().split(",").map(function(s) { return parseFloat(s.trim()) || 0; });
@@ -1329,6 +1447,7 @@ Window {
             }
 
             ShaderEffect {
+                id: viewportBgShader
                 anchors.fill: parent
                 visible: !viewport.bgOccluded
                 fragmentShader: "cloudyeditorbg.frag.qsb"
@@ -1646,6 +1765,15 @@ Window {
                     }
                 }
             }
+
+            // Scene content layer — wraps all element Repeaters so a ShaderEffectSource
+            // can capture them separately from the background shader (for thumbnails).
+            Item {
+                id: viewportSceneContent
+                anchors.fill: parent
+                // Must be above the box-select MouseArea (z:2) so element delegates
+                // win mouse events; lower than tool overlay MouseAreas (z:998+).
+                z: 10
 
             // Completed areas
             Repeater {
@@ -4441,6 +4569,8 @@ Window {
                 }
             }
 
+            } // end viewportSceneContent
+
             // In-progress rubber-band (only visible while dragging)
             Rectangle {
                 visible: viewport.areaDragging
@@ -5345,6 +5475,34 @@ Window {
                 z: 1000
             }
 
+            // Off-screen capture surface for thumbnails.
+            // Positioned to the left of the viewport (outside visible area).
+            // ShaderEffectSource mirrors only the scene content (no bg shader),
+            // over a black background — grabbed by captureAndSaveThumbnail().
+            Item {
+                id: thumbnailCaptureSurface
+                x: -(viewport.width + 20)
+                y: 0
+                width: viewport.width
+                height: viewport.height
+                // layer.enabled forces Qt to render this item to a texture even when
+                // positioned outside the visible window area, which is required for
+                // grabToImage() to capture anything useful.
+                layer.enabled: true
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: "black"
+                }
+                ShaderEffectSource {
+                    id: thumbnailShaderSource
+                    anchors.fill: parent
+                    sourceItem: viewportSceneContent
+                    live: true
+                    hideSource: false
+                }
+            }
+
             Rectangle {
                 id: navigationViewportOverlay
                 visible: sceneEditorButtons.navigationOpen
@@ -5386,12 +5544,46 @@ Window {
                                 Layout.minimumHeight: 70
                                 Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
                                 radius: 30
-                                color: "transparent"
-                                border.color: "white"
-                                border.width: 4
+                                color: "black"
+                                // border drawn as child overlay so it renders above the thumbnail
+                                clip: true
+                                layer.enabled: true
 
                                 property bool hovered: false
                                 property bool isLast: index === scenesRectModel.count - 1
+
+                                // Thumbnail fill — wrapped in a layer+OpacityMask Item so the
+                                // image is clipped to the card's rounded corners.
+                                Item {
+                                    id: navThumbClip
+                                    anchors.fill: parent
+                                    visible: !isLast && model.thumbnailRev > 0
+                                    layer.enabled: true
+                                    layer.effect: OpacityMask {
+                                        maskSource: Rectangle {
+                                            width: navThumbClip.width
+                                            height: navThumbClip.height
+                                            radius: 30
+                                            color: "white"
+                                        }
+                                    }
+                                    Image {
+                                        anchors.fill: parent
+                                        source: (!isLast && model.thumbnailRev > 0)
+                                            ? ("image://thumbnails/" + model.sceneId + "?rev=" + model.thumbnailRev)
+                                            : ""
+                                        fillMode: Image.PreserveAspectCrop
+                                        cache: false
+                                    }
+                                }
+
+                                // Dimming overlay on hover
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: "black"
+                                    opacity: hovered && !isLast ? 0.25 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                                }
 
                                 MouseArea {
                                     anchors.fill: parent
@@ -5403,7 +5595,7 @@ Window {
                                             var newId = storyManager.createScene("new scene");
                                             if (newId !== -1) {
                                                 scenesRectModel.insert(scenesRectModel.count - 1,
-                                                    { sceneId: newId, sceneName: "new scene" });
+                                                    { sceneId: newId, sceneName: "new scene", thumbnailRev: 0 });
                                                 if (mainWindow.currentSceneId !== -1) {
                                                     storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
                                                     storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
@@ -5417,8 +5609,16 @@ Window {
                                             var targetId = scenesRectModel.get(index).sceneId;
                                             if (targetId !== mainWindow.currentSceneId) {
                                                 if (mainWindow.currentSceneId !== -1) {
-                                                    storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
-                                                    storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
+                                                    viewport.captureAndSaveThumbnail(mainWindow.currentSceneId, function() {
+                                                        storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
+                                                        storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
+                                                        mainWindow.currentSceneId = targetId;
+                                                        viewport.loadSceneIntoViewport(targetId);
+                                                        sceneNameInput.text = storyManager.getSceneName(targetId);
+                                                        navigationViewportSelectionFlash.running = true;
+                                                        sceneEditorButtons.navigationOpen = false;
+                                                    });
+                                                    return;
                                                 }
                                                 mainWindow.currentSceneId = targetId;
                                                 viewport.loadSceneIntoViewport(targetId);
@@ -5449,6 +5649,17 @@ Window {
                                     elide: Text.ElideMiddle
                                     width: parent.width - 16
                                     horizontalAlignment: Text.AlignHCenter
+                                    style: Text.Outline
+                                    styleColor: "black"
+                                }
+
+                                // Border overlay — rendered last so it always appears above the thumbnail
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: "transparent"
+                                    border.color: "white"
+                                    border.width: 4
+                                    radius: 30
                                 }
                             }
                         }
@@ -5724,23 +5935,26 @@ Window {
                                         mainWindow.y = mainWindow.y + 150;
                                     }
                                 } else if (modelData === "close scene") {
-                                    // Save scene state before leaving
-                                    if (mainWindow.currentSceneId !== -1) {
-                                        storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
-                                        storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
-                                    }
-                                    if (sceneEditorButtons.timelineOpen) {
-                                        sceneEditorButtons.timelineOpen = false;
-                                        yanimationduration = 1000;
-                                        mainWindow.height = 540;
-                                        mainWindow.y = mainWindow.y + 150;
-                                        closeSceneTimer.start();
-                                    } else {
-                                        xanimationduration = 1000;
-                                        mainWindow.width = 960;
-                                        mainWindow.x = sceneEditorEntryX;
-                                        sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
-                                    }
+                                    // Capture thumbnail, save scene state, then initiate transition
+                                    var savedSceneId = mainWindow.currentSceneId;
+                                    viewport.captureAndSaveThumbnail(savedSceneId, function() {
+                                        if (savedSceneId !== -1) {
+                                            storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
+                                            storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
+                                        }
+                                        if (sceneEditorButtons.timelineOpen) {
+                                            sceneEditorButtons.timelineOpen = false;
+                                            yanimationduration = 1000;
+                                            mainWindow.height = 540;
+                                            mainWindow.y = mainWindow.y + 150;
+                                            closeSceneTimer.start();
+                                        } else {
+                                            xanimationduration = 1000;
+                                            mainWindow.width = 960;
+                                            mainWindow.x = sceneEditorEntryX;
+                                            sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
+                                        }
+                                    });
                                 }
                             }
                         }
@@ -9135,25 +9349,29 @@ Window {
         onAccepted: {
             var path = selectedFile.toString();
             if (sceneEditor.visible) {
-                // Scene editor is open — save state, close scene, then load story once
-                // the close-scene transition finishes (see sceneEditor2sceneMenu handler)
+                // Scene editor is open — capture thumbnail, save state, close scene,
+                // then load story once the close-scene transition finishes
+                // (see sceneEditor2sceneMenu handler for the final load step)
                 pendingStoryPath = path;
-                if (mainWindow.currentSceneId !== -1) {
-                    storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
-                    storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
-                }
-                if (sceneEditorButtons.timelineOpen) {
-                    sceneEditorButtons.timelineOpen = false;
-                    yanimationduration = 1000;
-                    mainWindow.height = 540;
-                    mainWindow.y = mainWindow.y + 150;
-                    closeSceneTimer.start();
-                } else {
-                    xanimationduration = 1000;
-                    mainWindow.width = 960;
-                    mainWindow.x = sceneEditorEntryX;
-                    sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
-                }
+                var savedSceneId = mainWindow.currentSceneId;
+                viewport.captureAndSaveThumbnail(savedSceneId, function() {
+                    if (savedSceneId !== -1) {
+                        storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
+                        storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
+                    }
+                    if (sceneEditorButtons.timelineOpen) {
+                        sceneEditorButtons.timelineOpen = false;
+                        yanimationduration = 1000;
+                        mainWindow.height = 540;
+                        mainWindow.y = mainWindow.y + 150;
+                        closeSceneTimer.start();
+                    } else {
+                        xanimationduration = 1000;
+                        mainWindow.width = 960;
+                        mainWindow.x = sceneEditorEntryX;
+                        sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
+                    }
+                });
             } else if (storyMenu.visible) {
                 // On story menu — load and animate to scene menu
                 if (storyManager.openStory(path)) {

@@ -19,6 +19,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301
 # USA
 
+import base64
+import hashlib
 import json
 import re
 import shutil
@@ -28,9 +30,43 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse, unquote
 
-from PySide6.QtCore import QObject, QUrl, Slot, Signal, Property
-from PySide6.QtGui import QGuiApplication, QFont, QFontDatabase
+from PySide6.QtCore import QObject, QSize, QUrl, Slot, Signal, Property
+from PySide6.QtGui import QGuiApplication, QFont, QFontDatabase, QImage
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuick import QQuickImageProvider
+
+
+class ThumbnailProvider(QQuickImageProvider):
+    """Serves scene thumbnail PNGs from the open story's SQLite DB.
+
+    QML source: "image://thumbnails/<sceneId>?rev=<N>"
+    The ?rev=N suffix busts Qt's image cache when a new thumbnail is saved.
+    """
+
+    def __init__(self, story_manager):
+        super().__init__(QQuickImageProvider.ImageType.Image)
+        self._mgr = story_manager
+
+    def requestImage(self, id_str, size, requested_size):
+        try:
+            scene_id = int(id_str.split("?")[0])
+            conn = self._mgr._conn
+            if conn:
+                row = conn.execute(
+                    "SELECT thumbnail FROM scenes WHERE id = ?", (scene_id,)
+                ).fetchone()
+                if row and row[0]:
+                    img = QImage()
+                    img.loadFromData(bytes(row[0]))
+                    size.setWidth(img.width())
+                    size.setHeight(img.height())
+                    return img
+        except Exception as e:
+            print(f"ThumbnailProvider.requestImage error: {e}")
+        # Return a 1×1 transparent image so QML doesn't log a load error
+        empty = QImage(1, 1, QImage.Format.Format_ARGB32)
+        empty.fill(0)
+        return empty
 
 
 class ShaderInspector(QObject):
@@ -95,6 +131,7 @@ class StoryManager(QObject):
         tmpl = Path(__file__).parent / "template.sql"
         self._template_sql = tmpl.read_text() if tmpl.exists() else ""
         self._recent_path = Path.home() / ".config" / "understory" / "recent.json"
+        self._thumbs_dir = Path.home() / ".config" / "understory" / "thumbs"
         self._recent = []
         self._load_recent()
 
@@ -181,6 +218,11 @@ class StoryManager(QObject):
         try:
             self._close()
             conn = sqlite3.connect(path)
+            # migrate: add thumbnail column if missing (older .story files)
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(scenes)")}
+            if "thumbnail" not in cols:
+                conn.execute("ALTER TABLE scenes ADD COLUMN thumbnail BLOB")
+                conn.commit()
             row = conn.execute("SELECT title FROM story WHERE id = 1").fetchone()
             self._conn = conn
             self._path = path
@@ -317,6 +359,78 @@ class StoryManager(QObject):
             print(f"StoryManager.loadSceneElements: {e}")
             return "[]"
 
+    @Slot(int, str)
+    def saveThumbnail(self, scene_id, file_url):
+        """Store a PNG file as a BLOB thumbnail for the given scene."""
+        if not self._conn:
+            return
+        try:
+            path = unquote(urlparse(file_url).path) if file_url.startswith("file://") else file_url
+            with open(path, "rb") as f:
+                data = f.read()
+            self._conn.execute(
+                "UPDATE scenes SET thumbnail = ? WHERE id = ?", (data, scene_id)
+            )
+            self._conn.commit()
+        except Exception as e:
+            print(f"StoryManager.saveThumbnail: {e}")
+
+    @Slot(str)
+    def saveStoryThumbnail(self, file_url):
+        """Copy a PNG to the per-story thumbnail cache and update recent.json.
+
+        The cache file is keyed by MD5 of the current story path so it can be
+        located without opening the .story file on next launch.
+        """
+        if not self._path:
+            return
+        try:
+            src = unquote(urlparse(file_url).path) if file_url.startswith("file://") else file_url
+            key = hashlib.md5(self._path.encode()).hexdigest()
+            self._thumbs_dir.mkdir(parents=True, exist_ok=True)
+            dest = self._thumbs_dir / f"{key}.png"
+            shutil.copy2(src, dest)
+            # Update the matching recent entry with the cache path
+            for r in self._recent:
+                if r["path"] == self._path:
+                    r["thumbPath"] = str(dest)
+                    break
+            self._save_recent()
+            self.storyChanged.emit()
+        except Exception as e:
+            print(f"StoryManager.saveStoryThumbnail: {e}")
+
+    @Slot(int, result=str)
+    def getThumbnailDataUrl(self, scene_id):
+        """Return a data: URL (base64 PNG) for the scene thumbnail, or empty string."""
+        if not self._conn:
+            return ""
+        try:
+            row = self._conn.execute(
+                "SELECT thumbnail FROM scenes WHERE id = ?", (scene_id,)
+            ).fetchone()
+            if row and row[0]:
+                encoded = base64.b64encode(bytes(row[0])).decode()
+                return f"data:image/png;base64,{encoded}"
+            return ""
+        except Exception as e:
+            print(f"StoryManager.getThumbnailDataUrl: {e}")
+            return ""
+
+    @Slot(int, result=bool)
+    def hasThumbnail(self, scene_id):
+        """Returns True if the scene has a stored thumbnail BLOB."""
+        if not self._conn:
+            return False
+        try:
+            row = self._conn.execute(
+                "SELECT thumbnail IS NOT NULL FROM scenes WHERE id = ?", (scene_id,)
+            ).fetchone()
+            return bool(row and row[0])
+        except Exception as e:
+            print(f"StoryManager.hasThumbnail: {e}")
+            return False
+
 
 versionnumber = "0.1"
 
@@ -339,6 +453,10 @@ engine.rootContext().setContextProperty("shaderInspector", shaderInspector)
 # Expose story manager so QML can open/save/create .story files
 storyManager = StoryManager()
 engine.rootContext().setContextProperty("storyManager", storyManager)
+
+# Register image provider so QML can load thumbnails via image://thumbnails/<sceneId>
+thumbnailProvider = ThumbnailProvider(storyManager)
+engine.addImageProvider("thumbnails", thumbnailProvider)
 
 
 # Load QML file
