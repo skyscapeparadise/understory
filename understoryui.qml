@@ -1285,6 +1285,11 @@ Window {
                         if (w === 0 && h === 0) return;
                         if (h === 0 || w / h > aspect) w = h * aspect;
                         else h = w / aspect;
+                        // clamp to viewport edges, preserving aspect ratio
+                        var maxW = dx >= 0 ? viewport.width  - viewport.imgX1 : viewport.imgX1;
+                        var maxH = dy >= 0 ? viewport.height - viewport.imgY1 : viewport.imgY1;
+                        if (w > maxW) { w = maxW; h = w / aspect; }
+                        if (h > maxH) { h = maxH; w = h * aspect; }
                         viewport.imgX2 = viewport.snapX(viewport.imgX1 + (dx >= 0 ? w : -w));
                         viewport.imgY2 = viewport.snapY(viewport.imgY1 + (dy >= 0 ? h : -h));
                     } else {
@@ -1341,6 +1346,11 @@ Window {
                         if (w === 0 && h === 0) return;
                         if (h === 0 || w / h > aspect) w = h * aspect;
                         else h = w / aspect;
+                        // clamp to viewport edges, preserving aspect ratio
+                        var maxW = dx >= 0 ? viewport.width  - viewport.vidX1 : viewport.vidX1;
+                        var maxH = dy >= 0 ? viewport.height - viewport.vidY1 : viewport.vidY1;
+                        if (w > maxW) { w = maxW; h = w / aspect; }
+                        if (h > maxH) { h = maxH; w = h * aspect; }
                         viewport.vidX2 = viewport.snapX(viewport.vidX1 + (dx >= 0 ? w : -w));
                         viewport.vidY2 = viewport.snapY(viewport.vidY1 + (dy >= 0 ? h : -h));
                     } else {
@@ -4263,10 +4273,10 @@ Window {
             // Box-select rubber band
             Rectangle {
                 visible: viewport.boxSelecting
-                x: Math.min(viewport.boxSelectX1, viewport.boxSelectX2)
-                y: Math.min(viewport.boxSelectY1, viewport.boxSelectY2)
-                width: Math.abs(viewport.boxSelectX2 - viewport.boxSelectX1)
-                height: Math.abs(viewport.boxSelectY2 - viewport.boxSelectY1)
+                x: Math.max(0, Math.min(viewport.boxSelectX1, viewport.boxSelectX2))
+                y: Math.max(0, Math.min(viewport.boxSelectY1, viewport.boxSelectY2))
+                width: Math.max(0, Math.min(viewport.width,  Math.max(viewport.boxSelectX1, viewport.boxSelectX2)) - Math.max(0, Math.min(viewport.boxSelectX1, viewport.boxSelectX2)))
+                height: Math.max(0, Math.min(viewport.height, Math.max(viewport.boxSelectY1, viewport.boxSelectY2)) - Math.max(0, Math.min(viewport.boxSelectY1, viewport.boxSelectY2)))
                 color: Qt.rgba(0.5, 0.7, 1.0, 0.08)
                 border.color: Qt.rgba(0.5, 0.7, 1.0, 0.9)
                 border.width: 1
