@@ -4,6 +4,7 @@ import QtMultimedia
 import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
+import QtQuick.Effects
 import QtQuick.Dialogs
 import Qt.labs.platform as Platform
 
@@ -297,19 +298,32 @@ Window {
                         }
 
                         // Filename label in lower third of existing-story cards
-                        Text {
+                        Item {
                             anchors.horizontalCenter: parent.horizontalCenter
                             anchors.bottom: parent.bottom
-                            anchors.bottomMargin: 20
-                            text: storyData ? storyData.filename : ""
-                            font.pixelSize: 14
-                            color: "white"
+                            width: parent.width - 8
+                            height: 60
                             visible: !isLast
-                            elide: Text.ElideMiddle
-                            width: parent.width - 24
-                            horizontalAlignment: Text.AlignHCenter
-                            style: Text.Outline
-                            styleColor: "black"
+                            layer.enabled: true
+                            layer.effect: DropShadow {
+                                horizontalOffset: 0
+                                verticalOffset: 3
+                                radius: 10
+                                samples: 21
+                                color: "#e0000000"
+                                spread: 0.5
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 20
+                                text: storyData ? storyData.filename : ""
+                                font.pixelSize: 14
+                                color: "white"
+                                elide: Text.ElideMiddle
+                                width: parent.width - 32
+                                horizontalAlignment: Text.AlignHCenter
+                            }
                         }
 
                         // Border overlay — rendered last so it always appears above the thumbnail
@@ -684,19 +698,32 @@ Window {
                         }
 
                         // Scene name label in lower third of existing scene cards
-                        Text {
+                        Item {
                             anchors.horizontalCenter: parent.horizontalCenter
                             anchors.bottom: parent.bottom
-                            anchors.bottomMargin: 20
-                            text: model.sceneName || ""
-                            font.pixelSize: 14
-                            color: "white"
+                            width: parent.width - 8
+                            height: 60
                             visible: !isLast
-                            elide: Text.ElideMiddle
-                            width: parent.width - 24
-                            horizontalAlignment: Text.AlignHCenter
-                            style: Text.Outline
-                            styleColor: "black"
+                            layer.enabled: true
+                            layer.effect: DropShadow {
+                                horizontalOffset: 0
+                                verticalOffset: 3
+                                radius: 10
+                                samples: 21
+                                color: "#e0000000"
+                                spread: 0.5
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 20
+                                text: model.sceneName || ""
+                                font.pixelSize: 14
+                                color: "white"
+                                elide: Text.ElideMiddle
+                                width: parent.width - 32
+                                horizontalAlignment: Text.AlignHCenter
+                            }
                         }
 
                         // Border overlay — rendered last so it always appears above the thumbnail
