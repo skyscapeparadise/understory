@@ -189,7 +189,10 @@ class StoryManager(QObject):
 
     @Property(str, notify=storyChanged)
     def storyTitle(self):
-        return self._title
+        # Custom title takes priority; fall back to the filename stem.
+        if self._title:
+            return self._title
+        return Path(self._path).stem if self._path else ""
 
     @Property(bool, notify=storyChanged)
     def isOpen(self):
@@ -208,12 +211,12 @@ class StoryManager(QObject):
             self._close()
             conn = sqlite3.connect(path)
             conn.executescript(self._template_sql)
-            conn.execute("INSERT INTO story (id, title) VALUES (1, 'new story')")
+            conn.execute("INSERT INTO story (id, title) VALUES (1, '')")
             conn.commit()
             self._conn = conn
             self._path = path
-            self._title = "new story"
-            self._add_recent(path, "new story")
+            self._title = ""
+            self._add_recent(path, self.storyTitle)
             self.storyChanged.emit()
             return True
         except Exception as e:
@@ -234,8 +237,11 @@ class StoryManager(QObject):
             row = conn.execute("SELECT title FROM story WHERE id = 1").fetchone()
             self._conn = conn
             self._path = path
-            self._title = row[0] if row else "untitled"
-            self._add_recent(path, self._title)
+            stored = row[0] if row else ""
+            # Treat the old default "new story" as no custom title so the
+            # filename stem is shown instead.
+            self._title = "" if stored in ("", "new story") else stored
+            self._add_recent(path, self.storyTitle)
             self.storyChanged.emit()
             return True
         except Exception as e:
@@ -270,6 +276,20 @@ class StoryManager(QObject):
         except Exception as e:
             print(f"StoryManager.saveStoryAs: {e}")
             return False
+
+    @Slot(str)
+    def setStoryTitle(self, title):
+        """Set a custom display title for the open story, independent of filename."""
+        if not self._conn:
+            return
+        try:
+            self._conn.execute("UPDATE story SET title = ? WHERE id = 1", (title,))
+            self._conn.commit()
+            self._title = title
+            self._add_recent(self._path, self.storyTitle)
+            self.storyChanged.emit()
+        except Exception as e:
+            print(f"StoryManager.setStoryTitle: {e}")
 
     # ------------------------------------------------------------------ scene slots
 

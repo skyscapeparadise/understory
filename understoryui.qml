@@ -825,24 +825,23 @@ Window {
             }
         }
 
-        Rectangle {
-            id: storyLogo2
-            radius: 14
+        Text {
+            id: storyTitleHeading
             y: 449
-            width: 400
             height: 60
-            color: "transparent"
             anchors.right: parent.right
             anchors.rightMargin: 23
-
-            Image {
-                id: svgIcon2
-                anchors.right: parent.right
-                height: parent.height
-                fillMode: Image.PreserveAspectFit
-                source: "file:welcomelogo.svg"
-                visible: true
-            }
+            anchors.left: sceneMenuButtons.right
+            anchors.leftMargin: 16
+            text: storyManager.storyTitle
+            color: "white"
+            font.bold: true
+            font.pixelSize: 48
+            fontSizeMode: Text.Fit
+            minimumPixelSize: 12
+            horizontalAlignment: Text.AlignRight
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideLeft
         }
     }
 
