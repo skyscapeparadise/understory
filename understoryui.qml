@@ -5,13 +5,14 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import QtQuick.Dialogs
+import Qt.labs.platform as Platform
 
 Window {
     id: mainWindow
     visible: true
     width: 960
     height: 540
-    title: qsTr("understory")
+    title: storyManager.isOpen ? "understory — " + storyManager.storyTitle : qsTr("understory")
     color: "black"
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint | Qt.MSWindowsFixedSizeDialogHint
 
@@ -24,9 +25,51 @@ Window {
         source: "headings/MonaSans-Italic-VariableFont_wdth,wght.ttf"
     }
 
+    // Native macOS menu bar
+    Platform.MenuBar {
+        Platform.Menu {
+            title: "File"
+
+            Platform.MenuItem {
+                text: "New Story"
+                shortcut: StandardKey.New
+                onTriggered: {
+                    saveStoryDialog.pendingAction = "new";
+                    saveStoryDialog.triggerTransition = false;
+                    saveStoryDialog.open();
+                }
+            }
+            Platform.MenuItem {
+                text: "Open Story…"
+                shortcut: StandardKey.Open
+                onTriggered: {
+                    openStoryDialog.open();
+                }
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: "Save Story"
+                shortcut: StandardKey.Save
+                enabled: storyManager.isOpen
+                onTriggered: storyManager.saveStory()
+            }
+            Platform.MenuItem {
+                text: "Save Story As…"
+                shortcut: "Ctrl+Shift+S"
+                enabled: storyManager.isOpen
+                onTriggered: {
+                    saveStoryDialog.pendingAction = "saveas";
+                    saveStoryDialog.triggerTransition = false;
+                    saveStoryDialog.open();
+                }
+            }
+        }
+    }
+
     property int xanimationduration: 0
     property int yanimationduration: 0
     property real sceneEditorEntryX: 0
+    property int currentSceneId: -1
 
     // flags to distinguish programmatic animations from user resize attempts
     property bool widthAnimating: false
@@ -155,13 +198,6 @@ Window {
             fillMode: Image.PreserveAspectFit
         }
 
-        ListModel {
-            id: projectsRectModel
-            ListElement {
-                placeholder: ""
-            }
-        }
-
         ScrollView {
             visible: storyMenuButtons.selectedButton !== "settings" && storyMenuButtons.selectedButton !== "credits"
 
@@ -186,7 +222,8 @@ Window {
                 columnSpacing: 25
 
                 Repeater {
-                    model: projectsRectModel
+                    // recentStories entries + 1 "+" card at the end
+                    model: storyManager.recentStories.length + 1
                     delegate: Rectangle {
                         width: 270
                         height: 150
@@ -196,7 +233,8 @@ Window {
                         border.width: 4
 
                         property bool hovered: false
-                        property bool isLast: index === projectsRectModel.count - 1
+                        property bool isLast: index === storyManager.recentStories.length
+                        property var storyData: isLast ? null : storyManager.recentStories[index]
 
                         MouseArea {
                             anchors.fill: parent
@@ -205,21 +243,39 @@ Window {
                             onExited: hovered = false
                             onClicked: {
                                 if (isLast) {
-                                    projectsRectModel.append({});
+                                    saveStoryDialog.pendingAction = "new";
+                                    saveStoryDialog.triggerTransition = true;
+                                    saveStoryDialog.open();
                                 } else {
-                                    console.log("object number " + index + " clicked!");
-                                    story2sceneMenu.visible = true;
-                                    story2sceneMenuPlayer.play();
+                                    if (storyManager.openStory(storyData.path)) {
+                                        story2sceneMenu.visible = true;
+                                        story2sceneMenuPlayer.play();
+                                    }
                                 }
                             }
                         }
 
+                        // "+" icon — only on the last (new story) card
                         Text {
                             anchors.centerIn: parent
                             text: "+"
                             font.pixelSize: 64
                             color: "white"
                             visible: hovered && isLast
+                        }
+
+                        // Filename label in lower third of existing-story cards
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 20
+                            text: storyData ? storyData.filename : ""
+                            font.pixelSize: 14
+                            color: "white"
+                            visible: !isLast
+                            elide: Text.ElideMiddle
+                            width: parent.width - 24
+                            horizontalAlignment: Text.AlignHCenter
                         }
                     }
                 }
@@ -455,9 +511,22 @@ Window {
 
         ListModel {
             id: scenesRectModel
-            ListElement {
-                placeholder: ""
-            }
+            // Populated by reloadScenes(). Each entry: { sceneId, sceneName }.
+            // The last entry always has sceneId: -1 (the "+" new-scene card).
+            ListElement { sceneId: -1; sceneName: "" }
+        }
+
+        function reloadScenes() {
+            scenesRectModel.clear();
+            var scenes = storyManager.getScenes();
+            for (var i = 0; i < scenes.length; i++)
+                scenesRectModel.append({ sceneId: scenes[i].id, sceneName: scenes[i].name });
+            scenesRectModel.append({ sceneId: -1, sceneName: "" });
+        }
+
+        Connections {
+            target: storyManager
+            function onStoryChanged() { sceneMenu.reloadScenes(); }
         }
 
         ScrollView {
@@ -494,7 +563,7 @@ Window {
                         border.width: 4
 
                         property bool hovered: false
-                        property bool isLast: index === scenesRectModel.count - 1
+                        property bool isLast: model.sceneId === -1
 
                         MouseArea {
                             anchors.fill: parent
@@ -503,21 +572,45 @@ Window {
                             onExited: hovered = false
                             onClicked: {
                                 if (isLast) {
-                                    scenesRectModel.append({});
+                                    var newId = storyManager.createScene("new scene");
+                                    if (newId !== -1) {
+                                        scenesRectModel.insert(scenesRectModel.count - 1,
+                                            { sceneId: newId, sceneName: "new scene" });
+                                        mainWindow.currentSceneId = newId;
+                                        viewport.clearForNewScene();
+                                        sceneMenu2sceneEditor.visible = true;
+                                        sceneMenu2sceneEditorPlayer.play();
+                                    }
                                 } else {
-                                    console.log("object number " + index + " clicked!");
+                                    mainWindow.currentSceneId = model.sceneId;
+                                    viewport.loadSceneIntoViewport(model.sceneId);
                                     sceneMenu2sceneEditor.visible = true;
                                     sceneMenu2sceneEditorPlayer.play();
                                 }
                             }
                         }
 
+                        // "+" icon on the new-scene card
                         Text {
                             anchors.centerIn: parent
                             text: "+"
                             font.pixelSize: 64
                             color: "white"
                             visible: hovered && isLast
+                        }
+
+                        // Scene name label in lower third of existing scene cards
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 20
+                            text: model.sceneName || ""
+                            font.pixelSize: 14
+                            color: "white"
+                            visible: !isLast
+                            elide: Text.ElideMiddle
+                            width: parent.width - 24
+                            horizontalAlignment: Text.AlignHCenter
                         }
                     }
                 }
@@ -948,6 +1041,8 @@ Window {
             // to trigger a fresh occlusion check.
             property int layoutRevision: 0
             onLayoutRevisionChanged: checkOcclusion()
+            // Incremented on every move/resize position change so selectSettings can sync in real time.
+            property int posRevision: 0
 
             function checkOcclusion() {
                 var vw = viewport.width;
@@ -1115,6 +1210,114 @@ Window {
                 var p = path.toLowerCase();
                 return p.endsWith(".mp4") || p.endsWith(".mov") || p.endsWith(".mkv") || p.endsWith(".avi") || p.endsWith(".webm");
             }
+
+            // ------------------------------------------------------------------ scene persistence
+
+            function clearForNewScene() {
+                areasModel.clear();
+                textBoxesModel.clear();
+                imagesModel.clear();
+                videosModel.clear();
+                shadersModel.clear();
+                nextStackOrder = 0;
+                clearSelection();
+            }
+
+            function loadSceneIntoViewport(sceneId) {
+                clearForNewScene();
+                var raw = storyManager.loadSceneElements(sceneId);
+                var elements;
+                try { elements = JSON.parse(raw); } catch(e) { elements = []; }
+                for (var i = 0; i < elements.length; i++) {
+                    var el = elements[i];
+                    var z = el.z_order !== undefined ? el.z_order : nextStackOrder;
+                    if (el.type === "area") {
+                        areasModel.append({
+                            x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
+                            name: el.name || "", stackOrder: z
+                        });
+                    } else if (el.type === "text") {
+                        textBoxesModel.append({
+                            x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
+                            family:    el.family    || "Mona Sans",
+                            tbWeight:  el.tbWeight  !== undefined ? el.tbWeight : Font.Normal,
+                            size:      el.size      || 16,
+                            italic:    el.italic    || false,
+                            underline: el.underline || false,
+                            textColor: el.textColor || "#FFFFFF",
+                            content:   el.content   || "",
+                            name: el.name || "", stackOrder: z
+                        });
+                    } else if (el.type === "image") {
+                        imagesModel.append({
+                            x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
+                            filePath: el.filePath || "",
+                            name: el.name || "", stackOrder: z
+                        });
+                    } else if (el.type === "video") {
+                        videosModel.append({
+                            x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
+                            filePath: el.filePath || "",
+                            name: el.name || "", stackOrder: z
+                        });
+                    } else if (el.type === "shader") {
+                        shadersModel.append({
+                            x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
+                            fragPath:     el.fragPath     || "",
+                            vertPath:     el.vertPath     || "",
+                            uniformsJson: el.uniformsJson || "[]",
+                            name: el.name || "", stackOrder: z
+                        });
+                    }
+                    if (z >= nextStackOrder) nextStackOrder = z + 1;
+                }
+            }
+
+            function collectSceneElements() {
+                var elements = [];
+                var i, m;
+                for (i = 0; i < areasModel.count; i++) {
+                    m = areasModel.get(i);
+                    elements.push({ type: "area",
+                        x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
+                        w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
+                        name: m.name || "", z_order: m.stackOrder });
+                }
+                for (i = 0; i < textBoxesModel.count; i++) {
+                    m = textBoxesModel.get(i);
+                    elements.push({ type: "text",
+                        x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
+                        w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
+                        z_order: m.stackOrder, name: m.name || "",
+                        family: m.family, tbWeight: m.tbWeight, size: m.size,
+                        italic: m.italic, underline: m.underline,
+                        textColor: m.textColor, content: m.content });
+                }
+                for (i = 0; i < imagesModel.count; i++) {
+                    m = imagesModel.get(i);
+                    elements.push({ type: "image",
+                        x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
+                        w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
+                        name: m.name || "", z_order: m.stackOrder, filePath: m.filePath });
+                }
+                for (i = 0; i < videosModel.count; i++) {
+                    m = videosModel.get(i);
+                    elements.push({ type: "video",
+                        x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
+                        w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
+                        name: m.name || "", z_order: m.stackOrder, filePath: m.filePath });
+                }
+                for (i = 0; i < shadersModel.count; i++) {
+                    m = shadersModel.get(i);
+                    elements.push({ type: "shader",
+                        x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
+                        w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
+                        name: m.name || "", z_order: m.stackOrder,
+                        fragPath: m.fragPath, vertPath: m.vertPath,
+                        uniformsJson: m.uniformsJson });
+                }
+                return JSON.stringify(elements);
+            }
             // Convert comma-separated text to a serialisable array/scalar (for storing in model).
             function parseUniformToArray(type, text) {
                 var parts = text.toString().split(",").map(function(s) { return parseFloat(s.trim()) || 0; });
@@ -1206,6 +1409,7 @@ Window {
                             y1: Math.min(viewport.areaY1, viewport.areaY2),
                             x2: Math.max(viewport.areaX1, viewport.areaX2),
                             y2: Math.max(viewport.areaY1, viewport.areaY2),
+                            name: areaSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++
                         });
                         viewport.selectArea(areasModel.count - 1);
@@ -1249,6 +1453,7 @@ Window {
                             underline: textSettings.txtUnderline,
                             textColor: textSettings.txtColor.toString(),
                             content: "",
+                            name: textSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++
                         });
                         viewport.selectTb(textBoxesModel.count - 1);
@@ -1309,6 +1514,7 @@ Window {
                             x2: Math.max(viewport.imgX1, viewport.imgX2),
                             y2: Math.max(viewport.imgY1, viewport.imgY2),
                             filePath: imageSettings.selectedFilePath,
+                            name: imageSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++
                         });
                         viewport.selectImage(imagesModel.count - 1);
@@ -1370,6 +1576,7 @@ Window {
                             x2: Math.max(viewport.vidX1, viewport.vidX2),
                             y2: Math.max(viewport.vidY1, viewport.vidY2),
                             filePath: videoSettings.selectedFilePath,
+                            name: videoSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++
                         });
                         viewport.selectVideo(videosModel.count - 1);
@@ -1427,6 +1634,7 @@ Window {
                                 x2: bounds.x2, y2: bounds.y2,
                                 fragPath: newshaderSettings.fragFilePath,
                                 vertPath: newshaderSettings.vertFilePath,
+                                name: newshaderSettings.propName,
                                 stackOrder: viewport.nextStackOrder++,
                                 uniformsJson: newshaderSettings.buildCurrentUniformsList()
                             });
@@ -1541,6 +1749,7 @@ Window {
                             areasModel.setProperty(index, "y1", ny1);
                             areasModel.setProperty(index, "x2", nx1 + w);
                             areasModel.setProperty(index, "y2", ny1 + h);
+                            viewport.posRevision++;
                         }
                         onReleased: function (mouse) {
                             if (mouse.button === Qt.RightButton) {
@@ -2089,6 +2298,7 @@ Window {
                                 textBoxesModel.setProperty(index, "y1", ny1);
                                 textBoxesModel.setProperty(index, "x2", nx1 + w);
                                 textBoxesModel.setProperty(index, "y2", ny1 + h);
+                                viewport.posRevision++;
                             }
                         }
                         onReleased: function (mouse) {
@@ -2637,6 +2847,7 @@ Window {
                             imagesModel.setProperty(index, "y1", ny1);
                             imagesModel.setProperty(index, "x2", nx1 + w);
                             imagesModel.setProperty(index, "y2", ny1 + h);
+                            viewport.posRevision++;
                         }
                         onReleased: function (mouse) {
                             if (mouse.button === Qt.RightButton) {
@@ -3181,6 +3392,7 @@ Window {
                             videosModel.setProperty(index, "y1", ny1);
                             videosModel.setProperty(index, "x2", nx1 + w);
                             videosModel.setProperty(index, "y2", ny1 + h);
+                            viewport.posRevision++;
                         }
                         onReleased: function (mouse) {
                             if (mouse.button === Qt.RightButton) {
@@ -3938,6 +4150,7 @@ Window {
                             shadersModel.setProperty(index, "y1", ny1);
                             shadersModel.setProperty(index, "x2", nx1 + w);
                             shadersModel.setProperty(index, "y2", ny1 + h);
+                            viewport.posRevision++;
                         }
                         onReleased: function (mouse) {
                             if (mouse.button === Qt.RightButton) {
@@ -4954,6 +5167,7 @@ Window {
                             x2: b.x2, y2: b.y2,
                             fragPath: newshaderSettings.fragFilePath,
                             vertPath: newshaderSettings.vertFilePath,
+                            name: newshaderSettings.propName,
                             stackOrder: viewport.nextStackOrder++,
                             uniformsJson: newshaderSettings.buildCurrentUniformsList()
                         });
@@ -5186,11 +5400,32 @@ Window {
                                     onExited: hovered = false
                                     onClicked: {
                                         if (isLast) {
-                                            scenesRectModel.append({});
-                                            console.log("Appended new scene from viewport preview");
+                                            var newId = storyManager.createScene("new scene");
+                                            if (newId !== -1) {
+                                                scenesRectModel.insert(scenesRectModel.count - 1,
+                                                    { sceneId: newId, sceneName: "new scene" });
+                                                if (mainWindow.currentSceneId !== -1) {
+                                                    storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
+                                                    storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
+                                                }
+                                                mainWindow.currentSceneId = newId;
+                                                viewport.clearForNewScene();
+                                                sceneNameInput.text = "new scene";
+                                                sceneEditorButtons.navigationOpen = false;
+                                            }
                                         } else {
-                                            console.log("Viewport preview clicked scene index", index);
+                                            var targetId = scenesRectModel.get(index).sceneId;
+                                            if (targetId !== mainWindow.currentSceneId) {
+                                                if (mainWindow.currentSceneId !== -1) {
+                                                    storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
+                                                    storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
+                                                }
+                                                mainWindow.currentSceneId = targetId;
+                                                viewport.loadSceneIntoViewport(targetId);
+                                                sceneNameInput.text = storyManager.getSceneName(targetId);
+                                            }
                                             navigationViewportSelectionFlash.running = true;
+                                            sceneEditorButtons.navigationOpen = false;
                                         }
                                     }
                                 }
@@ -5201,6 +5436,19 @@ Window {
                                     color: "white"
                                     font.pixelSize: 32
                                     visible: hovered && isLast
+                                }
+
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.bottom: parent.bottom
+                                    anchors.bottomMargin: 12
+                                    text: model.sceneId !== -1 ? (model.sceneName || "") : ""
+                                    font.pixelSize: 11
+                                    color: "white"
+                                    visible: model.sceneId !== -1
+                                    elide: Text.ElideMiddle
+                                    width: parent.width - 16
+                                    horizontalAlignment: Text.AlignHCenter
                                 }
                             }
                         }
@@ -5476,7 +5724,11 @@ Window {
                                         mainWindow.y = mainWindow.y + 150;
                                     }
                                 } else if (modelData === "close scene") {
-                                    console.log("Closing scene…");
+                                    // Save scene state before leaving
+                                    if (mainWindow.currentSceneId !== -1) {
+                                        storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
+                                        storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
+                                    }
                                     if (sceneEditorButtons.timelineOpen) {
                                         sceneEditorButtons.timelineOpen = false;
                                         yanimationduration = 1000;
@@ -5529,6 +5781,99 @@ Window {
                         anchors.left: parent.left
                         anchors.leftMargin: 20
                     }
+
+                    Column {
+                        id: areaSpatialProps
+                        anchors.top: areaSettingsHeading.bottom
+                        anchors.topMargin: 12
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        spacing: 4
+
+                        property real propX: 0
+                        property real propY: 0
+                        property real propW: 200
+                        property real propH: 150
+                        property bool propLock: false
+                        property string propName: ""
+
+                        Row {
+                            width: areaSpatialProps.width; height: 26; spacing: 6
+                            Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Rectangle {
+                                width: parent.width - 50; height: 26
+                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                TextInput {
+                                    anchors.fill: parent; anchors.margins: 3
+                                    color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                    text: areaSpatialProps.propName
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: focus = false
+                                    onEditingFinished: areaSpatialProps.propName = text
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: [
+                                { lbl: "x",      key: "propX" },
+                                { lbl: "y",      key: "propY" },
+                                { lbl: "width",  key: "propW" },
+                                { lbl: "height", key: "propH" }
+                            ]
+                            delegate: Row {
+                                width: areaSpatialProps.width
+                                height: 26
+                                spacing: 6
+                                Text {
+                                    text: modelData.lbl
+                                    width: 44; color: "#aaa"; font.pixelSize: 11
+                                    height: parent.height; verticalAlignment: Text.AlignVCenter
+                                }
+                                Rectangle {
+                                    width: parent.width - 50; height: 26
+                                    color: "transparent"; border.color: "white"
+                                    border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11
+                                        clip: true; selectByMouse: true
+                                        text: areaSpatialProps[modelData.key].toFixed(0)
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: areaSpatialProps[modelData.key] = parseFloat(text) || 0
+                                    }
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: areaSpatialProps.width; height: 26; spacing: 6
+                            Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Row {
+                                spacing: 12; anchors.verticalCenter: parent.verticalCenter
+                                Repeater {
+                                    model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                    delegate: Row {
+                                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                                        Rectangle {
+                                            width: 12; height: 12; radius: 6
+                                            border.color: "white"; border.width: 1; color: "transparent"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            Rectangle {
+                                                anchors.centerIn: parent; width: 6; height: 6; radius: 3
+                                                color: "white"; visible: areaSpatialProps.propLock === modelData.val
+                                            }
+                                            MouseArea { anchors.fill: parent; onClicked: areaSpatialProps.propLock = modelData.val }
+                                        }
+                                        Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Rectangle {
@@ -5568,55 +5913,140 @@ Window {
                         anchors.leftMargin: 20
                     }
 
-                    Column {
+                    // Image drop zone — fixed, not scrollable
+                    Rectangle {
+                        id: imageDropZone
                         anchors.top: imageSettingsHeading.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
                         anchors.rightMargin: 14
-                        spacing: 8
+                        height: 80
+                        color: "black"
+                        radius: 4
 
-                        // Image drop zone
-                        Rectangle {
-                            width: parent.width
-                            height: 80
-                            color: "black"
-                            radius: 4
+                        Image {
+                            id: dropImageIcon
+                            anchors.fill: parent
+                            anchors.margins: 9
+                            sourceSize.width: 256
+                            sourceSize.height: 256
+                            source: "icons/dropimage.svg"
+                            fillMode: Image.PreserveAspectFit
+                            opacity: imageSettings.selectedFilePath !== "" ? 0.3 : 1.0
+                        }
 
-                            Image {
-                                id: dropImageIcon
-                                anchors.fill: parent
-                                anchors.margins: 9
-                                sourceSize.width: 256
-                                sourceSize.height: 256
-                                source: "icons/dropimage.svg"
-                                fillMode: Image.PreserveAspectFit
-                                opacity: imageSettings.selectedFilePath !== "" ? 0.3 : 1.0
+                        Text {
+                            anchors.centerIn: parent
+                            text: imageSettings.selectedFilePath !== "" ? imageSettings.selectedFilePath.replace(/.*\//, "") : ""
+                            color: "white"
+                            font.pixelSize: 14
+                            wrapMode: Text.Wrap
+                            elide: Text.ElideNone
+                            width: parent.width - 16
+                            horizontalAlignment: Text.AlignHCenter
+                            visible: imageSettings.selectedFilePath !== ""
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: imageFileDialog.open()
+                        }
+
+                        DropArea {
+                            anchors.fill: parent
+                            onDropped: drop => {
+                                if (drop.hasUrls)
+                                    imageSettings.selectedFilePath = drop.urls[0].toString();
+                            }
+                        }
+                    }
+
+                    // Scrollable props below drop zone
+                    ScrollView {
+                        id: imagePropsScroll
+                        anchors.top: imageDropZone.bottom
+                        anchors.topMargin: 8
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        anchors.bottomMargin: 8
+                        clip: true
+
+                        Column {
+                            id: imageSpatialProps
+                            width: imagePropsScroll.availableWidth
+                            spacing: 4
+
+                            property real propX: 0
+                            property real propY: 0
+                            property real propW: 200
+                            property real propH: 150
+                            property bool propLock: false
+                            property string propName: ""
+
+                            Row {
+                                width: imageSpatialProps.width; height: 26; spacing: 6
+                                Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Rectangle {
+                                    width: parent.width - 50; height: 26
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: imageSpatialProps.propName
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: imageSpatialProps.propName = text
+                                    }
+                                }
                             }
 
-                            Text {
-                                anchors.centerIn: parent
-                                text: imageSettings.selectedFilePath !== "" ? imageSettings.selectedFilePath.replace(/.*\//, "") : ""
-                                color: "white"
-                                font.pixelSize: 14
-                                wrapMode: Text.Wrap
-                                elide: Text.ElideNone
-                                width: parent.width - 16
-                                horizontalAlignment: Text.AlignHCenter
-                                visible: imageSettings.selectedFilePath !== ""
+                            Repeater {
+                                model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
+                                delegate: Row {
+                                    width: imageSpatialProps.width; height: 26; spacing: 6
+                                    Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                    Rectangle {
+                                        width: parent.width - 50; height: 26
+                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                        TextInput {
+                                            anchors.fill: parent; anchors.margins: 3
+                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                            text: imageSpatialProps[modelData.key].toFixed(0)
+                                            Keys.onReturnPressed: focus = false
+                                            Keys.onEscapePressed: focus = false
+                                            onEditingFinished: imageSpatialProps[modelData.key] = parseFloat(text) || 0
+                                        }
+                                    }
+                                }
                             }
 
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: imageFileDialog.open()
-                            }
-
-                            DropArea {
-                                anchors.fill: parent
-                                onDropped: drop => {
-                                    if (drop.hasUrls)
-                                        imageSettings.selectedFilePath = drop.urls[0].toString();
+                            Row {
+                                width: imageSpatialProps.width; height: 26; spacing: 6
+                                Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Row {
+                                    spacing: 12; anchors.verticalCenter: parent.verticalCenter
+                                    Repeater {
+                                        model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                        delegate: Row {
+                                            spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                                            Rectangle {
+                                                width: 12; height: 12; radius: 6
+                                                border.color: "white"; border.width: 1; color: "transparent"
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                Rectangle {
+                                                    anchors.centerIn: parent; width: 6; height: 6; radius: 3
+                                                    color: "white"; visible: imageSpatialProps.propLock === modelData.val
+                                                }
+                                                MouseArea { anchors.fill: parent; onClicked: imageSpatialProps.propLock = modelData.val }
+                                            }
+                                            Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -5660,55 +6090,140 @@ Window {
                         anchors.leftMargin: 20
                     }
 
-                    Column {
+                    // Video drop zone — fixed, not scrollable
+                    Rectangle {
+                        id: videoDropZone
                         anchors.top: videoSettingsHeading.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
                         anchors.rightMargin: 14
-                        spacing: 8
+                        height: 80
+                        color: "black"
+                        radius: 4
 
-                        // Video drop zone
-                        Rectangle {
-                            width: parent.width
-                            height: 80
-                            color: "black"
-                            radius: 4
+                        Image {
+                            id: dropVideoIcon
+                            anchors.fill: parent
+                            anchors.margins: 9
+                            sourceSize.width: 256
+                            sourceSize.height: 256
+                            source: "icons/dropvideo.svg"
+                            fillMode: Image.PreserveAspectFit
+                            opacity: videoSettings.selectedFilePath !== "" ? 0.3 : 1.0
+                        }
 
-                            Image {
-                                id: dropVideoIcon
-                                anchors.fill: parent
-                                anchors.margins: 9
-                                sourceSize.width: 256
-                                sourceSize.height: 256
-                                source: "icons/dropvideo.svg"
-                                fillMode: Image.PreserveAspectFit
-                                opacity: videoSettings.selectedFilePath !== "" ? 0.3 : 1.0
+                        Text {
+                            anchors.centerIn: parent
+                            text: videoSettings.selectedFilePath !== "" ? videoSettings.selectedFilePath.replace(/.*\//, "") : ""
+                            color: "white"
+                            font.pixelSize: 14
+                            wrapMode: Text.Wrap
+                            elide: Text.ElideNone
+                            width: parent.width - 16
+                            horizontalAlignment: Text.AlignHCenter
+                            visible: videoSettings.selectedFilePath !== ""
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: videoFileDialog.open()
+                        }
+
+                        DropArea {
+                            anchors.fill: parent
+                            onDropped: drop => {
+                                if (drop.hasUrls)
+                                    videoSettings.selectedFilePath = drop.urls[0].toString();
+                            }
+                        }
+                    }
+
+                    // Scrollable props below drop zone
+                    ScrollView {
+                        id: videoPropsScroll
+                        anchors.top: videoDropZone.bottom
+                        anchors.topMargin: 8
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        anchors.bottomMargin: 8
+                        clip: true
+
+                        Column {
+                            id: videoSpatialProps
+                            width: videoPropsScroll.availableWidth
+                            spacing: 4
+
+                            property real propX: 0
+                            property real propY: 0
+                            property real propW: 200
+                            property real propH: 150
+                            property bool propLock: false
+                            property string propName: ""
+
+                            Row {
+                                width: videoSpatialProps.width; height: 26; spacing: 6
+                                Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Rectangle {
+                                    width: parent.width - 50; height: 26
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: videoSpatialProps.propName
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: videoSpatialProps.propName = text
+                                    }
+                                }
                             }
 
-                            Text {
-                                anchors.centerIn: parent
-                                text: videoSettings.selectedFilePath !== "" ? videoSettings.selectedFilePath.replace(/.*\//, "") : ""
-                                color: "white"
-                                font.pixelSize: 14
-                                wrapMode: Text.Wrap
-                                elide: Text.ElideNone
-                                width: parent.width - 16
-                                horizontalAlignment: Text.AlignHCenter
-                                visible: videoSettings.selectedFilePath !== ""
+                            Repeater {
+                                model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
+                                delegate: Row {
+                                    width: videoSpatialProps.width; height: 26; spacing: 6
+                                    Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                    Rectangle {
+                                        width: parent.width - 50; height: 26
+                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                        TextInput {
+                                            anchors.fill: parent; anchors.margins: 3
+                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                            text: videoSpatialProps[modelData.key].toFixed(0)
+                                            Keys.onReturnPressed: focus = false
+                                            Keys.onEscapePressed: focus = false
+                                            onEditingFinished: videoSpatialProps[modelData.key] = parseFloat(text) || 0
+                                        }
+                                    }
+                                }
                             }
 
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: videoFileDialog.open()
-                            }
-
-                            DropArea {
-                                anchors.fill: parent
-                                onDropped: drop => {
-                                    if (drop.hasUrls)
-                                        videoSettings.selectedFilePath = drop.urls[0].toString();
+                            Row {
+                                width: videoSpatialProps.width; height: 26; spacing: 6
+                                Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Row {
+                                    spacing: 12; anchors.verticalCenter: parent.verticalCenter
+                                    Repeater {
+                                        model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                        delegate: Row {
+                                            spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                                            Rectangle {
+                                                width: 12; height: 12; radius: 6
+                                                border.color: "white"; border.width: 1; color: "transparent"
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                Rectangle {
+                                                    anchors.centerIn: parent; width: 6; height: 6; radius: 3
+                                                    color: "white"; visible: videoSpatialProps.propLock === modelData.val
+                                                }
+                                                MouseArea { anchors.fill: parent; onClicked: videoSpatialProps.propLock = modelData.val }
+                                            }
+                                            Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -5756,6 +6271,7 @@ Window {
                     }
 
                     Column {
+                        id: textFormattingCol
                         anchors.top: textSettingsHeading.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
@@ -6059,6 +6575,86 @@ Window {
                         selectedColor: textSettings.txtColor
                         onAccepted: textSettings.txtColor = selectedColor
                     }
+
+                    Column {
+                        id: textSpatialProps
+                        anchors.top: textFormattingCol.bottom
+                        anchors.topMargin: 8
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        spacing: 4
+
+                        property real propX: 0
+                        property real propY: 0
+                        property real propW: 200
+                        property real propH: 150
+                        property bool propLock: false
+                        property string propName: ""
+
+                        Row {
+                            width: textSpatialProps.width; height: 26; spacing: 6
+                            Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Rectangle {
+                                width: parent.width - 50; height: 26
+                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                TextInput {
+                                    anchors.fill: parent; anchors.margins: 3
+                                    color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                    text: textSpatialProps.propName
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: focus = false
+                                    onEditingFinished: textSpatialProps.propName = text
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
+                            delegate: Row {
+                                width: textSpatialProps.width; height: 26; spacing: 6
+                                Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Rectangle {
+                                    width: parent.width - 50; height: 26
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: textSpatialProps[modelData.key].toFixed(0)
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: textSpatialProps[modelData.key] = parseFloat(text) || 0
+                                    }
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: textSpatialProps.width; height: 26; spacing: 6
+                            Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Row {
+                                spacing: 12; anchors.verticalCenter: parent.verticalCenter
+                                Repeater {
+                                    model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                    delegate: Row {
+                                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                                        Rectangle {
+                                            width: 12; height: 12; radius: 6
+                                            border.color: "white"; border.width: 1; color: "transparent"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            Rectangle {
+                                                anchors.centerIn: parent; width: 6; height: 6; radius: 3
+                                                color: "white"; visible: textSpatialProps.propLock === modelData.val
+                                            }
+                                            MouseArea { anchors.fill: parent; onClicked: textSpatialProps.propLock = modelData.val }
+                                        }
+                                        Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Rectangle {
@@ -6091,6 +6687,66 @@ Window {
                     Connections {
                         target: viewport
                         function onSelectionRevisionChanged() { selectSettings.refreshShaderUniforms(); }
+                    }
+
+                    // Spatial state for the currently selected element
+                    property real selX: 0
+                    property real selY: 0
+                    property real selW: 200
+                    property real selH: 150
+                    property bool selLock: false
+                    property string selName: ""
+
+                    function syncSpatialFromModel() {
+                        var m = null;
+                        if (hasActiveArea)        m = areasModel.get(viewport.selectedAreas[0]);
+                        else if (hasActiveTb)     m = textBoxesModel.get(viewport.selectedTbs[0]);
+                        else if (hasActiveImage)  m = imagesModel.get(viewport.selectedImages[0]);
+                        else if (hasActiveVideo)  m = videosModel.get(viewport.selectedVideos[0]);
+                        else if (hasActiveShader) m = shadersModel.get(viewport.selectedShaders[0]);
+                        if (m) {
+                            selX = Math.min(m.x1, m.x2);
+                            selY = Math.min(m.y1, m.y2);
+                            selW = Math.abs(m.x2 - m.x1);
+                            selH = Math.abs(m.y2 - m.y1);
+                            selName = m.name || "";
+                        }
+                    }
+
+                    function writeSpatialToModel() {
+                        var idx = -1;
+                        var mod = null;
+                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = areasModel; }
+                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = textBoxesModel; }
+                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = imagesModel; }
+                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = videosModel; }
+                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = shadersModel; }
+                        if (mod !== null && idx >= 0) {
+                            mod.setProperty(idx, "x1", selX);
+                            mod.setProperty(idx, "y1", selY);
+                            mod.setProperty(idx, "x2", selX + selW);
+                            mod.setProperty(idx, "y2", selY + selH);
+                            viewport.layoutRevision++;
+                        }
+                    }
+
+                    function writeNameToModel(n) {
+                        var idx = -1;
+                        var mod = null;
+                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = areasModel; }
+                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = textBoxesModel; }
+                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = imagesModel; }
+                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = videosModel; }
+                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = shadersModel; }
+                        if (mod !== null && idx >= 0)
+                            mod.setProperty(idx, "name", n);
+                    }
+
+                    Connections {
+                        target: viewport
+                        function onSelectionRevisionChanged() { selectSettings.syncSpatialFromModel(); }
+                        function onPosRevisionChanged()       { selectSettings.syncSpatialFromModel(); }
+                        function onElementDraggingChanged()   { if (!viewport.elementDragging) selectSettings.syncSpatialFromModel(); }
                     }
 
                     // Local state for editing the active text box's formatting
@@ -6147,16 +6803,27 @@ Window {
                         anchors.leftMargin: 20
                     }
 
-                    // Text formatting controls — visible when a text box is active
-                    Column {
-                        visible: selectSettings.hasActiveTb
+                    ScrollView {
+                        id: selectPropsScroll
                         anchors.top: selectSettingsHeading.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
                         anchors.rightMargin: 14
-                        spacing: 8
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 8
+                        clip: true
+
+                        Column {
+                            width: selectPropsScroll.availableWidth
+                            spacing: 8
+
+                            // Text formatting controls — visible when a text box is active
+                            Column {
+                                visible: selectSettings.hasActiveTb
+                                width: parent.width
+                                spacing: 8
 
                         // Font family
                         ComboBox {
@@ -6461,31 +7128,13 @@ Window {
                         }
                     }
 
-                    ColorDialog {
-                        id: selTxtColorDialog
-                        selectedColor: selectSettings.tbColor
-                        onAccepted: {
-                            selectSettings.tbColor = selectedColor;
-                            selectSettings.applyTbFormatting();
-                        }
-                    }
-
-                    // Image swap — visible when a single image is selected
-                    Column {
-                        visible: selectSettings.hasActiveImage
-                        anchors.top: selectSettingsHeading.bottom
-                        anchors.topMargin: 12
-                        anchors.left: parent.left
-                        anchors.leftMargin: 14
-                        anchors.right: parent.right
-                        anchors.rightMargin: 14
-                        spacing: 8
-
-                        Rectangle {
-                            width: parent.width
-                            height: 80
-                            color: "black"
-                            radius: 4
+                            // Image swap — visible when a single image is selected
+                            Rectangle {
+                                visible: selectSettings.hasActiveImage
+                                width: parent.width
+                                height: 80
+                                color: "black"
+                                radius: 4
 
                             Image {
                                 anchors.fill: parent
@@ -6520,24 +7169,14 @@ Window {
                                         imagesModel.setProperty(viewport.selectedImages[0], "filePath", drop.urls[0].toString());
                                 }
                             }
-                        }
-                    }
+                            }
 
-                    // Video swap — visible when a single video is selected
-                    Column {
-                        visible: selectSettings.hasActiveVideo
-                        anchors.top: selectSettingsHeading.bottom
-                        anchors.topMargin: 12
-                        anchors.left: parent.left
-                        anchors.leftMargin: 14
-                        anchors.right: parent.right
-                        anchors.rightMargin: 14
-                        spacing: 8
-
-                        Rectangle {
-                            width: parent.width
-                            height: 80
-                            color: "black"
+                            // Video swap — visible when a single video is selected
+                            Rectangle {
+                                visible: selectSettings.hasActiveVideo
+                                width: parent.width
+                                height: 80
+                                color: "black"
                             radius: 4
 
                             Image {
@@ -6573,20 +7212,18 @@ Window {
                                         videosModel.setProperty(viewport.selectedVideos[0], "filePath", drop.urls[0].toString());
                                 }
                             }
-                        }
-                    }
+                            }
 
-                    // Shader swap — visible when a single shader is selected
-                    Item {
-                        id: shaderSwapItem
-                        visible: selectSettings.hasActiveShader
-                        anchors.top: selectSettingsHeading.bottom
-                        anchors.topMargin: 12
-                        anchors.left: parent.left
-                        anchors.leftMargin: 14
-                        anchors.right: parent.right
-                        anchors.rightMargin: 14
-                        height: 80
+                            // Shader swap + uniforms — visible when a single shader is selected
+                            Column {
+                                visible: selectSettings.hasActiveShader
+                                width: parent.width
+                                spacing: 8
+
+                                Item {
+                                    id: shaderSwapItem
+                                    width: parent.width
+                                    height: 80
 
                         Rectangle {
                             width: (parent.width - 8) / 2
@@ -6683,28 +7320,11 @@ Window {
                         }
                     }
 
-                    // Editable uniform fields for the selected shader.
-                    ScrollView {
-                        id: selectShaderUniformsScroll
-                        visible: selectSettings.hasActiveShader && selectSettings.shaderUniforms.length > 0
-                        anchors.top: shaderSwapItem.bottom
-                        anchors.topMargin: 10
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        anchors.bottomMargin: 8
-                        clip: true
-
-                        Column {
-                            width: selectShaderUniformsScroll.availableWidth
-                            spacing: 5
-
-                        Repeater {
-                            model: selectSettings.shaderUniforms
-                            delegate: Row {
-                                width: parent.width
+                                // Editable uniform fields
+                                Repeater {
+                                    model: selectSettings.shaderUniforms
+                                    delegate: Row {
+                                        width: parent.width
                                 height: 26
                                 spacing: 6
 
@@ -6866,10 +7486,96 @@ Window {
                                     }
                                 }
                             }
+                            }  // close Repeater
+                            }  // close shader Column
+
+                            // Spatial props — always visible when something is selected
+                            Column {
+                                visible: selectSettings.hasActiveArea || selectSettings.hasActiveTb || selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
+                                width: parent.width
+                                spacing: 4
+
+                                Row {
+                                    width: parent.width; height: 26; spacing: 6
+                                    Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                    Rectangle {
+                                        width: parent.width - 50; height: 26
+                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                        TextInput {
+                                            anchors.fill: parent; anchors.margins: 3
+                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                            text: selectSettings.selName
+                                            Keys.onReturnPressed: focus = false
+                                            Keys.onEscapePressed: focus = false
+                                            onEditingFinished: {
+                                                selectSettings.selName = text;
+                                                selectSettings.writeNameToModel(text);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Repeater {
+                                    model: [{ lbl:"x", prop:"selX" }, { lbl:"y", prop:"selY" }, { lbl:"width", prop:"selW" }, { lbl:"height", prop:"selH" }]
+                                    delegate: Row {
+                                        width: parent.width; height: 26; spacing: 6
+                                        Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                        Rectangle {
+                                            width: parent.width - 50; height: 26
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                anchors.fill: parent; anchors.margins: 3
+                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                text: selectSettings[modelData.prop].toFixed(0)
+                                                Keys.onReturnPressed: focus = false
+                                                Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    selectSettings[modelData.prop] = parseFloat(text) || 0;
+                                                    selectSettings.writeSpatialToModel();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Row {
+                                    width: parent.width; height: 26; spacing: 6
+                                    Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                    Row {
+                                        spacing: 12; anchors.verticalCenter: parent.verticalCenter
+                                        Repeater {
+                                            model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                            delegate: Row {
+                                                spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                                                Rectangle {
+                                                    width: 12; height: 12; radius: 6
+                                                    border.color: "white"; border.width: 1; color: "transparent"
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    Rectangle {
+                                                        anchors.centerIn: parent; width: 6; height: 6; radius: 3
+                                                        color: "white"; visible: selectSettings.selLock === modelData.val
+                                                    }
+                                                    MouseArea { anchors.fill: parent; onClicked: selectSettings.selLock = modelData.val }
+                                                }
+                                                Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Item { width: 1; height: 16 }
+                        }  // close outer Column
+                    }  // close outer ScrollView
+
+                    ColorDialog {
+                        id: selTxtColorDialog
+                        selectedColor: selectSettings.tbColor
+                        onAccepted: {
+                            selectSettings.tbColor = selectedColor;
+                            selectSettings.applyTbFormatting();
                         }
-                        Item { width: 1; height: 16 }
-                        }  // Column
-                    }  // ScrollView
+                    }
                 }
 
                 Rectangle {
@@ -6884,6 +7590,12 @@ Window {
                     property string vertFilePath: ""
                     property bool showUncompiledWarning: false
                     property var rawUniforms: []  // full list from inspectShader, including time
+                    property real propX: 0
+                    property real propY: 0
+                    property real propW: 200
+                    property real propH: 150
+                    property bool propLock: false
+                    property string propName: ""
 
                     ListModel { id: uniformFieldsModel }  // one entry per non-time uniform shown in UI
 
@@ -7070,10 +7782,9 @@ Window {
                         }
                     }
 
-                    // Editable default values for detected uniforms.
+                    // Scrollable list: uniforms first, then name + spatial props.
                     ScrollView {
                         id: newShaderUniformsScroll
-                        visible: uniformFieldsModel.count > 0
                         anchors.top: shaderDropZonesRow.bottom
                         anchors.topMargin: 10
                         anchors.left: parent.left
@@ -7216,6 +7927,71 @@ Window {
                                 }
                             }
                         }
+                        Item { width: 1; height: 8 }
+
+                        // Name + spatial props (always shown, below uniforms)
+                        Row {
+                            width: parent.width; height: 26; spacing: 6
+                            Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Rectangle {
+                                width: parent.width - 50; height: 26
+                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                TextInput {
+                                    anchors.fill: parent; anchors.margins: 3
+                                    color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                    text: newshaderSettings.propName
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: focus = false
+                                    onEditingFinished: newshaderSettings.propName = text
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
+                            delegate: Row {
+                                width: parent.width; height: 26; spacing: 6
+                                Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Rectangle {
+                                    width: parent.width - 50; height: 26
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: newshaderSettings[modelData.key].toFixed(0)
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: newshaderSettings[modelData.key] = parseFloat(text) || 0
+                                    }
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: parent.width; height: 26; spacing: 6
+                            Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Row {
+                                spacing: 12; anchors.verticalCenter: parent.verticalCenter
+                                Repeater {
+                                    model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                    delegate: Row {
+                                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                                        Rectangle {
+                                            width: 12; height: 12; radius: 6
+                                            border.color: "white"; border.width: 1; color: "transparent"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            Rectangle {
+                                                anchors.centerIn: parent; width: 6; height: 6; radius: 3
+                                                color: "white"; visible: newshaderSettings.propLock === modelData.val
+                                            }
+                                            MouseArea { anchors.fill: parent; onClicked: newshaderSettings.propLock = modelData.val }
+                                        }
+                                        Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                    }
+                                }
+                            }
+                        }
+
                         Item { width: 1; height: 16 }
                         }  // Column
                     }  // ScrollView
@@ -8119,6 +8895,18 @@ Window {
                         clip: true
                         Keys.onReturnPressed: focus = false
                         Keys.onEscapePressed: focus = false
+                        onEditingFinished: {
+                            if (mainWindow.currentSceneId !== -1) {
+                                storyManager.updateSceneName(mainWindow.currentSceneId, text);
+                                // Keep scene menu cards in sync
+                                for (var i = 0; i < scenesRectModel.count; i++) {
+                                    if (scenesRectModel.get(i).sceneId === mainWindow.currentSceneId) {
+                                        scenesRectModel.setProperty(i, "sceneName", text);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Rectangle {
@@ -8324,6 +9112,9 @@ Window {
                     sceneEditorButtons.conditionsOpen = false;
                     sceneEditorButtons.variablesOpen = false;
                     sceneEditorButtons.navigationOpen = false;
+                    // Populate the scene name field from the DB
+                    if (mainWindow.currentSceneId !== -1)
+                        sceneNameInput.text = storyManager.getSceneName(mainWindow.currentSceneId);
                 }
             }
         }
@@ -8331,6 +9122,69 @@ Window {
         VideoOutput {
             id: sceneMenu2sceneEditorVideoOutput
             anchors.fill: parent
+        }
+    }
+
+    // ------------------------------------------------------------------ story file dialogs
+
+    FileDialog {
+        id: openStoryDialog
+        title: "Open story"
+        nameFilters: ["Story files (*.story)"]
+        property string pendingStoryPath: ""
+        onAccepted: {
+            var path = selectedFile.toString();
+            if (sceneEditor.visible) {
+                // Scene editor is open — save state, close scene, then load story once
+                // the close-scene transition finishes (see sceneEditor2sceneMenu handler)
+                pendingStoryPath = path;
+                if (mainWindow.currentSceneId !== -1) {
+                    storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
+                    storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
+                }
+                if (sceneEditorButtons.timelineOpen) {
+                    sceneEditorButtons.timelineOpen = false;
+                    yanimationduration = 1000;
+                    mainWindow.height = 540;
+                    mainWindow.y = mainWindow.y + 150;
+                    closeSceneTimer.start();
+                } else {
+                    xanimationduration = 1000;
+                    mainWindow.width = 960;
+                    mainWindow.x = sceneEditorEntryX;
+                    sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
+                }
+            } else if (storyMenu.visible) {
+                // On story menu — load and animate to scene menu
+                if (storyManager.openStory(path)) {
+                    story2sceneMenu.visible = true;
+                    story2sceneMenuPlayer.play();
+                }
+            } else {
+                // On scene menu — just load; scene menu updates reactively
+                storyManager.openStory(path);
+            }
+        }
+    }
+
+    FileDialog {
+        id: saveStoryDialog
+        title: "Save story"
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "story"
+        nameFilters: ["Story files (*.story)"]
+        property string pendingAction: "new"
+        property bool triggerTransition: false
+        onAccepted: {
+            var ok = false;
+            if (pendingAction === "new")
+                ok = storyManager.newStory(selectedFile.toString());
+            else
+                ok = storyManager.saveStoryAs(selectedFile.toString());
+            if (ok && triggerTransition && pendingAction === "new") {
+                story2sceneMenu.visible = true;
+                story2sceneMenuPlayer.play();
+            }
         }
     }
 
@@ -8355,6 +9209,10 @@ Window {
                     sceneEditor2sceneMenu.visible = false;
                     sceneMenu.visible = true;
                     sceneEditor2sceneMenu.windowSizeCompleteTrigger = false;
+                    if (openStoryDialog.pendingStoryPath !== "") {
+                        storyManager.openStory(openStoryDialog.pendingStoryPath);
+                        openStoryDialog.pendingStoryPath = "";
+                    }
                 }
             }
         }
