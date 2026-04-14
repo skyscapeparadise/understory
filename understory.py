@@ -28,12 +28,14 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlparse, unquote
+from urllib.parse import unquote, urlparse
 
-from PySide6.QtCore import QObject, QSize, QUrl, Slot, Signal, Property
-from PySide6.QtGui import QGuiApplication, QFont, QFontDatabase, QImage
+from PySide6.QtCore import Property, QObject, QSize, QUrl, Signal, Slot
+from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication, QImage
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickImageProvider
+
+versionnumber = "0.2"
 
 
 class ThumbnailProvider(QQuickImageProvider):
@@ -79,7 +81,9 @@ class ShaderInspector(QObject):
         try:
             result = subprocess.run(
                 ["/Users/kady/Qt/6.9.0/macos/bin/qsb", "-d", path],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             output = result.stdout
         except Exception:
@@ -117,6 +121,7 @@ class ShaderInspector(QObject):
         for sampler in info.get("combinedImageSamplers", []):
             uniforms.append({"name": sampler["name"], "type": "sampler2D"})
         return uniforms
+
 
 class StoryManager(QObject):
     """Owns the SQLite connection for the currently-open .story file."""
@@ -165,11 +170,14 @@ class StoryManager(QObject):
 
     def _add_recent(self, path, title):
         self._recent = [r for r in self._recent if r["path"] != path]
-        self._recent.insert(0, {
-            "path": path,
-            "title": title,
-            "filename": Path(path).stem,
-        })
+        self._recent.insert(
+            0,
+            {
+                "path": path,
+                "title": title,
+                "filename": Path(path).stem,
+            },
+        )
         self._recent = self._recent[:8]
         self._save_recent()
 
@@ -288,7 +296,8 @@ class StoryManager(QObject):
             ).fetchone()
             sort_order = row[0] if row else 0
             cur = self._conn.execute(
-                "INSERT INTO scenes (name, sort_order) VALUES (?, ?)", (name, sort_order)
+                "INSERT INTO scenes (name, sort_order) VALUES (?, ?)",
+                (name, sort_order),
             )
             self._conn.commit()
             return cur.lastrowid
@@ -301,7 +310,9 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
-            self._conn.execute("UPDATE scenes SET name = ? WHERE id = ?", (name, scene_id))
+            self._conn.execute(
+                "UPDATE scenes SET name = ? WHERE id = ?", (name, scene_id)
+            )
             self._conn.commit()
         except Exception as e:
             print(f"StoryManager.updateSceneName: {e}")
@@ -335,7 +346,10 @@ class StoryManager(QObject):
                         scene_id,
                         el["type"],
                         el.get("name", ""),
-                        el["x"], el["y"], el["w"], el["h"],
+                        el["x"],
+                        el["y"],
+                        el["w"],
+                        el["h"],
                         el.get("z_order", 0),
                         json.dumps(el),
                     ),
@@ -365,7 +379,11 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
-            path = unquote(urlparse(file_url).path) if file_url.startswith("file://") else file_url
+            path = (
+                unquote(urlparse(file_url).path)
+                if file_url.startswith("file://")
+                else file_url
+            )
             with open(path, "rb") as f:
                 data = f.read()
             self._conn.execute(
@@ -385,7 +403,11 @@ class StoryManager(QObject):
         if not self._path:
             return
         try:
-            src = unquote(urlparse(file_url).path) if file_url.startswith("file://") else file_url
+            src = (
+                unquote(urlparse(file_url).path)
+                if file_url.startswith("file://")
+                else file_url
+            )
             key = hashlib.md5(self._path.encode()).hexdigest()
             self._thumbs_dir.mkdir(parents=True, exist_ok=True)
             dest = self._thumbs_dir / f"{key}.png"
@@ -430,9 +452,6 @@ class StoryManager(QObject):
         except Exception as e:
             print(f"StoryManager.hasThumbnail: {e}")
             return False
-
-
-versionnumber = "0.1"
 
 
 app = QGuiApplication(sys.argv)
