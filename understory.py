@@ -169,15 +169,12 @@ class StoryManager(QObject):
             print(f"StoryManager._save_recent: {e}")
 
     def _add_recent(self, path, title):
+        existing = next((r for r in self._recent if r["path"] == path), None)
         self._recent = [r for r in self._recent if r["path"] != path]
-        self._recent.insert(
-            0,
-            {
-                "path": path,
-                "title": title,
-                "filename": Path(path).stem,
-            },
-        )
+        entry = {"path": path, "title": title, "filename": Path(path).stem}
+        if existing and existing.get("thumbPath"):
+            entry["thumbPath"] = existing["thumbPath"]
+        self._recent.insert(0, entry)
         self._recent = self._recent[:8]
         self._save_recent()
 

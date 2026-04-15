@@ -924,6 +924,7 @@ Window {
             property string relayerHoveredType: ""
             property int relayerHoveredIndex: -1
 
+            property bool capturingThumbnail: false
             property bool boxSelecting: false
             property real boxSelectX1: 0
             property real boxSelectY1: 0
@@ -1447,6 +1448,7 @@ Window {
             function captureAndSaveThumbnail(sceneId, onDone) {
                 if (sceneId === -1) { onDone(); return; }
                 var tempPath = "/tmp/understory_thumb_" + sceneId + ".png";
+                viewport.capturingThumbnail = true;
                 thumbnailCaptureSurface.grabToImage(function(result) {
                     result.saveToFile(tempPath);
                     storyManager.saveThumbnail(sceneId, tempPath);
@@ -1814,7 +1816,7 @@ Window {
                     z: 100 + model.stackOrder
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
-                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedAreas.indexOf(index) !== -1
+                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedAreas.indexOf(index) !== -1 && !viewport.capturingThumbnail
                     property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "area" && viewport.relayerHoveredIndex === index
                     property real pressVpX: 0
                     property real pressVpY: 0
@@ -2347,7 +2349,7 @@ Window {
                     z: 100 + model.stackOrder
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
-                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedTbs.indexOf(index) !== -1
+                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedTbs.indexOf(index) !== -1 && !viewport.capturingThumbnail
                     property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "tb" && viewport.relayerHoveredIndex === index
                     property bool editing: false
                     onEditingChanged: viewport.textEditing = editing
@@ -2905,7 +2907,7 @@ Window {
                     layer.enabled: true
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
-                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedImages.indexOf(index) !== -1
+                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedImages.indexOf(index) !== -1 && !viewport.capturingThumbnail
                     property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "image" && viewport.relayerHoveredIndex === index
                     property real pressVpX: 0
                     property real pressVpY: 0
@@ -3445,7 +3447,7 @@ Window {
                     layer.enabled: true
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
-                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedVideos.indexOf(index) !== -1
+                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedVideos.indexOf(index) !== -1 && !viewport.capturingThumbnail
                     property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "video" && viewport.relayerHoveredIndex === index
                     property real pressVpX: 0
                     property real pressVpY: 0
@@ -4079,7 +4081,7 @@ Window {
                     z: 100 + model.stackOrder
 
                     property bool isSelect: buttonGrid.selectedTool === "select"
-                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedShaders.indexOf(index) !== -1
+                    property bool isActive: isSelect && (viewport.selectionRevision >= 0) && viewport.selectedShaders.indexOf(index) !== -1 && !viewport.capturingThumbnail
                     property bool isRelayerHovered: buttonGrid.selectedTool === "relayer" && viewport.relayerHoveredType === "shader" && viewport.relayerHoveredIndex === index
                     property real pressVpX: 0
                     property real pressVpY: 0
@@ -4641,7 +4643,7 @@ Window {
 
             // Box-select rubber band
             Rectangle {
-                visible: viewport.boxSelecting
+                visible: viewport.boxSelecting && !viewport.capturingThumbnail
                 x: Math.max(0, Math.min(viewport.boxSelectX1, viewport.boxSelectX2))
                 y: Math.max(0, Math.min(viewport.boxSelectY1, viewport.boxSelectY2))
                 width: Math.max(0, Math.min(viewport.width,  Math.max(viewport.boxSelectX1, viewport.boxSelectX2)) - Math.max(0, Math.min(viewport.boxSelectX1, viewport.boxSelectX2)))
@@ -9348,6 +9350,7 @@ Window {
                     sceneEditor.visible = true;
                     sceneMenu2sceneEditor.visible = false;
                     sceneMenu.visible = false;
+                    viewport.capturingThumbnail = false;
                     buttonGrid.selectedTool = "select";
                     sceneEditorButtons.conditionsOpen = false;
                     sceneEditorButtons.variablesOpen = false;
