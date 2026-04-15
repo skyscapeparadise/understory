@@ -116,6 +116,15 @@ Window {
                         console.log("ScriptAction triggered");
                         sceneEditor2sceneMenu.visible = true;
                         sceneEditor2sceneMenuPlayer.play();
+                    } else if (mainWindow.width === 1365 && mainWindow.currentSceneId !== -1) {
+                        // Just finished opening the scene editor — auto-open timeline if it was open last time
+                        var tlState = storyManager.getEditorState("scene_" + mainWindow.currentSceneId + "_timeline_open");
+                        if (tlState === "1") {
+                            sceneEditorButtons.timelineOpen = true;
+                            yanimationduration = 1000;
+                            mainWindow.height = mainWindow.height + 300;
+                            mainWindow.y = mainWindow.y - 150;
+                        }
                     }
                 }
             }
@@ -6002,6 +6011,8 @@ Window {
                                             storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
                                         }
                                         nodeWorkspace.saveToDb();
+                                        if (savedSceneId !== -1)
+                                            storyManager.setEditorState("scene_" + savedSceneId + "_timeline_open", sceneEditorButtons.timelineOpen ? "1" : "0");
                                         viewportFadeInAnim.start();
                                         if (sceneEditorButtons.timelineOpen) {
                                             sceneEditorButtons.timelineOpen = false;
@@ -9423,6 +9434,8 @@ Window {
                         storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
                     }
                     nodeWorkspace.saveToDb();
+                    if (savedSceneId !== -1)
+                        storyManager.setEditorState("scene_" + savedSceneId + "_timeline_open", sceneEditorButtons.timelineOpen ? "1" : "0");
                     viewportFadeInAnim.start();
                     if (sceneEditorButtons.timelineOpen) {
                         sceneEditorButtons.timelineOpen = false;

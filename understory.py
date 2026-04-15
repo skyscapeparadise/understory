@@ -248,7 +248,15 @@ class StoryManager(QObject):
                     ");"
                 )
                 conn.commit()
-            else:
+            if "editor_state" not in tables:
+                conn.executescript(
+                    "CREATE TABLE editor_state ("
+                    "    key TEXT PRIMARY KEY,"
+                    "    value TEXT NOT NULL"
+                    ");"
+                )
+                conn.commit()
+            if "networks" in tables:
                 # migrate: add color column if missing (stories created before this feature)
                 net_cols = {r[1] for r in conn.execute("PRAGMA table_info(networks)").fetchall()}
                 if "color" not in net_cols:
@@ -612,6 +620,37 @@ class StoryManager(QObject):
             self._conn.commit()
         except Exception as e:
             print(f"StoryManager.deleteNetwork: {e}")
+
+    # ------------------------------------------------------------------ editor state slots
+
+    @Slot(str, result=str)
+    def getEditorState(self, key):
+        """Return the stored value for key, or empty string if absent."""
+        if not self._conn:
+            return ""
+        try:
+            row = self._conn.execute(
+                "SELECT value FROM editor_state WHERE key = ?", (key,)
+            ).fetchone()
+            return row[0] if row else ""
+        except Exception as e:
+            print(f"StoryManager.getEditorState: {e}")
+            return ""
+
+    @Slot(str, str)
+    def setEditorState(self, key, value):
+        """Upsert a key/value pair into editor_state."""
+        if not self._conn:
+            return
+        try:
+            self._conn.execute(
+                "INSERT INTO editor_state (key, value) VALUES (?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+            self._conn.commit()
+        except Exception as e:
+            print(f"StoryManager.setEditorState: {e}")
 
 
 app = QGuiApplication(sys.argv)
