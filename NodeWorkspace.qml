@@ -674,11 +674,11 @@ Item {
                     orbCount++
                 }
             }
-            var cr   = Math.max(5, 10 * root.zoom)
-            var step = cr * 2 + 2 * root.zoom
+            var cr   = 10
+            var step = 22
             var cx   = nx + (orbPos - (orbCount - 1) / 2.0) * step
-            var cy   = ny + (root.nodeRadius + 3) * root.zoom + cr
-            cr = Math.max(8, 11 * root.zoom)            // widen hit radius slightly
+            var cy   = ny + root.nodeRadius + 3 + cr
+            cr = 14            // widen hit radius slightly
             var dx = stageX - cx
             var dy = stageY - cy
             if (dx * dx + dy * dy <= cr * cr) return oi
@@ -1778,15 +1778,15 @@ Item {
                     return count
                 }
                 
-                property real cr: Math.max(5, 10 * root.zoom)
-                property real step: cr * 2 + 2 * root.zoom
+                property real cr: 10
+                property real step: 22
                 
                 visible: nodeModelItem !== null
                          && !(root.isDraggingCircle && model.circleType === root.draggingCircleType && model.itemIdx === root.draggingCircleItemIdx)
                          && !(root.snappingCircle && model.circleType === root.snappingCircleType && model.itemIdx === root.snappingCircleItemIdx)
 
                 x: nodeModelItem ? (nodeModelItem.x * root.zoom + root.panX + (orbPos - (orbCount - 1) / 2.0) * step - cr) : 0
-                y: nodeModelItem ? (nodeModelItem.y * root.zoom + root.panY + (root.nodeRadius + 3) * root.zoom) : 0
+                y: nodeModelItem ? (nodeModelItem.y * root.zoom + root.panY + root.nodeRadius + 3) : 0
                 width: cr * 2
                 height: cr * 2
 
@@ -1826,7 +1826,7 @@ Item {
                             }
                             return ""
                         }
-                        font.pixelSize: Math.max(7, Math.round(10 * root.zoom))
+                        font.pixelSize: 10
                         font.bold: true
                         color: "#1a1a1d"
                         visible: (model.circleType === "sound") || (model.circleType === "char" && (model.itemIdx < 0 || model.itemIdx >= charactersModel.count || !charactersModel.get(model.itemIdx) || !charactersModel.get(model.itemIdx).charImagePath))
@@ -1876,11 +1876,11 @@ Item {
                 return count
             }
 
-            property real scr: Math.max(5, 10 * root.zoom)
-            property real sStep: scr * 2 + 2 * root.zoom
+            property real scr: 10
+            property real sStep: 22
             
             property real tgtX: nodeModelItem ? (nodeModelItem.x * root.zoom + root.panX + (sPos - (sCount - 1) / 2.0) * sStep) : 0
-            property real tgtY: nodeModelItem ? (nodeModelItem.y * root.zoom + root.panY + (root.nodeRadius + 3) * root.zoom + scr) : 0
+            property real tgtY: nodeModelItem ? (nodeModelItem.y * root.zoom + root.panY + root.nodeRadius + 3 + scr) : 0
             
             x: root.snappingFromX + (tgtX - root.snappingFromX) * root.snappingProgress - width / 2
             y: root.snappingFromY + (tgtY - root.snappingFromY) * root.snappingProgress - height / 2
