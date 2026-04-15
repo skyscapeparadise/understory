@@ -5730,6 +5730,32 @@ Window {
                     }
                 }
             }
+
+            Rectangle {
+                id: viewportBlackOverlay
+                anchors.fill: parent
+                color: "black"
+                opacity: 1.0
+                z: 1001
+
+                NumberAnimation {
+                    id: viewportFadeInAnim
+                    target: viewportBlackOverlay
+                    property: "opacity"
+                    to: 1.0
+                    duration: 800
+                    easing.type: Easing.InOutQuad
+                }
+
+                NumberAnimation {
+                    id: viewportFadeOutAnim
+                    target: viewportBlackOverlay
+                    property: "opacity"
+                    to: 0.0
+                    duration: 800
+                    easing.type: Easing.InOutQuad
+                }
+            }
         }
 
         Rectangle {
@@ -5976,6 +6002,7 @@ Window {
                                             storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
                                         }
                                         nodeWorkspace.saveToDb();
+                                        viewportFadeInAnim.start();
                                         if (sceneEditorButtons.timelineOpen) {
                                             sceneEditorButtons.timelineOpen = false;
                                             yanimationduration = 1000;
@@ -9354,6 +9381,7 @@ Window {
                     mainWindow.width = 1365;
                     mainWindow.x = mainWindow.x - 202;
                     sceneEditor.visible = true;
+                    viewportFadeOutAnim.start();
                     sceneMenu2sceneEditor.visible = false;
                     sceneMenu.visible = false;
                     viewport.capturingThumbnail = false;
@@ -9395,6 +9423,7 @@ Window {
                         storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
                     }
                     nodeWorkspace.saveToDb();
+                    viewportFadeInAnim.start();
                     if (sceneEditorButtons.timelineOpen) {
                         sceneEditorButtons.timelineOpen = false;
                         yanimationduration = 1000;
@@ -9460,6 +9489,7 @@ Window {
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
                     sceneEditor.visible = false;
+                    viewportBlackOverlay.opacity = 1;
                     sceneEditor2sceneMenu.visible = false;
                     sceneMenu.visible = true;
                     sceneEditor2sceneMenu.windowSizeCompleteTrigger = false;
