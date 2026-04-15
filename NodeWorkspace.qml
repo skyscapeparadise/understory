@@ -23,8 +23,67 @@ Item {
     ListModel {
         id: networksModel
     }
+    // orbitsModel rows: { circleType:string ("char"|"sound"), itemIdx:int, nodeId:int }
+    ListModel {
+        id: orbitsModel
+    }
 
     property int nextNodeId: 0
+
+    // Drag-circle state (character/sound circle dragged from list onto canvas)
+    property bool   isDraggingCircle:      false
+    property string draggingCircleType:    ""
+    property int    draggingCircleItemIdx: -1
+    property string draggingCircleLabel:   ""
+    property real   draggingCircleX:       0
+    property real   draggingCircleY:       0
+
+    // Snap animation state — plays after a circle is dropped on a node
+    property bool   snappingCircle:        false
+    property string snappingCircleType:    ""
+    property int    snappingCircleItemIdx: -1
+    property int    snappingCircleNodeId:  -1
+    property real   snappingFromX:         0   // stage coords
+    property real   snappingFromY:         0
+    property real   snappingProgress:      0.0
+    onSnappingProgressChanged: { if (snappingCircle) requestRedraw() }
+
+    NumberAnimation {
+        id: snapCircleAnim
+        target: root
+        property: "snappingProgress"
+        from: 0.0; to: 1.0
+        duration: 280
+        easing.type: Easing.OutCubic
+        onFinished: { root.snappingCircle = false; root.requestRedraw() }
+    }
+
+    // Removes orbit circles belonging to a deleted list item and shifts down higher indices.
+    function removeOrbitCirclesForItem(circleType, itemIdx) {
+        for (var i = orbitsModel.count - 1; i >= 0; i--) {
+            var o = orbitsModel.get(i)
+            if (o.circleType === circleType) {
+                if (o.itemIdx === itemIdx)
+                    orbitsModel.remove(i)
+                else if (o.itemIdx > itemIdx)
+                    orbitsModel.setProperty(i, "itemIdx", o.itemIdx - 1)
+            }
+        }
+        requestRedraw()
+    }
+
+    // Appends the circle to orbitsModel and plays the snap animation from (fromStageX, fromStageY).
+    function startSnapAnimation(fromStageX, fromStageY, circleType, itemIdx, nodeId) {
+        orbitsModel.append({ circleType: circleType, itemIdx: itemIdx, nodeId: nodeId })
+        root.snappingCircle        = true
+        root.snappingCircleType    = circleType
+        root.snappingCircleItemIdx = itemIdx
+        root.snappingCircleNodeId  = nodeId
+        root.snappingFromX         = fromStageX
+        root.snappingFromY         = fromStageY
+        root.snappingProgress      = 0.0
+        snapCircleAnim.restart()
+    }
     property real nodeRadius: 16
     property int networkId: -1
 
@@ -220,18 +279,24 @@ Item {
         var characters = []
         for (var i = 0; i < charactersModel.count; i++) {
             var c = charactersModel.get(i)
-            characters.push({ enabled: c.enabled, charName: c.charName, charRole: c.charRole })
+            characters.push({ enabled: c.enabled, charName: c.charName, charRole: c.charRole, charImagePath: c.charImagePath })
         }
         var sounds = []
         for (var i = 0; i < soundsModel.count; i++) {
             var s = soundsModel.get(i)
             sounds.push({ enabled: s.enabled, soundName: s.soundName, filePath: s.filePath })
         }
+        var orbits = []
+        for (var i = 0; i < orbitsModel.count; i++) {
+            var o = orbitsModel.get(i)
+            orbits.push({ circleType: o.circleType, itemIdx: o.itemIdx, nodeId: o.nodeId })
+        }
         return JSON.stringify({
             nodes: nodes,
             links: links,
             characters: characters,
             sounds: sounds,
+            orbits: orbits,
             zoom: root.zoom,
             panX: root.panX,
             panY: root.panY,
@@ -253,6 +318,7 @@ Item {
         linksModel.clear()
         charactersModel.clear()
         soundsModel.clear()
+        orbitsModel.clear()
 
         var nodes = data.nodes || []
         for (var i = 0; i < nodes.length; i++)
@@ -269,6 +335,10 @@ Item {
         var snds = data.sounds || []
         for (var i = 0; i < snds.length; i++)
             soundsModel.append(snds[i])
+
+        var orbs = data.orbits || []
+        for (var i = 0; i < orbs.length; i++)
+            orbitsModel.append(orbs[i])
 
         root.zoom = (data.zoom !== undefined) ? data.zoom : 1.0
         root.panX = (data.panX !== undefined) ? data.panX : 0.0
@@ -418,6 +488,13 @@ Item {
         linkingFromIndex = -1;
         cancelWobble();
 
+        // Remove any orbiting circles attached to this node
+        var deletedNodeId = nodesModel.get(idx).id
+        for (var oi = orbitsModel.count - 1; oi >= 0; oi--) {
+            if (orbitsModel.get(oi).nodeId === deletedNodeId)
+                orbitsModel.remove(oi)
+        }
+
         // First, cleanly remove all links connected to this node,
         // and shift down the indices of any nodes that come AFTER the deleted one.
         for (var i = linksModel.count - 1; i >= 0; --i) {
@@ -562,6 +639,52 @@ Item {
         requestRedraw();
     }
 
+    // Returns the index of the node closest to (sceneX, sceneY) within maxDist scene-units, or -1.
+    function findNearestNode(sceneX, sceneY, maxDist) {
+        var best = -1
+        var bestDist = maxDist
+        for (var i = 0; i < nodesModel.count; i++) {
+            var n = nodesModel.get(i)
+            var dx = sceneX - n.x
+            var dy = sceneY - n.y
+            var dist = Math.sqrt(dx * dx + dy * dy)
+            if (dist < bestDist) { bestDist = dist; best = i }
+        }
+        return best
+    }
+
+    // Returns the orbitsModel index whose drawn circle contains (stageX, stageY), or -1.
+    // Uses the same geometry as the canvas onPaint orbit drawing.
+    function findOrbitCircleAt(stageX, stageY) {
+        for (var oi = 0; oi < orbitsModel.count; oi++) {
+            var orb = orbitsModel.get(oi)
+            var nodeIdx = -1
+            for (var j = 0; j < nodesModel.count; j++) {
+                if (nodesModel.get(j).id === orb.nodeId) { nodeIdx = j; break }
+            }
+            if (nodeIdx < 0) continue
+            var nd  = nodesModel.get(nodeIdx)
+            var nx  = nd.x * root.zoom + root.panX
+            var ny  = nd.y * root.zoom + root.panY
+            var orbCount = 0, orbPos = 0
+            for (var k = 0; k < orbitsModel.count; k++) {
+                if (orbitsModel.get(k).nodeId === orb.nodeId) {
+                    if (k < oi) orbPos++
+                    orbCount++
+                }
+            }
+            var cr   = Math.max(5, 10 * root.zoom)
+            var step = cr * 2 + 2 * root.zoom
+            var cx   = nx + (orbPos - (orbCount - 1) / 2.0) * step
+            var cy   = ny + (root.nodeRadius + 3) * root.zoom + cr
+            cr = Math.max(8, 11 * root.zoom)            // widen hit radius slightly
+            var dx = stageX - cx
+            var dy = stageY - cy
+            if (dx * dx + dy * dy <= cr * cr) return oi
+        }
+        return -1
+    }
+
     //
     // Left panel
     //
@@ -638,6 +761,16 @@ Item {
         ListModel { id: soundsModel }
 
         FileDialog {
+            id: charImageFileDialog
+            title: "Select character image"
+            nameFilters: ["Image files (*.png *.jpg *.jpeg *.gif *.webp *.bmp *.svg)"]
+            onAccepted: {
+                if (leftPanel.activeDialogIndex >= 0)
+                    charactersModel.setProperty(leftPanel.activeDialogIndex, "charImagePath", selectedFile.toString())
+            }
+        }
+
+        FileDialog {
             id: soundFileDialog
             title: "Select audio file"
             nameFilters: ["Audio files (*.mp3 *.wav *.ogg *.flac *.aac *.m4a *.opus *.wma)"]
@@ -698,8 +831,10 @@ Item {
                             duration: 1200
                             easing.type: Easing.Linear
                             onFinished: {
-                                if (charDelegate.deleteProgress >= 1.0)
+                                if (charDelegate.deleteProgress >= 1.0) {
+                                    root.removeOrbitCirclesForItem("char", charDelegate.idx)
                                     charactersModel.remove(charDelegate.idx)
+                                }
                             }
                         }
 
@@ -805,7 +940,7 @@ Item {
 
                             // Role radio buttons
                             Item {
-                                Layout.fillWidth: true
+                                Layout.preferredWidth: 110
                                 Layout.preferredHeight: 26
 
                                 Row {
@@ -885,6 +1020,122 @@ Item {
                                 }
                             }
 
+                            // Image drop zone
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 26
+                                color: "black"
+                                radius: 4
+
+                                Image {
+                                    id: dropCharImg
+                                    anchors.centerIn: parent
+                                    width: 28; height: 28
+                                    source: "icons/dropimage.svg"
+                                    fillMode: Image.PreserveAspectFit
+                                    visible: false
+                                }
+                                ColorOverlay {
+                                    anchors.fill: dropCharImg
+                                    source: dropCharImg
+                                    color: "#666"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        leftPanel.activeDialogIndex = charDelegate.idx
+                                        charImageFileDialog.open()
+                                    }
+                                }
+
+                                DropArea {
+                                    anchors.fill: parent
+                                    onDropped: drop => {
+                                        if (drop.hasUrls)
+                                            charactersModel.setProperty(charDelegate.idx, "charImagePath", drop.urls[0].toString())
+                                    }
+                                }
+                            }
+
+                            // Character circle — drag onto a node to attach
+                            Item {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+
+                                property bool isBeingDragged: root.isDraggingCircle
+                                    && root.draggingCircleType === "char"
+                                    && root.draggingCircleItemIdx === charDelegate.idx
+                                property bool isAttached: {
+                                    var _ = orbitsModel.count
+                                    for (var i = 0; i < orbitsModel.count; i++) {
+                                        var o = orbitsModel.get(i)
+                                        if (o.circleType === "char" && o.itemIdx === charDelegate.idx) return true
+                                    }
+                                    return false
+                                }
+
+                                // Grey placeholder dot — always present underneath
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 14; height: 14; radius: 7
+                                    color: "#2a2a30"
+                                    border.color: "#3a3a40"
+                                    border.width: 1
+                                }
+
+                                // White circle (visual only)
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: width / 2
+                                    color: "white"
+                                    visible: !parent.isAttached && !parent.isBeingDragged
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: (model.charName || "").charAt(0).toUpperCase()
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        color: "#1a1a1d"
+                                    }
+                                }
+
+                                // MouseArea on the outer Item — never hidden, retains capture
+                                MouseArea {
+                                    anchors.fill: parent
+                                    enabled: !parent.isAttached
+                                    onPressed: mouse => {
+                                        var pos = mapToItem(root, mouse.x, mouse.y)
+                                        root.isDraggingCircle      = true
+                                        root.draggingCircleType    = "char"
+                                        root.draggingCircleItemIdx = charDelegate.idx
+                                        root.draggingCircleLabel   = (model.charName || "").charAt(0).toUpperCase()
+                                        root.draggingCircleX       = pos.x
+                                        root.draggingCircleY       = pos.y
+                                        mouse.accepted = true
+                                    }
+                                    onPositionChanged: mouse => {
+                                        if (root.isDraggingCircle) {
+                                            var pos = mapToItem(root, mouse.x, mouse.y)
+                                            root.draggingCircleX = pos.x
+                                            root.draggingCircleY = pos.y
+                                        }
+                                    }
+                                    onReleased: mouse => {
+                                        if (root.isDraggingCircle) {
+                                            var stageX  = root.draggingCircleX - stage.x
+                                            var stageY  = root.draggingCircleY - stage.y
+                                            var sceneX  = (stageX - root.panX) / root.zoom
+                                            var sceneY  = (stageY - root.panY) / root.zoom
+                                            var nearest = root.findNearestNode(sceneX, sceneY, 80)
+                                            root.isDraggingCircle = false
+                                            if (nearest >= 0)
+                                                root.startSnapAnimation(stageX, stageY, "char", charDelegate.idx, nodesModel.get(nearest).id)
+                                        }
+                                    }
+                                }
+                            }
+
                         }
                     }
                 }
@@ -923,7 +1174,7 @@ Item {
                         hoverEnabled: true
                         onEntered: parent.hovered = true
                         onExited: parent.hovered = false
-                        onClicked: charactersModel.append({ enabled: true, charName: "", charRole: "perform" })
+                        onClicked: charactersModel.append({ enabled: true, charName: "", charRole: "perform", charImagePath: "" })
                     }
                 }
             }
@@ -968,8 +1219,10 @@ Item {
                             duration: 1200
                             easing.type: Easing.Linear
                             onFinished: {
-                                if (soundDelegate.deleteProgress >= 1.0)
+                                if (soundDelegate.deleteProgress >= 1.0) {
+                                    root.removeOrbitCirclesForItem("sound", soundDelegate.idx)
                                     soundsModel.remove(soundDelegate.idx)
+                                }
                             }
                         }
 
@@ -1107,6 +1360,84 @@ Item {
                                     onDropped: drop => {
                                         if (drop.hasUrls)
                                             soundsModel.setProperty(soundDelegate.idx, "filePath", drop.urls[0].toString())
+                                    }
+                                }
+                            }
+
+                            // Sound circle — drag onto a node to attach
+                            Item {
+                                Layout.preferredWidth: 26
+                                Layout.preferredHeight: 26
+
+                                property bool isBeingDragged: root.isDraggingCircle
+                                    && root.draggingCircleType === "sound"
+                                    && root.draggingCircleItemIdx === soundDelegate.idx
+                                property bool isAttached: {
+                                    var _ = orbitsModel.count
+                                    for (var i = 0; i < orbitsModel.count; i++) {
+                                        var o = orbitsModel.get(i)
+                                        if (o.circleType === "sound" && o.itemIdx === soundDelegate.idx) return true
+                                    }
+                                    return false
+                                }
+
+                                // Grey placeholder dot
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 14; height: 14; radius: 7
+                                    color: "#2a2a30"
+                                    border.color: "#3a3a40"
+                                    border.width: 1
+                                }
+
+                                // White circle (visual only)
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: width / 2
+                                    color: "white"
+                                    visible: !parent.isAttached && !parent.isBeingDragged
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: (model.soundName || "").charAt(0).toUpperCase()
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        color: "#1a1a1d"
+                                    }
+                                }
+
+                                // MouseArea on the outer Item — never hidden, retains capture
+                                MouseArea {
+                                    anchors.fill: parent
+                                    enabled: !parent.isAttached
+                                    onPressed: mouse => {
+                                        var pos = mapToItem(root, mouse.x, mouse.y)
+                                        root.isDraggingCircle      = true
+                                        root.draggingCircleType    = "sound"
+                                        root.draggingCircleItemIdx = soundDelegate.idx
+                                        root.draggingCircleLabel   = (model.soundName || "").charAt(0).toUpperCase()
+                                        root.draggingCircleX       = pos.x
+                                        root.draggingCircleY       = pos.y
+                                        mouse.accepted = true
+                                    }
+                                    onPositionChanged: mouse => {
+                                        if (root.isDraggingCircle) {
+                                            var pos = mapToItem(root, mouse.x, mouse.y)
+                                            root.draggingCircleX = pos.x
+                                            root.draggingCircleY = pos.y
+                                        }
+                                    }
+                                    onReleased: mouse => {
+                                        if (root.isDraggingCircle) {
+                                            var stageX  = root.draggingCircleX - stage.x
+                                            var stageY  = root.draggingCircleY - stage.y
+                                            var sceneX  = (stageX - root.panX) / root.zoom
+                                            var sceneY  = (stageY - root.panY) / root.zoom
+                                            var nearest = root.findNearestNode(sceneX, sceneY, 80)
+                                            root.isDraggingCircle = false
+                                            if (nearest >= 0)
+                                                root.startSnapAnimation(stageX, stageY, "sound", soundDelegate.idx, nodesModel.get(nearest).id)
+                                        }
                                     }
                                 }
                             }
@@ -1378,6 +1709,115 @@ Item {
 
                 ctx.restore();
 
+                // draw orbit circles around nodes
+                for (var oi = 0; oi < orbitsModel.count; oi++) {
+                    var orb = orbitsModel.get(oi)
+                    // Skip the circle currently held by the user — shown as floating circle instead
+                    if (root.isDraggingCircle
+                            && orb.circleType === root.draggingCircleType
+                            && orb.itemIdx    === root.draggingCircleItemIdx) continue
+                    var onodeIdx = -1
+                    for (var oj = 0; oj < nodesModel.count; oj++) {
+                        if (nodesModel.get(oj).id === orb.nodeId) { onodeIdx = oj; break }
+                    }
+                    if (onodeIdx < 0) continue
+                    var nd  = nodesModel.get(onodeIdx)
+                    var onx = nd.x * root.zoom + root.panX
+                    var ony = nd.y * root.zoom + root.panY
+
+                    // Count siblings on same node and find this circle's slot
+                    var orbCount = 0, orbPos = 0
+                    for (var ok = 0; ok < orbitsModel.count; ok++) {
+                        if (orbitsModel.get(ok).nodeId === orb.nodeId) {
+                            if (ok < oi) orbPos++
+                            orbCount++
+                        }
+                    }
+
+                    // Also skip while snap animation is in flight (drawn separately below)
+                    if (root.snappingCircle
+                            && orb.circleType === root.snappingCircleType
+                            && orb.itemIdx    === root.snappingCircleItemIdx) continue
+
+                    var cr     = Math.max(5, 10 * root.zoom)
+                    var step   = cr * 2 + 2 * root.zoom
+                    var ocx    = onx + (orbPos - (orbCount - 1) / 2.0) * step
+                    var ocy    = ony + (root.nodeRadius + 3) * root.zoom + cr
+
+                    ctx.beginPath()
+                    ctx.arc(ocx, ocy, cr, 0, Math.PI * 2)
+                    ctx.fillStyle = "white"
+                    ctx.fill()
+
+                    var olabel = ""
+                    if (orb.circleType === "char" && orb.itemIdx < charactersModel.count)
+                        olabel = (charactersModel.get(orb.itemIdx).charName || "").charAt(0).toUpperCase()
+                    else if (orb.circleType === "sound" && orb.itemIdx < soundsModel.count)
+                        olabel = (soundsModel.get(orb.itemIdx).soundName || "").charAt(0).toUpperCase()
+
+                    if (olabel) {
+                        ctx.fillStyle = "#1a1a1d"
+                        ctx.font = "bold " + Math.max(7, Math.round(10 * root.zoom)) + "px sans-serif"
+                        ctx.textAlign = "center"
+                        ctx.textBaseline = "middle"
+                        ctx.fillText(olabel, ocx, ocy)
+                    }
+                }
+
+                // draw snap animation — circle travelling from drop point to orbit position
+                if (root.snappingCircle) {
+                    var snapOrbIdx = -1
+                    for (var si = 0; si < orbitsModel.count; si++) {
+                        var so = orbitsModel.get(si)
+                        if (so.circleType === root.snappingCircleType
+                                && so.itemIdx === root.snappingCircleItemIdx) { snapOrbIdx = si; break }
+                    }
+                    if (snapOrbIdx >= 0) {
+                        var sorb = orbitsModel.get(snapOrbIdx)
+                        var sNodeIdx = -1
+                        for (var sj = 0; sj < nodesModel.count; sj++) {
+                            if (nodesModel.get(sj).id === sorb.nodeId) { sNodeIdx = sj; break }
+                        }
+                        if (sNodeIdx >= 0) {
+                            var snd  = nodesModel.get(sNodeIdx)
+                            var snx  = snd.x * root.zoom + root.panX
+                            var sny  = snd.y * root.zoom + root.panY
+                            var sCnt = 0, sPos = 0
+                            for (var sk = 0; sk < orbitsModel.count; sk++) {
+                                if (orbitsModel.get(sk).nodeId === sorb.nodeId) {
+                                    if (sk < snapOrbIdx) sPos++
+                                    sCnt++
+                                }
+                            }
+                            var scr     = Math.max(5, 10 * root.zoom)
+                            var sStep   = scr * 2 + 2 * root.zoom
+                            var tgtX    = snx + (sPos - (sCnt - 1) / 2.0) * sStep
+                            var tgtY    = sny + (root.nodeRadius + 3) * root.zoom + scr
+                            var t       = root.snappingProgress
+                            var scx     = root.snappingFromX + (tgtX - root.snappingFromX) * t
+                            var scy     = root.snappingFromY + (tgtY - root.snappingFromY) * t
+
+                            ctx.beginPath()
+                            ctx.arc(scx, scy, scr, 0, Math.PI * 2)
+                            ctx.fillStyle = "white"
+                            ctx.fill()
+
+                            var slabel = ""
+                            if (root.snappingCircleType === "char" && root.snappingCircleItemIdx < charactersModel.count)
+                                slabel = (charactersModel.get(root.snappingCircleItemIdx).charName || "").charAt(0).toUpperCase()
+                            else if (root.snappingCircleType === "sound" && root.snappingCircleItemIdx < soundsModel.count)
+                                slabel = (soundsModel.get(root.snappingCircleItemIdx).soundName || "").charAt(0).toUpperCase()
+                            if (slabel) {
+                                ctx.fillStyle = "#1a1a1d"
+                                ctx.font = "bold " + Math.max(7, Math.round(10 * root.zoom)) + "px sans-serif"
+                                ctx.textAlign = "center"
+                                ctx.textBaseline = "middle"
+                                ctx.fillText(slabel, scx, scy)
+                            }
+                        }
+                    }
+                }
+
                 // draw magenta dashed temp link
                 if (root.linking && root.linkingFromIndex >= 0 && root.linkingFromIndex < nodesModel.count) {
                     var fromNode = nodesModel.get(root.linkingFromIndex);
@@ -1422,6 +1862,78 @@ Item {
                 }
                 onEndLinkDrag: (sceneX, sceneY) => {
                     root.endLink(sceneX, sceneY);
+                }
+            }
+        }
+
+        // LAYER 3: orbit circle drag — must be above nodes (z:2) so it gets first pick,
+        // but sets mouse.accepted = false for non-orbit presses so NodeItems still work.
+        // IMPORTANT: we do NOT mutate orbitsModel during onPressed — doing so disrupts
+        // the mouse grab. We record the index and defer the remove/append to onReleased.
+        MouseArea {
+            anchors.fill: parent
+            z: 3
+            acceptedButtons: Qt.LeftButton
+            property bool draggingFromCanvas: false
+            property int  draggingOrbitIdx:   -1
+
+            onPressed: mouse => {
+                var hitIdx = root.findOrbitCircleAt(mouse.x, mouse.y)
+                if (hitIdx < 0) { mouse.accepted = false; return }
+
+                var orb   = orbitsModel.get(hitIdx)
+                var label = ""
+                if (orb.circleType === "char" && orb.itemIdx < charactersModel.count)
+                    label = (charactersModel.get(orb.itemIdx).charName || "").charAt(0).toUpperCase()
+                else if (orb.circleType === "sound" && orb.itemIdx < soundsModel.count)
+                    label = (soundsModel.get(orb.itemIdx).soundName || "").charAt(0).toUpperCase()
+
+                // Record orbit; canvas onPaint will skip drawing it so the floating circle
+                // takes over visually. orbitsModel is NOT mutated here.
+                draggingOrbitIdx           = hitIdx
+                draggingFromCanvas         = true
+
+                var pos = mapToItem(root, mouse.x, mouse.y)
+                root.isDraggingCircle      = true
+                root.draggingCircleType    = orb.circleType
+                root.draggingCircleItemIdx = orb.itemIdx
+                root.draggingCircleLabel   = label
+                root.draggingCircleX       = pos.x
+                root.draggingCircleY       = pos.y
+                root.requestRedraw()
+                mouse.accepted             = true
+            }
+
+            onPositionChanged: mouse => {
+                if (draggingFromCanvas) {
+                    var pos = mapToItem(root, mouse.x, mouse.y)
+                    root.draggingCircleX = pos.x
+                    root.draggingCircleY = pos.y
+                }
+            }
+
+            onReleased: mouse => {
+                if (draggingFromCanvas) {
+                    // Now it's safe to mutate the model
+                    var idx = draggingOrbitIdx
+                    if (idx >= 0 && idx < orbitsModel.count) {
+                        var ct  = orbitsModel.get(idx).circleType
+                        var ii  = orbitsModel.get(idx).itemIdx
+                        orbitsModel.remove(idx)
+                        var sceneX  = (mouse.x - root.panX) / root.zoom
+                        var sceneY  = (mouse.y - root.panY) / root.zoom
+                        var nearest = root.findNearestNode(sceneX, sceneY, 80)
+                        root.isDraggingCircle = false
+                        if (nearest >= 0) {
+                            root.startSnapAnimation(mouse.x, mouse.y, ct, ii, nodesModel.get(nearest).id)
+                        } else {
+                            root.requestRedraw()
+                        }
+                    } else {
+                        root.isDraggingCircle = false
+                    }
+                    draggingFromCanvas = false
+                    draggingOrbitIdx   = -1
                 }
             }
         }
@@ -2047,6 +2559,25 @@ Item {
                     onClicked: root.createNewNetwork()
                 }
             }
+        }
+    }
+
+    // ── Floating character/sound circle (root-level, escapes leftPanel clip) ──
+    Rectangle {
+        id: floatingCircle
+        visible: root.isDraggingCircle
+        x: root.draggingCircleX - width / 2
+        y: root.draggingCircleY - height / 2
+        width: 22; height: 22; radius: 11
+        color: "white"
+        z: 200
+
+        Text {
+            anchors.centerIn: parent
+            text: root.draggingCircleLabel
+            font.pixelSize: 10
+            font.bold: true
+            color: "#1a1a1d"
         }
     }
 
