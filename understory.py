@@ -127,6 +127,7 @@ class StoryManager(QObject):
     """Owns the SQLite connection for the currently-open .story file."""
 
     storyChanged = Signal()
+    storyOpened = Signal()  # fires only on open/new, not on metadata updates
 
     def __init__(self):
         super().__init__()
@@ -215,6 +216,7 @@ class StoryManager(QObject):
             self._title = ""
             self._add_recent(path, self.storyTitle)
             self.storyChanged.emit()
+            self.storyOpened.emit()
             return True
         except Exception as e:
             print(f"StoryManager.newStory: {e}")
@@ -231,6 +233,29 @@ class StoryManager(QObject):
             if "thumbnail" not in cols:
                 conn.execute("ALTER TABLE scenes ADD COLUMN thumbnail BLOB")
                 conn.commit()
+            # migrate: create networks table if missing (older .story files)
+            tables = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()}
+            if "networks" not in tables:
+                conn.executescript(
+                    "CREATE TABLE networks ("
+                    "    id INTEGER PRIMARY KEY,"
+                    "    name TEXT NOT NULL,"
+                    "    color TEXT NOT NULL DEFAULT '#2e2e33',"
+                    "    description TEXT,"
+                    "    meta TEXT"
+                    ");"
+                )
+                conn.commit()
+            else:
+                # migrate: add color column if missing (stories created before this feature)
+                net_cols = {r[1] for r in conn.execute("PRAGMA table_info(networks)").fetchall()}
+                if "color" not in net_cols:
+                    conn.execute(
+                        "ALTER TABLE networks ADD COLUMN color TEXT NOT NULL DEFAULT '#2e2e33'"
+                    )
+                    conn.commit()
             row = conn.execute("SELECT title FROM story WHERE id = 1").fetchone()
             self._conn = conn
             self._path = path
@@ -240,6 +265,7 @@ class StoryManager(QObject):
             self._title = "" if stored in ("", "new story") else stored
             self._add_recent(path, self.storyTitle)
             self.storyChanged.emit()
+            self.storyOpened.emit()
             return True
         except Exception as e:
             print(f"StoryManager.openStory: {e}")
@@ -469,6 +495,123 @@ class StoryManager(QObject):
         except Exception as e:
             print(f"StoryManager.hasThumbnail: {e}")
             return False
+
+    # ------------------------------------------------------------------ network slots
+
+    @Slot(result=int)
+    def ensureDefaultNetwork(self):
+        """Returns the id of the first network, creating a default one if none exists."""
+        if not self._conn:
+            return -1
+        try:
+            row = self._conn.execute(
+                "SELECT id FROM networks ORDER BY id LIMIT 1"
+            ).fetchone()
+            if row:
+                return row[0]
+            cur = self._conn.execute(
+                "INSERT INTO networks (name) VALUES (?)", ("",)
+            )
+            self._conn.commit()
+            return cur.lastrowid
+        except Exception as e:
+            print(f"StoryManager.ensureDefaultNetwork: {e}")
+            return -1
+
+    @Slot(result="QVariantList")
+    def getNetworks(self):
+        """Returns list of {id, name, color} for all networks in the story."""
+        if not self._conn:
+            return []
+        try:
+            rows = self._conn.execute(
+                "SELECT id, name, COALESCE(color, '#2e2e33') FROM networks ORDER BY id"
+            ).fetchall()
+            return [{"id": r[0], "name": r[1], "color": r[2]} for r in rows]
+        except Exception as e:
+            print(f"StoryManager.getNetworks: {e}")
+            return []
+
+    @Slot(int, result=str)
+    def loadNetworkData(self, network_id):
+        """Returns JSON blob stored in networks.meta for the given network."""
+        if not self._conn:
+            return "{}"
+        try:
+            row = self._conn.execute(
+                "SELECT meta FROM networks WHERE id = ?", (network_id,)
+            ).fetchone()
+            if row and row[0]:
+                return row[0]
+            return "{}"
+        except Exception as e:
+            print(f"StoryManager.loadNetworkData: {e}")
+            return "{}"
+
+    @Slot(int, str)
+    def saveNetworkData(self, network_id, json_str):
+        """Writes and commits the JSON state blob for a network."""
+        if not self._conn:
+            return
+        try:
+            self._conn.execute(
+                "UPDATE networks SET meta = ? WHERE id = ?", (json_str, network_id)
+            )
+            self._conn.commit()
+        except Exception as e:
+            print(f"StoryManager.saveNetworkData: {e}")
+
+    @Slot(str, result=int)
+    def createNetwork(self, name):
+        """Creates a new named network and returns its id."""
+        if not self._conn:
+            return -1
+        try:
+            cur = self._conn.execute(
+                "INSERT INTO networks (name) VALUES (?)", (name,)
+            )
+            self._conn.commit()
+            return cur.lastrowid
+        except Exception as e:
+            print(f"StoryManager.createNetwork: {e}")
+            return -1
+
+    @Slot(int, str)
+    def renameNetwork(self, network_id, name):
+        """Rename a network."""
+        if not self._conn:
+            return
+        try:
+            self._conn.execute(
+                "UPDATE networks SET name = ? WHERE id = ?", (name, network_id)
+            )
+            self._conn.commit()
+        except Exception as e:
+            print(f"StoryManager.renameNetwork: {e}")
+
+    @Slot(int, str)
+    def saveNetworkColor(self, network_id, color):
+        """Persist the display color for a network."""
+        if not self._conn:
+            return
+        try:
+            self._conn.execute(
+                "UPDATE networks SET color = ? WHERE id = ?", (color, network_id)
+            )
+            self._conn.commit()
+        except Exception as e:
+            print(f"StoryManager.saveNetworkColor: {e}")
+
+    @Slot(int)
+    def deleteNetwork(self, network_id):
+        """Delete a network and all its stored data."""
+        if not self._conn:
+            return
+        try:
+            self._conn.execute("DELETE FROM networks WHERE id = ?", (network_id,))
+            self._conn.commit()
+        except Exception as e:
+            print(f"StoryManager.deleteNetwork: {e}")
 
 
 app = QGuiApplication(sys.argv)

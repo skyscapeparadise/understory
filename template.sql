@@ -146,6 +146,7 @@ CREATE TABLE links (
 CREATE TABLE networks (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#2e2e33',
     description TEXT,
     meta TEXT
 );

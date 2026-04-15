@@ -52,7 +52,10 @@ Window {
                 text: "Save Story"
                 shortcut: StandardKey.Save
                 enabled: storyManager.isOpen
-                onTriggered: storyManager.saveStory()
+                onTriggered: {
+                    nodeWorkspace.saveToDb()
+                    storyManager.saveStory()
+                }
             }
             Platform.MenuItem {
                 text: "Save Story As…"
@@ -5628,6 +5631,7 @@ Window {
                                                     storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
                                                     storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
                                                 }
+                                                nodeWorkspace.saveToDb();
                                                 mainWindow.currentSceneId = newId;
                                                 viewport.clearForNewScene();
                                                 sceneNameInput.text = "new scene";
@@ -5640,6 +5644,7 @@ Window {
                                                     viewport.captureAndSaveThumbnail(mainWindow.currentSceneId, function() {
                                                         storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
                                                         storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
+                                                        nodeWorkspace.saveToDb();
                                                         mainWindow.currentSceneId = targetId;
                                                         viewport.loadSceneIntoViewport(targetId);
                                                         sceneNameInput.text = storyManager.getSceneName(targetId);
@@ -5970,6 +5975,7 @@ Window {
                                             storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
                                             storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
                                         }
+                                        nodeWorkspace.saveToDb();
                                         if (sceneEditorButtons.timelineOpen) {
                                             sceneEditorButtons.timelineOpen = false;
                                             yanimationduration = 1000;
@@ -9388,6 +9394,7 @@ Window {
                         storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
                         storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
                     }
+                    nodeWorkspace.saveToDb();
                     if (sceneEditorButtons.timelineOpen) {
                         sceneEditorButtons.timelineOpen = false;
                         yanimationduration = 1000;

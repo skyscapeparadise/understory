@@ -19,9 +19,14 @@ Item {
     ListModel {
         id: linksModel
     }
+    // networksModel rows: { netId:int, netName:string, netColor:string }
+    ListModel {
+        id: networksModel
+    }
 
     property int nextNodeId: 0
     property real nodeRadius: 16
+    property int networkId: -1
 
     // Zoom and Pan state
     property real zoom: 1.0
@@ -185,6 +190,168 @@ Item {
             }
         }
     }
+
+    // ------------------------------------------------------------------ persistence
+
+    Connections {
+        target: storyManager
+        function onStoryOpened() {
+            var netId = storyManager.ensureDefaultNetwork()
+            var nets = storyManager.getNetworks()
+            networksModel.clear()
+            for (var i = 0; i < nets.length; i++)
+                networksModel.append({ netId: nets[i].id, netName: nets[i].name, netColor: nets[i].color })
+            root.networkId = netId
+            root.loadFromDb(netId)
+        }
+    }
+
+    function collectNetworkData() {
+        var nodes = []
+        for (var i = 0; i < nodesModel.count; i++) {
+            var n = nodesModel.get(i)
+            nodes.push({ id: n.id, x: n.x, y: n.y, name: n.name, nodeColor: n.nodeColor })
+        }
+        var links = []
+        for (var i = 0; i < linksModel.count; i++) {
+            var l = linksModel.get(i)
+            links.push({ a: l.a, b: l.b })
+        }
+        var characters = []
+        for (var i = 0; i < charactersModel.count; i++) {
+            var c = charactersModel.get(i)
+            characters.push({ enabled: c.enabled, charName: c.charName, charRole: c.charRole })
+        }
+        var sounds = []
+        for (var i = 0; i < soundsModel.count; i++) {
+            var s = soundsModel.get(i)
+            sounds.push({ enabled: s.enabled, soundName: s.soundName, filePath: s.filePath })
+        }
+        return JSON.stringify({
+            nodes: nodes,
+            links: links,
+            characters: characters,
+            sounds: sounds,
+            zoom: root.zoom,
+            panX: root.panX,
+            panY: root.panY,
+            nextNodeId: root.nextNodeId
+        })
+    }
+
+    function saveToDb() {
+        if (root.networkId !== -1)
+            storyManager.saveNetworkData(root.networkId, root.collectNetworkData())
+    }
+
+    function loadFromDb(netId) {
+        var raw = storyManager.loadNetworkData(netId)
+        var data
+        try { data = JSON.parse(raw) } catch(e) { data = {} }
+
+        nodesModel.clear()
+        linksModel.clear()
+        charactersModel.clear()
+        soundsModel.clear()
+
+        var nodes = data.nodes || []
+        for (var i = 0; i < nodes.length; i++)
+            nodesModel.append(nodes[i])
+
+        var links = data.links || []
+        for (var i = 0; i < links.length; i++)
+            linksModel.append(links[i])
+
+        var chars = data.characters || []
+        for (var i = 0; i < chars.length; i++)
+            charactersModel.append(chars[i])
+
+        var snds = data.sounds || []
+        for (var i = 0; i < snds.length; i++)
+            soundsModel.append(snds[i])
+
+        root.zoom = (data.zoom !== undefined) ? data.zoom : 1.0
+        root.panX = (data.panX !== undefined) ? data.panX : 0.0
+        root.panY = (data.panY !== undefined) ? data.panY : 0.0
+        root.nextNodeId = (data.nextNodeId !== undefined) ? data.nextNodeId : 0
+
+        root.requestRedraw()
+    }
+
+    function switchToNetwork(newNetId) {
+        if (newNetId === root.networkId) return
+        root.saveToDb()
+        root.networkId = newNetId
+        root.loadFromDb(newNetId)
+    }
+
+    function renameActiveNetworkInModel(name) {
+        if (root.networkId === -1) return
+        storyManager.renameNetwork(root.networkId, name)
+        for (var i = 0; i < networksModel.count; i++) {
+            if (networksModel.get(i).netId === root.networkId) {
+                networksModel.setProperty(i, "netName", name)
+                break
+            }
+        }
+    }
+
+    function changeActiveNetworkColor(color) {
+        if (root.networkId === -1) return
+        storyManager.saveNetworkColor(root.networkId, color)
+        for (var i = 0; i < networksModel.count; i++) {
+            if (networksModel.get(i).netId === root.networkId) {
+                networksModel.setProperty(i, "netColor", color)
+                break
+            }
+        }
+    }
+
+    function deleteOrClearNetwork(netId, idx) {
+        if (idx === 0) {
+            // Index 0 is never deleted — just cleared back to blank state
+            storyManager.renameNetwork(netId, "")
+            storyManager.saveNetworkColor(netId, "#2e2e33")
+            storyManager.saveNetworkData(netId, "{}")
+            networksModel.setProperty(0, "netName", "")
+            networksModel.setProperty(0, "netColor", "#2e2e33")
+            if (root.networkId === netId) {
+                nodesModel.clear(); linksModel.clear()
+                charactersModel.clear(); soundsModel.clear()
+                root.zoom = 1.0; root.panX = 0.0; root.panY = 0.0; root.nextNodeId = 0
+                root.requestRedraw()
+            }
+        } else {
+            var wasActive  = (root.networkId === netId)
+            var fallbackId = networksModel.get(0).netId
+            storyManager.deleteNetwork(netId)
+            networksModel.remove(idx)
+            if (wasActive) {
+                root.networkId = fallbackId
+                root.loadFromDb(fallbackId)
+            }
+        }
+    }
+
+    function createNewNetwork() {
+        root.saveToDb()
+        var newId = storyManager.createNetwork("")
+        if (newId !== -1) {
+            networksModel.append({ netId: newId, netName: "", netColor: "#2e2e33" })
+            root.networkId = newId
+            nodesModel.clear()
+            linksModel.clear()
+            charactersModel.clear()
+            soundsModel.clear()
+            root.zoom = 1.0
+            root.panX = 0.0
+            root.panY = 0.0
+            root.nextNodeId = 0
+            root.requestRedraw()
+        }
+    }
+
+    // ------------------------------------------------------------------
 
     function requestRedraw() {
         canvas.requestPaint();
@@ -1559,6 +1726,309 @@ Item {
                             // previous and next are dummy buttons — no action yet
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ Network switcher bar
+    //
+    // Lives at root level (not inside stage) so its color-ring Canvas can
+    // overflow without being clipped by stage's clip:true.
+    //
+    // Normally sits flush with the showAll button (8px from top, 8px from
+    // the left-panel edge).  When a network button enters edit mode the
+    // whole bar floats: 20px down (ring clears the NodeWorkspace top edge)
+    // and 12px right (ring clears the left-panel right edge), then slides
+    // back when editing ends.
+    //
+    Item {
+        id: networkBar
+
+        // Float from rest position (8,8) to editing position (20,28)
+        property bool anyEditing: false
+        x: anyEditing ? leftPanel.width + 20 : leftPanel.width + 8
+        y: anyEditing ? 28 : 8
+        z: 20
+
+        Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+        Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+
+        Row {
+            id: networkBtnRow
+            spacing: 4
+
+            Repeater {
+                id: networkBtnRepeater
+                model: networksModel
+
+                delegate: Item {
+                    id: netBtn
+
+                    property bool isActive:  model.netId === root.networkId
+                    property bool editMode:  false
+                    property bool isEditing: isActive && editMode
+                    property bool isHovered: false
+
+                    // Float the whole bar when this button enters edit mode
+                    onEditModeChanged: networkBar.anyEditing = editMode
+
+                    // Raise above the "+" button so the ring canvas renders in front of it
+                    z: isEditing ? 1 : 0
+
+                    // ── Computed style helpers ───────────────────────────────────
+                    // Active with default dark color → show white fill (like tool palette).
+                    // Active with custom color → show that color.
+                    // Inactive → transparent.
+                    property string fillColor: {
+                        if (!isActive) return "transparent"
+                        return model.netColor !== "#2e2e33" ? model.netColor : "white"
+                    }
+                    // Content (icon / text) color derived from actual fill luminance.
+                    property string contentColor: {
+                        if (!isActive) return model.netColor !== "#2e2e33" ? model.netColor : "white"
+                        var fill = model.netColor !== "#2e2e33" ? model.netColor : "white"
+                        var c = Qt.color(fill)
+                        var lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+                        return lum > 0.5 ? "#1a1a1d" : "white"
+                    }
+
+                    // ── Right-click-hold delete ──────────────────────────────────
+                    property real deleteProgress: 0.0
+
+                    NumberAnimation {
+                        id: deleteAnim
+                        target: netBtn
+                        property: "deleteProgress"
+                        to: 1.0
+                        duration: 1200
+                        easing.type: Easing.Linear
+                        onFinished: {
+                            if (netBtn.deleteProgress >= 1.0)
+                                root.deleteOrClearNetwork(model.netId, index)
+                        }
+                    }
+
+                    // ── Size helpers ─────────────────────────────────────────────
+                    Text {
+                        id: netNameMeasure
+                        visible: false
+                        text: model.netName
+                        font.pixelSize: 12
+                    }
+
+                    property real labelW: Math.max(36, netNameMeasure.contentWidth + 24)
+
+                    width:  isEditing ? Math.max(80, labelW) : (model.netName !== "" ? labelW : 36)
+                    height: 36
+
+                    Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+
+                    // ── Color wheel ring ─────────────────────────────────────────
+                    Canvas {
+                        id: netColorRing
+                        x: -20; y: -20
+                        width:  netBtn.width  + 40
+                        height: netBtn.height + 40
+                        z: -1
+                        opacity: netBtn.isEditing ? 1.0 : 0.0
+                        Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+                        onWidthChanged:  requestPaint()
+                        onHeightChanged: requestPaint()
+
+                        onPaint: {
+                            var ctx = getContext("2d"); ctx.reset()
+                            var cw = width, ch = height
+                            ctx.beginPath()
+                            var rOut = ch / 2
+                            ctx.moveTo(rOut, 0); ctx.lineTo(cw - rOut, 0)
+                            ctx.arc(cw - rOut, rOut, rOut, -Math.PI / 2, 0)
+                            ctx.lineTo(cw, ch - rOut)
+                            ctx.arc(cw - rOut, ch - rOut, rOut, 0, Math.PI / 2)
+                            ctx.lineTo(rOut, ch)
+                            ctx.arc(rOut, ch - rOut, rOut, Math.PI / 2, Math.PI)
+                            ctx.lineTo(0, rOut)
+                            ctx.arc(rOut, rOut, rOut, Math.PI, -Math.PI / 2)
+                            var ix = 16, iy = 16
+                            var iw = cw - 32, ih = ch - 32, rIn = ih / 2
+                            ctx.moveTo(ix + rIn, iy)
+                            ctx.arc(ix + rIn, iy + rIn, rIn, -Math.PI / 2, Math.PI, true)
+                            ctx.lineTo(ix, iy + ih - rIn)
+                            ctx.arc(ix + rIn, iy + ih - rIn, rIn, Math.PI, Math.PI / 2, true)
+                            ctx.lineTo(ix + iw - rIn, iy + ih)
+                            ctx.arc(ix + iw - rIn, iy + ih - rIn, rIn, Math.PI / 2, 0, true)
+                            ctx.lineTo(ix + iw, iy + rIn)
+                            ctx.arc(ix + iw - rIn, iy + rIn, rIn, 0, -Math.PI / 2, true)
+                            ctx.closePath(); ctx.clip()
+                            var cx = cw / 2, cy = ch / 2, maxR = Math.max(cw, ch)
+                            ctx.translate(cx, cy)
+                            for (var i = 0; i < 360; i += 3) {
+                                ctx.beginPath(); ctx.moveTo(0, 0)
+                                ctx.lineTo(maxR * Math.cos(i * Math.PI / 180),
+                                           maxR * Math.sin(i * Math.PI / 180))
+                                ctx.lineTo(maxR * Math.cos((i + 3.5) * Math.PI / 180),
+                                           maxR * Math.sin((i + 3.5) * Math.PI / 180))
+                                ctx.closePath()
+                                ctx.fillStyle = "hsl(" + i + ", 100%, 50%)"
+                                ctx.fill()
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: netBtn.isEditing
+                            acceptedButtons: Qt.LeftButton
+                            onClicked: mouse => {
+                                var cx = width / 2, cy = height / 2
+                                var angle = Math.atan2(mouse.y - cy, mouse.x - cx) * 180 / Math.PI
+                                if (angle < 0) angle += 360
+                                root.changeActiveNetworkColor(
+                                    Qt.hsla(angle / 360.0, 1.0, 0.5, 1.0).toString())
+                            }
+                        }
+                    }
+
+                    // ── Button background ────────────────────────────────────────
+                    Rectangle {
+                        id: netBtnBg
+                        anchors.fill: parent
+                        radius: 12
+                        color: netBtn.fillColor
+                        // Border bleeds toward red as deleteProgress increases
+                        border.width: 2
+                        border.color: netBtn.deleteProgress > 0
+                            ? Qt.rgba(1, 1 - netBtn.deleteProgress, 1 - netBtn.deleteProgress, 1)
+                            : (netBtn.isHovered ? "#80cfff" : "white")
+                        Behavior on color        { ColorAnimation { duration: 150 } }
+                        Behavior on border.color { ColorAnimation { duration: 80  } }
+                    }
+
+                    // ── Delete-progress red overlay ──────────────────────────────
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 12
+                        color: "#ff4444"
+                        opacity: netBtn.deleteProgress * 0.75
+                        visible: netBtn.deleteProgress > 0
+                    }
+
+                    // ── Icon (unnamed, not editing) ──────────────────────────────
+                    Image {
+                        id: netIcon
+                        anchors.centerIn: parent
+                        width: 22; height: 22
+                        fillMode: Image.PreserveAspectFit
+                        source: "icons/nodenetwork.svg"
+                        visible: false
+                    }
+                    ColorOverlay {
+                        anchors.fill: netIcon
+                        source: netIcon
+                        visible: model.netName === "" && !netBtn.isEditing
+                        color: netBtn.contentColor
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    // ── Name label (named, not editing) ─────────────────────────
+                    Text {
+                        id: netNameLabel
+                        anchors.centerIn: parent
+                        text: model.netName
+                        font.pixelSize: 12
+                        visible: model.netName !== "" && !netBtn.isEditing
+                        color: netBtn.contentColor
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    // ── Name text input (editing) ────────────────────────────────
+                    TextInput {
+                        id: netNameEdit
+                        anchors.centerIn: parent
+                        text: model.netName
+                        font.pixelSize: 12
+                        color: netBtn.contentColor
+                        visible: netBtn.isEditing
+                        enabled: netBtn.isEditing
+                        selectByMouse: true
+                        horizontalAlignment: TextInput.AlignHCenter
+                        Keys.onReturnPressed: focus = false
+                        Keys.onEscapePressed: { netBtn.editMode = false; focus = false }
+                        onEditingFinished: {
+                            root.renameActiveNetworkInModel(text)
+                            netBtn.editMode = false
+                        }
+                    }
+
+                    // ── Interaction ──────────────────────────────────────────────
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onEntered: netBtn.isHovered = true
+                        onExited: {
+                            netBtn.isHovered = false
+                            // Cancel any in-progress delete if cursor leaves
+                            deleteAnim.stop()
+                            netBtn.deleteProgress = 0
+                        }
+                        onPressed: mouse => {
+                            if (mouse.button === Qt.RightButton) {
+                                netBtn.deleteProgress = 0
+                                deleteAnim.start()
+                                mouse.accepted = true
+                            }
+                        }
+                        onReleased: mouse => {
+                            if (mouse.button === Qt.RightButton) {
+                                deleteAnim.stop()
+                                netBtn.deleteProgress = 0
+                            }
+                        }
+                        onClicked: mouse => {
+                            if (mouse.button === Qt.LeftButton && !netBtn.isActive)
+                                root.switchToNetwork(model.netId)
+                        }
+                        onDoubleClicked: mouse => {
+                            if (mouse.button === Qt.LeftButton
+                                    && netBtn.isActive && !netBtn.editMode) {
+                                netBtn.editMode = true
+                                netNameEdit.forceActiveFocus()
+                                netNameEdit.selectAll()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── "+" button — add a new node network ──────────────────────────
+            Item {
+                id: addNetworkBtn
+                width: 36; height: 36
+                property bool isHovered: false
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 12
+                    color: "transparent"
+                    border.width: 2
+                    border.color: addNetworkBtn.isHovered ? "#80cfff" : "white"
+                    Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                    Text {
+                        anchors.centerIn: parent
+                        anchors.verticalCenterOffset: -1
+                        text: "+"
+                        font.pixelSize: 20
+                        color: "white"
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: addNetworkBtn.isHovered = true
+                    onExited:  addNetworkBtn.isHovered = false
+                    onClicked: root.createNewNetwork()
                 }
             }
         }
