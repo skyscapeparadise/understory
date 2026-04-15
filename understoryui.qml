@@ -6013,7 +6013,6 @@ Window {
                                         nodeWorkspace.saveToDb();
                                         if (savedSceneId !== -1)
                                             storyManager.setEditorState("scene_" + savedSceneId + "_timeline_open", sceneEditorButtons.timelineOpen ? "1" : "0");
-                                        viewportFadeInAnim.start();
                                         if (sceneEditorButtons.timelineOpen) {
                                             sceneEditorButtons.timelineOpen = false;
                                             yanimationduration = 1000;
@@ -6021,6 +6020,7 @@ Window {
                                             mainWindow.y = mainWindow.y + 150;
                                             closeSceneTimer.start();
                                         } else {
+                                            viewportFadeInAnim.start();
                                             xanimationduration = 1000;
                                             mainWindow.width = 960;
                                             mainWindow.x = sceneEditorEntryX;
@@ -9283,6 +9283,7 @@ Window {
         interval: 1000
         repeat: false
         onTriggered: {
+            viewportFadeInAnim.start();
             xanimationduration = 1000;
             mainWindow.width = 960;
             mainWindow.x = sceneEditorEntryX;
@@ -9436,7 +9437,6 @@ Window {
                     nodeWorkspace.saveToDb();
                     if (savedSceneId !== -1)
                         storyManager.setEditorState("scene_" + savedSceneId + "_timeline_open", sceneEditorButtons.timelineOpen ? "1" : "0");
-                    viewportFadeInAnim.start();
                     if (sceneEditorButtons.timelineOpen) {
                         sceneEditorButtons.timelineOpen = false;
                         yanimationduration = 1000;
@@ -9444,6 +9444,7 @@ Window {
                         mainWindow.y = mainWindow.y + 150;
                         closeSceneTimer.start();
                     } else {
+                        viewportFadeInAnim.start();
                         xanimationduration = 1000;
                         mainWindow.width = 960;
                         mainWindow.x = sceneEditorEntryX;
