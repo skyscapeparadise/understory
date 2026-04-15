@@ -35,6 +35,7 @@ Item {
     property string draggingCircleType:    ""
     property int    draggingCircleItemIdx: -1
     property string draggingCircleLabel:   ""
+    property string draggingCircleImage:   ""
     property real   draggingCircleX:       0
     property real   draggingCircleY:       0
 
@@ -1086,10 +1087,27 @@ Item {
 
                                 // White circle (visual only)
                                 Rectangle {
+                                    id: charListCircle
                                     anchors.fill: parent
                                     radius: width / 2
                                     color: "white"
                                     visible: !parent.isAttached && !parent.isBeingDragged
+                                    clip: true
+                                    layer.enabled: true
+                                    layer.effect: OpacityMask {
+                                        maskSource: Rectangle {
+                                            width: charListCircle.width
+                                            height: charListCircle.height
+                                            radius: charListCircle.radius
+                                        }
+                                    }
+
+                                    Image {
+                                        anchors.fill: parent
+                                        source: model.charImagePath || ""
+                                        fillMode: Image.PreserveAspectCrop
+                                        visible: !!model.charImagePath
+                                    }
 
                                     Text {
                                         anchors.centerIn: parent
@@ -1097,6 +1115,7 @@ Item {
                                         font.pixelSize: 10
                                         font.bold: true
                                         color: "#1a1a1d"
+                                        visible: !model.charImagePath
                                     }
                                 }
 
@@ -1110,6 +1129,7 @@ Item {
                                         root.draggingCircleType    = "char"
                                         root.draggingCircleItemIdx = charDelegate.idx
                                         root.draggingCircleLabel   = (model.charName || "").charAt(0).toUpperCase()
+                                        root.draggingCircleImage   = model.charImagePath || ""
                                         root.draggingCircleX       = pos.x
                                         root.draggingCircleY       = pos.y
                                         mouse.accepted = true
@@ -1709,115 +1729,6 @@ Item {
 
                 ctx.restore();
 
-                // draw orbit circles around nodes
-                for (var oi = 0; oi < orbitsModel.count; oi++) {
-                    var orb = orbitsModel.get(oi)
-                    // Skip the circle currently held by the user — shown as floating circle instead
-                    if (root.isDraggingCircle
-                            && orb.circleType === root.draggingCircleType
-                            && orb.itemIdx    === root.draggingCircleItemIdx) continue
-                    var onodeIdx = -1
-                    for (var oj = 0; oj < nodesModel.count; oj++) {
-                        if (nodesModel.get(oj).id === orb.nodeId) { onodeIdx = oj; break }
-                    }
-                    if (onodeIdx < 0) continue
-                    var nd  = nodesModel.get(onodeIdx)
-                    var onx = nd.x * root.zoom + root.panX
-                    var ony = nd.y * root.zoom + root.panY
-
-                    // Count siblings on same node and find this circle's slot
-                    var orbCount = 0, orbPos = 0
-                    for (var ok = 0; ok < orbitsModel.count; ok++) {
-                        if (orbitsModel.get(ok).nodeId === orb.nodeId) {
-                            if (ok < oi) orbPos++
-                            orbCount++
-                        }
-                    }
-
-                    // Also skip while snap animation is in flight (drawn separately below)
-                    if (root.snappingCircle
-                            && orb.circleType === root.snappingCircleType
-                            && orb.itemIdx    === root.snappingCircleItemIdx) continue
-
-                    var cr     = Math.max(5, 10 * root.zoom)
-                    var step   = cr * 2 + 2 * root.zoom
-                    var ocx    = onx + (orbPos - (orbCount - 1) / 2.0) * step
-                    var ocy    = ony + (root.nodeRadius + 3) * root.zoom + cr
-
-                    ctx.beginPath()
-                    ctx.arc(ocx, ocy, cr, 0, Math.PI * 2)
-                    ctx.fillStyle = "white"
-                    ctx.fill()
-
-                    var olabel = ""
-                    if (orb.circleType === "char" && orb.itemIdx < charactersModel.count)
-                        olabel = (charactersModel.get(orb.itemIdx).charName || "").charAt(0).toUpperCase()
-                    else if (orb.circleType === "sound" && orb.itemIdx < soundsModel.count)
-                        olabel = (soundsModel.get(orb.itemIdx).soundName || "").charAt(0).toUpperCase()
-
-                    if (olabel) {
-                        ctx.fillStyle = "#1a1a1d"
-                        ctx.font = "bold " + Math.max(7, Math.round(10 * root.zoom)) + "px sans-serif"
-                        ctx.textAlign = "center"
-                        ctx.textBaseline = "middle"
-                        ctx.fillText(olabel, ocx, ocy)
-                    }
-                }
-
-                // draw snap animation — circle travelling from drop point to orbit position
-                if (root.snappingCircle) {
-                    var snapOrbIdx = -1
-                    for (var si = 0; si < orbitsModel.count; si++) {
-                        var so = orbitsModel.get(si)
-                        if (so.circleType === root.snappingCircleType
-                                && so.itemIdx === root.snappingCircleItemIdx) { snapOrbIdx = si; break }
-                    }
-                    if (snapOrbIdx >= 0) {
-                        var sorb = orbitsModel.get(snapOrbIdx)
-                        var sNodeIdx = -1
-                        for (var sj = 0; sj < nodesModel.count; sj++) {
-                            if (nodesModel.get(sj).id === sorb.nodeId) { sNodeIdx = sj; break }
-                        }
-                        if (sNodeIdx >= 0) {
-                            var snd  = nodesModel.get(sNodeIdx)
-                            var snx  = snd.x * root.zoom + root.panX
-                            var sny  = snd.y * root.zoom + root.panY
-                            var sCnt = 0, sPos = 0
-                            for (var sk = 0; sk < orbitsModel.count; sk++) {
-                                if (orbitsModel.get(sk).nodeId === sorb.nodeId) {
-                                    if (sk < snapOrbIdx) sPos++
-                                    sCnt++
-                                }
-                            }
-                            var scr     = Math.max(5, 10 * root.zoom)
-                            var sStep   = scr * 2 + 2 * root.zoom
-                            var tgtX    = snx + (sPos - (sCnt - 1) / 2.0) * sStep
-                            var tgtY    = sny + (root.nodeRadius + 3) * root.zoom + scr
-                            var t       = root.snappingProgress
-                            var scx     = root.snappingFromX + (tgtX - root.snappingFromX) * t
-                            var scy     = root.snappingFromY + (tgtY - root.snappingFromY) * t
-
-                            ctx.beginPath()
-                            ctx.arc(scx, scy, scr, 0, Math.PI * 2)
-                            ctx.fillStyle = "white"
-                            ctx.fill()
-
-                            var slabel = ""
-                            if (root.snappingCircleType === "char" && root.snappingCircleItemIdx < charactersModel.count)
-                                slabel = (charactersModel.get(root.snappingCircleItemIdx).charName || "").charAt(0).toUpperCase()
-                            else if (root.snappingCircleType === "sound" && root.snappingCircleItemIdx < soundsModel.count)
-                                slabel = (soundsModel.get(root.snappingCircleItemIdx).soundName || "").charAt(0).toUpperCase()
-                            if (slabel) {
-                                ctx.fillStyle = "#1a1a1d"
-                                ctx.font = "bold " + Math.max(7, Math.round(10 * root.zoom)) + "px sans-serif"
-                                ctx.textAlign = "center"
-                                ctx.textBaseline = "middle"
-                                ctx.fillText(slabel, scx, scy)
-                            }
-                        }
-                    }
-                }
-
                 // draw magenta dashed temp link
                 if (root.linking && root.linkingFromIndex >= 0 && root.linkingFromIndex < nodesModel.count) {
                     var fromNode = nodesModel.get(root.linkingFromIndex);
@@ -1837,7 +1748,188 @@ Item {
             }
         }
 
-        //
+
+
+        // Orbit circles layer
+        Repeater {
+            model: orbitsModel
+            delegate: Item {
+                id: orbDelegate
+                z: 1
+                
+                property var nodeModelItem: {
+                    for (var i = 0; i < nodesModel.count; i++) {
+                        if (nodesModel.get(i).id === model.nodeId) return nodesModel.get(i)
+                    }
+                    return null
+                }
+                property int orbPos: {
+                    var count = 0
+                    for (var i = 0; i < index; i++) {
+                        if (orbitsModel.get(i).nodeId === model.nodeId) count++
+                    }
+                    return count
+                }
+                property int orbCount: {
+                    var count = 0
+                    for (var i = 0; i < orbitsModel.count; i++) {
+                        if (orbitsModel.get(i).nodeId === model.nodeId) count++
+                    }
+                    return count
+                }
+                
+                property real cr: Math.max(5, 10 * root.zoom)
+                property real step: cr * 2 + 2 * root.zoom
+                
+                visible: nodeModelItem !== null
+                         && !(root.isDraggingCircle && model.circleType === root.draggingCircleType && model.itemIdx === root.draggingCircleItemIdx)
+                         && !(root.snappingCircle && model.circleType === root.snappingCircleType && model.itemIdx === root.snappingCircleItemIdx)
+
+                x: nodeModelItem ? (nodeModelItem.x * root.zoom + root.panX + (orbPos - (orbCount - 1) / 2.0) * step - cr) : 0
+                y: nodeModelItem ? (nodeModelItem.y * root.zoom + root.panY + (root.nodeRadius + 3) * root.zoom) : 0
+                width: cr * 2
+                height: cr * 2
+
+                Rectangle {
+                    id: orbInnerCircle
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: "white"
+                    clip: true
+                    layer.enabled: true
+                    layer.effect: OpacityMask {
+                        maskSource: Rectangle {
+                            width: orbInnerCircle.width
+                            height: orbInnerCircle.height
+                            radius: orbInnerCircle.radius
+                        }
+                    }
+                    
+                    Image {
+                        anchors.fill: parent
+                        source: (model.circleType === "char" && model.itemIdx >= 0 && model.itemIdx < charactersModel.count) 
+                                ? (charactersModel.get(model.itemIdx).charImagePath || "") 
+                                : ""
+                        fillMode: Image.PreserveAspectCrop
+                        visible: !!source.toString()
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: {
+                            if (model.circleType === "char" && model.itemIdx >= 0 && model.itemIdx < charactersModel.count) {
+                                var c = charactersModel.get(model.itemIdx)
+                                return c ? (c.charName || "").charAt(0).toUpperCase() : ""
+                            } else if (model.circleType === "sound" && model.itemIdx >= 0 && model.itemIdx < soundsModel.count) {
+                                var s = soundsModel.get(model.itemIdx)
+                                return s ? (s.soundName || "").charAt(0).toUpperCase() : ""
+                            }
+                            return ""
+                        }
+                        font.pixelSize: Math.max(7, Math.round(10 * root.zoom))
+                        font.bold: true
+                        color: "#1a1a1d"
+                        visible: (model.circleType === "sound") || (model.circleType === "char" && (model.itemIdx < 0 || model.itemIdx >= charactersModel.count || !charactersModel.get(model.itemIdx) || !charactersModel.get(model.itemIdx).charImagePath))
+                    }
+                }
+            }
+        }
+
+        // Snap animation circle
+        Item {
+            id: snappingCircleItem
+            z: 1
+            visible: root.snappingCircle
+            
+            property var snapOrb: {
+                if (!root.snappingCircle) return null
+                for (var i = 0; i < orbitsModel.count; i++) {
+                    var o = orbitsModel.get(i)
+                    if (o.circleType === root.snappingCircleType && o.itemIdx === root.snappingCircleItemIdx) return { orb: o, idx: i }
+                }
+                return null
+            }
+            
+            property var nodeModelItem: {
+                if (!snapOrb) return null
+                for (var i = 0; i < nodesModel.count; i++) {
+                    if (nodesModel.get(i).id === snapOrb.orb.nodeId) return nodesModel.get(i)
+                }
+                return null
+            }
+            
+            property int sPos: {
+                if (!snapOrb) return 0
+                var count = 0
+                for (var i = 0; i < snapOrb.idx; i++) {
+                    if (orbitsModel.get(i).nodeId === snapOrb.orb.nodeId) count++
+                }
+                return count
+            }
+            
+            property int sCount: {
+                if (!snapOrb) return 0
+                var count = 0
+                for (var i = 0; i < orbitsModel.count; i++) {
+                    if (orbitsModel.get(i).nodeId === snapOrb.orb.nodeId) count++
+                }
+                return count
+            }
+
+            property real scr: Math.max(5, 10 * root.zoom)
+            property real sStep: scr * 2 + 2 * root.zoom
+            
+            property real tgtX: nodeModelItem ? (nodeModelItem.x * root.zoom + root.panX + (sPos - (sCount - 1) / 2.0) * sStep) : 0
+            property real tgtY: nodeModelItem ? (nodeModelItem.y * root.zoom + root.panY + (root.nodeRadius + 3) * root.zoom + scr) : 0
+            
+            x: root.snappingFromX + (tgtX - root.snappingFromX) * root.snappingProgress - width / 2
+            y: root.snappingFromY + (tgtY - root.snappingFromY) * root.snappingProgress - height / 2
+            width: scr * 2
+            height: scr * 2
+            
+            Rectangle {
+                id: snapInnerCircle
+                anchors.fill: parent
+                radius: width / 2
+                color: "white"
+                clip: true
+                layer.enabled: true
+                layer.effect: OpacityMask {
+                    maskSource: Rectangle {
+                        width: snapInnerCircle.width
+                        height: snapInnerCircle.height
+                        radius: snapInnerCircle.radius
+                    }
+                }
+                
+                Image {
+                    anchors.fill: parent
+                    source: (root.snappingCircleType === "char" && root.snappingCircleItemIdx >= 0 && root.snappingCircleItemIdx < charactersModel.count) 
+                            ? (charactersModel.get(root.snappingCircleItemIdx).charImagePath || "") 
+                            : ""
+                    fillMode: Image.PreserveAspectCrop
+                    visible: !!source.toString()
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: {
+                        if (root.snappingCircleType === "char" && root.snappingCircleItemIdx >= 0 && root.snappingCircleItemIdx < charactersModel.count) {
+                            var c = charactersModel.get(root.snappingCircleItemIdx)
+                            return c ? (c.charName || "").charAt(0).toUpperCase() : ""
+                        } else if (root.snappingCircleType === "sound" && root.snappingCircleItemIdx >= 0 && root.snappingCircleItemIdx < soundsModel.count) {
+                            var s = soundsModel.get(root.snappingCircleItemIdx)
+                            return s ? (s.soundName || "").charAt(0).toUpperCase() : ""
+                        }
+                        return ""
+                    }
+                    font.pixelSize: Math.max(7, Math.round(10 * root.zoom))
+                    font.bold: true
+                    color: "#1a1a1d"
+                    visible: (root.snappingCircleType === "sound") || (root.snappingCircleType === "char") && (root.snappingCircleItemIdx < 0 || root.snappingCircleItemIdx >= charactersModel.count || !charactersModel.get(root.snappingCircleItemIdx) || !charactersModel.get(root.snappingCircleItemIdx).charImagePath)
+                }
+            }
+        }        //
         // LAYER 2: node visuals, interactable
         //
         Repeater {
@@ -1882,11 +1974,14 @@ Item {
                 if (hitIdx < 0) { mouse.accepted = false; return }
 
                 var orb   = orbitsModel.get(hitIdx)
-                var label = ""
-                if (orb.circleType === "char" && orb.itemIdx < charactersModel.count)
-                    label = (charactersModel.get(orb.itemIdx).charName || "").charAt(0).toUpperCase()
-                else if (orb.circleType === "sound" && orb.itemIdx < soundsModel.count)
+                var label = "", img = ""
+                if (orb.circleType === "char" && orb.itemIdx >= 0 && orb.itemIdx < charactersModel.count) {
+                    var c = charactersModel.get(orb.itemIdx)
+                    label = (c.charName || "").charAt(0).toUpperCase()
+                    img = c.charImagePath || ""
+                } else if (orb.circleType === "sound" && orb.itemIdx < soundsModel.count) {
                     label = (soundsModel.get(orb.itemIdx).soundName || "").charAt(0).toUpperCase()
+                }
 
                 // Record orbit; canvas onPaint will skip drawing it so the floating circle
                 // takes over visually. orbitsModel is NOT mutated here.
@@ -1898,6 +1993,7 @@ Item {
                 root.draggingCircleType    = orb.circleType
                 root.draggingCircleItemIdx = orb.itemIdx
                 root.draggingCircleLabel   = label
+                root.draggingCircleImage   = img
                 root.draggingCircleX       = pos.x
                 root.draggingCircleY       = pos.y
                 root.requestRedraw()
@@ -2571,6 +2667,22 @@ Item {
         width: 22; height: 22; radius: 11
         color: "white"
         z: 200
+        clip: true
+        layer.enabled: true
+        layer.effect: OpacityMask {
+            maskSource: Rectangle {
+                width: floatingCircle.width
+                height: floatingCircle.height
+                radius: floatingCircle.radius
+            }
+        }
+
+        Image {
+            anchors.fill: parent
+            source: root.draggingCircleImage
+            fillMode: Image.PreserveAspectCrop
+            visible: !!root.draggingCircleImage
+        }
 
         Text {
             anchors.centerIn: parent
@@ -2578,6 +2690,7 @@ Item {
             font.pixelSize: 10
             font.bold: true
             color: "#1a1a1d"
+            visible: !root.draggingCircleImage
         }
     }
 
