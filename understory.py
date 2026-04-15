@@ -264,6 +264,17 @@ class StoryManager(QObject):
                         "ALTER TABLE networks ADD COLUMN color TEXT NOT NULL DEFAULT '#2e2e33'"
                     )
                     conn.commit()
+            if "variables" not in tables:
+                conn.executescript(
+                    "CREATE TABLE variables ("
+                    "    id INTEGER PRIMARY KEY,"
+                    "    name TEXT NOT NULL UNIQUE,"
+                    "    type TEXT NOT NULL CHECK (type IN ('bool','int','float','string','color')),"
+                    "    default_value TEXT NOT NULL,"
+                    "    description TEXT"
+                    ");"
+                )
+                conn.commit()
             row = conn.execute("SELECT title FROM story WHERE id = 1").fetchone()
             self._conn = conn
             self._path = path
@@ -620,6 +631,56 @@ class StoryManager(QObject):
             self._conn.commit()
         except Exception as e:
             print(f"StoryManager.deleteNetwork: {e}")
+
+    # ------------------------------------------------------------------ variable slots
+
+    # Type mapping between QML display names and DB column values
+    _QML_TO_DB_TYPE = {"true or false": "bool", "number": "float", "text": "string"}
+    _DB_TO_QML_TYPE = {"bool": "true or false", "int": "number", "float": "number",
+                       "string": "text", "color": "text"}
+
+    @Slot(result="QVariantList")
+    def getVariables(self):
+        """Returns all story variables as [{varName, varType, varValue}] for QML."""
+        if not self._conn:
+            return []
+        try:
+            rows = self._conn.execute(
+                "SELECT name, type, default_value FROM variables ORDER BY id"
+            ).fetchall()
+            return [
+                {
+                    "varName": r[0],
+                    "varType": self._DB_TO_QML_TYPE.get(r[1], "text"),
+                    "varValue": r[2],
+                }
+                for r in rows
+            ]
+        except Exception as e:
+            print(f"StoryManager.getVariables: {e}")
+            return []
+
+    @Slot(str)
+    def saveVariables(self, variables_json):
+        """Replace all story variables from a JSON array of {varName, varType, varValue}."""
+        if not self._conn:
+            return
+        try:
+            data = json.loads(variables_json)
+            self._conn.execute("DELETE FROM variables")
+            for v in data:
+                name = v.get("varName", "").strip()
+                if not name:
+                    continue
+                db_type = self._QML_TO_DB_TYPE.get(v.get("varType", "text"), "string")
+                value = v.get("varValue", "")
+                self._conn.execute(
+                    "INSERT INTO variables (name, type, default_value) VALUES (?, ?, ?)",
+                    (name, db_type, value),
+                )
+            self._conn.commit()
+        except Exception as e:
+            print(f"StoryManager.saveVariables: {e}")
 
     # ------------------------------------------------------------------ editor state slots
 

@@ -6010,6 +6010,7 @@ Window {
                                             storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
                                             storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
                                         }
+                                        sceneScript.saveVariablesToDb();
                                         nodeWorkspace.saveToDb();
                                         if (savedSceneId !== -1)
                                             storyManager.setEditorState("scene_" + savedSceneId + "_timeline_open", sceneEditorButtons.timelineOpen ? "1" : "0");
@@ -8643,13 +8644,33 @@ Window {
                         id: variablesModel
                     }
 
-                    // Remove unnamed variables when the user navigates away
+                    function loadVariablesFromDb() {
+                        variablesModel.clear();
+                        var vars = storyManager.getVariables();
+                        for (var i = 0; i < vars.length; i++)
+                            variablesModel.append(vars[i]);
+                    }
+
+                    function saveVariablesToDb() {
+                        var out = [];
+                        for (var i = 0; i < variablesModel.count; i++)
+                            out.push(variablesModel.get(i));
+                        storyManager.saveVariables(JSON.stringify(out));
+                    }
+
+                    Connections {
+                        target: storyManager
+                        function onStoryOpened() { sceneScript.loadVariablesFromDb(); }
+                    }
+
+                    // Remove unnamed variables and persist when the user navigates away
                     onVisibleChanged: {
                         if (!visible) {
                             for (var i = variablesModel.count - 1; i >= 0; i--) {
                                 if (variablesModel.get(i).varName === "")
                                     variablesModel.remove(i);
                             }
+                            saveVariablesToDb();
                         }
                     }
 
@@ -9434,6 +9455,7 @@ Window {
                         storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
                         storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
                     }
+                    sceneScript.saveVariablesToDb();
                     nodeWorkspace.saveToDb();
                     if (savedSceneId !== -1)
                         storyManager.setEditorState("scene_" + savedSceneId + "_timeline_open", sceneEditorButtons.timelineOpen ? "1" : "0");
