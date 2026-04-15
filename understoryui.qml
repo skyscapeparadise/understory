@@ -297,7 +297,7 @@ Window {
                             text: "+"
                             font.pixelSize: 64
                             color: "white"
-                            visible: parent.hovered && parent.isLast
+                            visible: parent.isLast
                         }
 
                         // Filename label in lower third of existing-story cards
@@ -697,7 +697,7 @@ Window {
                             text: "+"
                             font.pixelSize: 64
                             color: "white"
-                            visible: hovered && isLast
+                            visible: isLast
                         }
 
                         // Scene name label in lower third of existing scene cards
@@ -5668,7 +5668,7 @@ Window {
                                     text: "+"
                                     color: "white"
                                     font.pixelSize: 32
-                                    visible: hovered && isLast
+                                    visible: isLast
                                 }
 
                                 Text {
