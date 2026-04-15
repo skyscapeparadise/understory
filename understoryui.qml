@@ -6069,96 +6069,160 @@ Window {
                         anchors.leftMargin: 20
                     }
 
-                    Column {
-                        id: areaSpatialProps
+                    ScrollView {
+                        id: areaPropsScroll
                         anchors.top: areaSettingsHeading.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
                         anchors.rightMargin: 14
-                        spacing: 4
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 8
+                        clip: true
 
-                        property real propX: 0
-                        property real propY: 0
-                        property real propW: 200
-                        property real propH: 150
-                        property bool propLock: false
-                        property string propName: ""
+                        Column {
+                            id: areaSpatialProps
+                            width: areaPropsScroll.availableWidth
+                            spacing: 4
 
-                        Row {
-                            width: areaSpatialProps.width; height: 26; spacing: 6
-                            Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                            Rectangle {
-                                width: parent.width - 50; height: 26
-                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                TextInput {
-                                    anchors.fill: parent; anchors.margins: 3
-                                    color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                    text: areaSpatialProps.propName
-                                    Keys.onReturnPressed: focus = false
-                                    Keys.onEscapePressed: focus = false
-                                    onEditingFinished: areaSpatialProps.propName = text
-                                }
+                            property real propX: 0
+                            property real propY: 0
+                            property real propW: 200
+                            property real propH: 150
+                            property bool propLock: false
+                            property string propName: ""
+
+                            Text {
+                                text: "information"
+                                font.pixelSize: 11
+                                font.capitalization: Font.AllUppercase
+                                font.letterSpacing: 1
+                                color: "white"
+                                width: parent.width
+                                bottomPadding: 6
                             }
-                        }
 
-                        Repeater {
-                            model: [
-                                { lbl: "x",      key: "propX" },
-                                { lbl: "y",      key: "propY" },
-                                { lbl: "width",  key: "propW" },
-                                { lbl: "height", key: "propH" }
-                            ]
-                            delegate: Row {
-                                width: areaSpatialProps.width
-                                height: 26
-                                spacing: 6
-                                Text {
-                                    text: modelData.lbl
-                                    width: 44; color: "#aaa"; font.pixelSize: 11
-                                    height: parent.height; verticalAlignment: Text.AlignVCenter
-                                }
+                            Row {
+                                width: areaSpatialProps.width; height: 26; spacing: 6
+                                Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                 Rectangle {
                                     width: parent.width - 50; height: 26
-                                    color: "transparent"; border.color: "white"
-                                    border.width: 1; radius: 4
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
                                     TextInput {
                                         anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11
-                                        clip: true; selectByMouse: true
-                                        text: areaSpatialProps[modelData.key].toFixed(0)
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: areaSpatialProps.propName
                                         Keys.onReturnPressed: focus = false
                                         Keys.onEscapePressed: focus = false
-                                        onEditingFinished: areaSpatialProps[modelData.key] = parseFloat(text) || 0
+                                        onEditingFinished: areaSpatialProps.propName = text
                                     }
                                 }
                             }
-                        }
 
-                        Row {
-                            width: areaSpatialProps.width; height: 26; spacing: 6
-                            Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                            Row {
-                                spacing: 12; anchors.verticalCenter: parent.verticalCenter
-                                Repeater {
-                                    model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                    delegate: Row {
-                                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                                        Rectangle {
-                                            width: 12; height: 12; radius: 6
-                                            border.color: "white"; border.width: 1; color: "transparent"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            Rectangle {
-                                                anchors.centerIn: parent; width: 6; height: 6; radius: 3
-                                                color: "white"; visible: areaSpatialProps.propLock === modelData.val
-                                            }
-                                            MouseArea { anchors.fill: parent; onClicked: areaSpatialProps.propLock = modelData.val }
+                            Repeater {
+                                model: [
+                                    { lbl: "x",      key: "propX" },
+                                    { lbl: "y",      key: "propY" },
+                                    { lbl: "width",  key: "propW" },
+                                    { lbl: "height", key: "propH" }
+                                ]
+                                delegate: Row {
+                                    width: areaSpatialProps.width
+                                    height: 26
+                                    spacing: 6
+                                    Text {
+                                        text: modelData.lbl
+                                        width: 44; color: "white"; font.pixelSize: 11
+                                        height: parent.height; verticalAlignment: Text.AlignVCenter
+                                    }
+                                    Rectangle {
+                                        width: parent.width - 50; height: 26
+                                        color: "transparent"; border.color: "white"
+                                        border.width: 1; radius: 4
+                                        TextInput {
+                                            anchors.fill: parent; anchors.margins: 3
+                                            color: "white"; font.pixelSize: 11
+                                            clip: true; selectByMouse: true
+                                            text: areaSpatialProps[modelData.key].toFixed(0)
+                                            Keys.onReturnPressed: focus = false
+                                            Keys.onEscapePressed: focus = false
+                                            onEditingFinished: areaSpatialProps[modelData.key] = parseFloat(text) || 0
                                         }
-                                        Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
                                     }
                                 }
                             }
+
+                            Row {
+                                width: areaSpatialProps.width; height: 26; spacing: 6
+                                Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Row {
+                                    spacing: 12; anchors.verticalCenter: parent.verticalCenter
+                                    Repeater {
+                                        model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                        delegate: Row {
+                                            spacing: 4; anchors.verticalCenter: parent.verticalCenter
+                                            Rectangle {
+                                                width: 12; height: 12; radius: 6
+                                                border.color: "white"; border.width: 1; color: "transparent"
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                Rectangle {
+                                                    anchors.centerIn: parent; width: 6; height: 6; radius: 3
+                                                    color: "white"; visible: areaSpatialProps.propLock === modelData.val
+                                                }
+                                                MouseArea { anchors.fill: parent; onClicked: areaSpatialProps.propLock = modelData.val }
+                                            }
+                                            Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Item { width: 1; height: 12 }
+
+                            RowLayout {
+                                width: parent.width
+                                height: 24
+
+                                Text {
+                                    text: "interactivity"
+                                    font.pixelSize: 11
+                                    font.capitalization: Font.AllUppercase
+                                    font.letterSpacing: 1
+                                    color: "white"
+                                    Layout.fillWidth: true
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+
+                                Rectangle {
+                                    Layout.preferredWidth: 26
+                                    Layout.preferredHeight: 26
+                                    radius: 4
+                                    property bool hovered: false
+                                    color: hovered ? "white" : "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        anchors.verticalCenterOffset: 0
+                                        anchors.horizontalCenterOffset: -0.5
+                                        text: "+"
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                        color: parent.hovered ? "darkslategrey" : "white"
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onEntered: parent.hovered = true
+                                        onExited: parent.hovered = false
+                                    }
+                                }
+                            }
+
+                            Item { width: 1; height: 8 }
                         }
                     }
                 }
@@ -6277,7 +6341,7 @@ Window {
 
                             Row {
                                 width: imageSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                 Rectangle {
                                     width: parent.width - 50; height: 26
                                     color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -6296,7 +6360,7 @@ Window {
                                 model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
                                 delegate: Row {
                                     width: imageSpatialProps.width; height: 26; spacing: 6
-                                    Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                    Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                     Rectangle {
                                         width: parent.width - 50; height: 26
                                         color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -6314,7 +6378,7 @@ Window {
 
                             Row {
                                 width: imageSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                 Row {
                                     spacing: 12; anchors.verticalCenter: parent.verticalCenter
                                     Repeater {
@@ -6454,7 +6518,7 @@ Window {
 
                             Row {
                                 width: videoSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                 Rectangle {
                                     width: parent.width - 50; height: 26
                                     color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -6473,7 +6537,7 @@ Window {
                                 model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
                                 delegate: Row {
                                     width: videoSpatialProps.width; height: 26; spacing: 6
-                                    Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                    Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                     Rectangle {
                                         width: parent.width - 50; height: 26
                                         color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -6491,7 +6555,7 @@ Window {
 
                             Row {
                                 width: videoSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                 Row {
                                     spacing: 12; anchors.verticalCenter: parent.verticalCenter
                                     Repeater {
@@ -6557,14 +6621,25 @@ Window {
                         anchors.leftMargin: 20
                     }
 
-                    Column {
-                        id: textFormattingCol
+                    ScrollView {
+                        id: textPropsScroll
                         anchors.top: textSettingsHeading.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
                         anchors.rightMargin: 14
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 8
+                        clip: true
+
+                        Column {
+                            width: textPropsScroll.availableWidth
+                            spacing: 8
+
+                    Column {
+                        id: textFormattingCol
+                        width: parent.width
                         spacing: 8
 
                         // Font family
@@ -6857,20 +6932,19 @@ Window {
                         }
                     }
 
-                    ColorDialog {
-                        id: txtColorDialog
-                        selectedColor: textSettings.txtColor
-                        onAccepted: textSettings.txtColor = selectedColor
+                    Text {
+                        text: "information"
+                        font.pixelSize: 11
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 1
+                        color: "white"
+                        width: parent.width
+                        bottomPadding: 6
                     }
 
                     Column {
                         id: textSpatialProps
-                        anchors.top: textFormattingCol.bottom
-                        anchors.topMargin: 8
-                        anchors.left: parent.left
-                        anchors.leftMargin: 14
-                        anchors.right: parent.right
-                        anchors.rightMargin: 14
+                        width: parent.width
                         spacing: 4
 
                         property real propX: 0
@@ -6882,7 +6956,7 @@ Window {
 
                         Row {
                             width: textSpatialProps.width; height: 26; spacing: 6
-                            Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                             Rectangle {
                                 width: parent.width - 50; height: 26
                                 color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -6901,7 +6975,7 @@ Window {
                             model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
                             delegate: Row {
                                 width: textSpatialProps.width; height: 26; spacing: 6
-                                Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                 Rectangle {
                                     width: parent.width - 50; height: 26
                                     color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -6919,7 +6993,7 @@ Window {
 
                         Row {
                             width: textSpatialProps.width; height: 26; spacing: 6
-                            Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                             Row {
                                 spacing: 12; anchors.verticalCenter: parent.verticalCenter
                                 Repeater {
@@ -6941,6 +7015,16 @@ Window {
                                 }
                             }
                         }
+                    }
+
+                    Item { width: 1; height: 8 }
+                        }  // close outer Column
+                    }  // close ScrollView
+
+                    ColorDialog {
+                        id: txtColorDialog
+                        selectedColor: textSettings.txtColor
+                        onAccepted: textSettings.txtColor = selectedColor
                     }
                 }
 
@@ -7625,7 +7709,7 @@ Window {
                                 Text {
                                     text: uName
                                     width: 108
-                                    color: "#aaa"
+                                    color: "white"
                                     font.pixelSize: 11
                                     height: parent.height
                                     verticalAlignment: Text.AlignVCenter
@@ -7782,9 +7866,19 @@ Window {
                                 width: parent.width
                                 spacing: 4
 
+                                Text {
+                                    text: "information"
+                                    font.pixelSize: 11
+                                    font.capitalization: Font.AllUppercase
+                                    font.letterSpacing: 1
+                                    color: "white"
+                                    width: parent.width
+                                    bottomPadding: 6
+                                }
+
                                 Row {
                                     width: parent.width; height: 26; spacing: 6
-                                    Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                    Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                     Rectangle {
                                         width: parent.width - 50; height: 26
                                         color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -7806,7 +7900,7 @@ Window {
                                     model: [{ lbl:"x", prop:"selX" }, { lbl:"y", prop:"selY" }, { lbl:"width", prop:"selW" }, { lbl:"height", prop:"selH" }]
                                     delegate: Row {
                                         width: parent.width; height: 26; spacing: 6
-                                        Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                        Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                         Rectangle {
                                             width: parent.width - 50; height: 26
                                             color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -7827,7 +7921,7 @@ Window {
 
                                 Row {
                                     width: parent.width; height: 26; spacing: 6
-                                    Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                    Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                     Row {
                                         spacing: 12; anchors.verticalCenter: parent.verticalCenter
                                         Repeater {
@@ -7847,6 +7941,44 @@ Window {
                                                 Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
                                             }
                                         }
+                                    }
+                                }
+                            }
+
+                            // Interactivity — only for areas
+                            Column {
+                                visible: selectSettings.hasActiveArea
+                                width: parent.width
+                                spacing: 0
+
+                                RowLayout {
+                                    width: parent.width
+                                    height: 24
+
+                                    Text {
+                                        text: "interactivity"
+                                        font.pixelSize: 11
+                                        font.capitalization: Font.AllUppercase
+                                        font.letterSpacing: 1
+                                        color: "white"
+                                        Layout.fillWidth: true
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 24
+                                        Layout.preferredHeight: 24
+                                        radius: 4
+                                        color: "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "+"
+                                            font.pixelSize: 16
+                                            color: "white"
+                                        }
+                                        MouseArea { anchors.fill: parent }
                                     }
                                 }
                             }
@@ -8104,7 +8236,7 @@ Window {
                                 Text {
                                     text: uName
                                     width: 108
-                                    color: "#aaa"
+                                    color: "white"
                                     font.pixelSize: 11
                                     height: parent.height
                                     verticalAlignment: Text.AlignVCenter
@@ -8219,7 +8351,7 @@ Window {
                         // Name + spatial props (always shown, below uniforms)
                         Row {
                             width: parent.width; height: 26; spacing: 6
-                            Text { text: "name"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                             Rectangle {
                                 width: parent.width - 50; height: 26
                                 color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -8238,7 +8370,7 @@ Window {
                             model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
                             delegate: Row {
                                 width: parent.width; height: 26; spacing: 6
-                                Text { text: modelData.lbl; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                                 Rectangle {
                                     width: parent.width - 50; height: 26
                                     color: "transparent"; border.color: "white"; border.width: 1; radius: 4
@@ -8256,7 +8388,7 @@ Window {
 
                         Row {
                             width: parent.width; height: 26; spacing: 6
-                            Text { text: "lock"; width: 44; color: "#aaa"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
                             Row {
                                 spacing: 12; anchors.verticalCenter: parent.verticalCenter
                                 Repeater {
