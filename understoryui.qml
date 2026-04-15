@@ -8661,12 +8661,54 @@ Window {
                             Repeater {
                                 model: variablesModel
                                 delegate: Item {
+                                    id: varDelegate
                                     width: parent.width
                                     height: 26
 
                                     // Capture the Repeater index so it isn't shadowed by
                                     // signal parameters also named index
                                     property int delegateIndex: index
+                                    property real deleteProgress: 0.0
+
+                                    NumberAnimation {
+                                        id: varDeleteAnim
+                                        target: varDelegate
+                                        property: "deleteProgress"
+                                        to: 1.0
+                                        duration: 1200
+                                        easing.type: Easing.Linear
+                                        onFinished: {
+                                            if (varDelegate.deleteProgress >= 1.0)
+                                                variablesModel.remove(varDelegate.delegateIndex)
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        acceptedButtons: Qt.RightButton
+                                        z: 10
+                                        onPressed: mouse => {
+                                            varDelegate.deleteProgress = 0
+                                            varDeleteAnim.start()
+                                        }
+                                        onReleased: mouse => {
+                                            varDeleteAnim.stop()
+                                            varDelegate.deleteProgress = 0
+                                        }
+                                        onExited: {
+                                            varDeleteAnim.stop()
+                                            varDelegate.deleteProgress = 0
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 4
+                                        color: "#ff4444"
+                                        opacity: varDelegate.deleteProgress * 0.75
+                                        visible: varDelegate.deleteProgress > 0
+                                        z: 9
+                                    }
 
                                     RowLayout {
                                         anchors.fill: parent
@@ -8998,48 +9040,6 @@ Window {
                                             }
                                         }
 
-                                        // Delete button
-                                        Item {
-                                            Layout.preferredWidth: 26
-                                            Layout.preferredHeight: 26
-                                            property bool hovered: false
-
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                radius: 4
-                                                color: parent.hovered ? "white" : "transparent"
-                                                border.color: "white"
-                                                border.width: 1
-                                                Behavior on color {
-                                                    ColorAnimation {
-                                                        duration: 100
-                                                    }
-                                                }
-
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    anchors.verticalCenterOffset: 0
-                                                    anchors.horizontalCenterOffset: -0.5
-                                                    text: "×"
-                                                    font.pixelSize: 18
-                                                    font.bold: true
-                                                    color: parent.parent.hovered ? "darkslategrey" : "white"
-                                                    Behavior on color {
-                                                        ColorAnimation {
-                                                            duration: 100
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                onEntered: parent.hovered = true
-                                                onExited: parent.hovered = false
-                                                onClicked: variablesModel.remove(delegateIndex)
-                                            }
-                                        }
                                     }
                                 }
                             }

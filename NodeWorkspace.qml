@@ -688,6 +688,47 @@ Item {
                         height: 26
                         property int idx: index
                         property bool on: model.enabled
+                        property real deleteProgress: 0.0
+
+                        NumberAnimation {
+                            id: charDeleteAnim
+                            target: charDelegate
+                            property: "deleteProgress"
+                            to: 1.0
+                            duration: 1200
+                            easing.type: Easing.Linear
+                            onFinished: {
+                                if (charDelegate.deleteProgress >= 1.0)
+                                    charactersModel.remove(charDelegate.idx)
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            z: 10
+                            onPressed: mouse => {
+                                charDelegate.deleteProgress = 0
+                                charDeleteAnim.start()
+                            }
+                            onReleased: mouse => {
+                                charDeleteAnim.stop()
+                                charDelegate.deleteProgress = 0
+                            }
+                            onExited: {
+                                charDeleteAnim.stop()
+                                charDelegate.deleteProgress = 0
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 4
+                            color: "#ff4444"
+                            opacity: charDelegate.deleteProgress * 0.75
+                            visible: charDelegate.deleteProgress > 0
+                            z: 9
+                        }
 
                         RowLayout {
                             anchors.fill: parent
@@ -844,39 +885,6 @@ Item {
                                 }
                             }
 
-                            // Delete button
-                            Item {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                property bool hovered: false
-
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: 4
-                                    color: parent.hovered ? "white" : "transparent"
-                                    border.color: "white"
-                                    border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 100 } }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
-                                        text: "×"
-                                        font.pixelSize: 18
-                                        font.bold: true
-                                        color: parent.parent.hovered ? "darkslategrey" : "white"
-                                        Behavior on color { ColorAnimation { duration: 100 } }
-                                    }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onEntered: parent.hovered = true
-                                    onExited: parent.hovered = false
-                                    onClicked: charactersModel.remove(charDelegate.idx)
-                                }
-                            }
                         }
                     }
                 }
@@ -950,6 +958,47 @@ Item {
                         height: 26
                         property int idx: index
                         property bool on: model.enabled
+                        property real deleteProgress: 0.0
+
+                        NumberAnimation {
+                            id: soundDeleteAnim
+                            target: soundDelegate
+                            property: "deleteProgress"
+                            to: 1.0
+                            duration: 1200
+                            easing.type: Easing.Linear
+                            onFinished: {
+                                if (soundDelegate.deleteProgress >= 1.0)
+                                    soundsModel.remove(soundDelegate.idx)
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            z: 10
+                            onPressed: mouse => {
+                                soundDelegate.deleteProgress = 0
+                                soundDeleteAnim.start()
+                            }
+                            onReleased: mouse => {
+                                soundDeleteAnim.stop()
+                                soundDelegate.deleteProgress = 0
+                            }
+                            onExited: {
+                                soundDeleteAnim.stop()
+                                soundDelegate.deleteProgress = 0
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 4
+                            color: "#ff4444"
+                            opacity: soundDelegate.deleteProgress * 0.75
+                            visible: soundDelegate.deleteProgress > 0
+                            z: 9
+                        }
 
                         RowLayout {
                             anchors.fill: parent
@@ -1062,39 +1111,6 @@ Item {
                                 }
                             }
 
-                            // Delete button
-                            Item {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                property bool hovered: false
-
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: 4
-                                    color: parent.hovered ? "white" : "transparent"
-                                    border.color: "white"
-                                    border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 100 } }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
-                                        text: "×"
-                                        font.pixelSize: 18
-                                        font.bold: true
-                                        color: parent.parent.hovered ? "darkslategrey" : "white"
-                                        Behavior on color { ColorAnimation { duration: 100 } }
-                                    }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onEntered: parent.hovered = true
-                                    onExited: parent.hovered = false
-                                    onClicked: soundsModel.remove(soundDelegate.idx)
-                                }
-                            }
                         }
                     }
                 }
