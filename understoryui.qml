@@ -5498,19 +5498,19 @@ Window {
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
-                cursorShape: viewport.textEditing ? Qt.IBeamCursor : (["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1 ? Qt.BlankCursor : Qt.ArrowCursor)
+                cursorShape: viewport.textEditing ? Qt.IBeamCursor : ((sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1) ? Qt.BlankCursor : Qt.ArrowCursor)
                 z: 999
                 onPositionChanged: viewport.hoveredAreaIndex = viewport.findHoveredArea(mouseX, mouseY)
                 onExited: viewport.hoveredAreaIndex = -1
             }
 
             Image {
-                x: (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.shaderDragging ? viewport.shaderX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX))))))) + (viewport.effectiveTool === "select" ? -8 : 0)
-                y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.shaderDragging ? viewport.shaderY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY))))))) + (viewport.effectiveTool === "select" ? -1 : 0)
+                x: (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.shaderDragging ? viewport.shaderX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -8 : 0)
+                y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.shaderDragging ? viewport.shaderY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -1 : 0)
                 width: 36
                 height: 36
-                source: viewport.elementDragging ? "icons/pinch.svg" : (["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : "")
-                visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1)
+                source: viewport.elementDragging ? "icons/pinch.svg" : ((sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? "icons/select.svg" : (["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : ""))
+                visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1)
                 fillMode: Image.PreserveAspectFit
                 z: 1000
             }
@@ -6298,7 +6298,17 @@ Window {
                                         hoverEnabled: true
                                         onEntered: parent.hovered = true
                                         onExited: parent.hovered = false
-                                        onClicked: areaInteractivityModel.append({ itemAction: "cue", itemCommand: "jump", itemTransition: "cut", itemTargetSceneId: -1, itemTargetSceneName: "" })
+                                        onClicked: {
+                                            var defaultAction = "cue"
+                                            for (var i = 0; i < areaInteractivityModel.count; i++) {
+                                                var e = areaInteractivityModel.get(i)
+                                                if ((e.itemAction === "cue" && e.itemCommand === "jump") ||
+                                                    (e.itemAction === "else" && e.itemCommand === "jump")) {
+                                                    defaultAction = "if"; break
+                                                }
+                                            }
+                                            areaInteractivityModel.append({ itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "" })
+                                        }
                                     }
                                 }
                             }
@@ -6306,10 +6316,56 @@ Window {
                             Repeater {
                                 model: areaInteractivityModel
                                 delegate: Component {
-                                    Column {
+                                    Item {
+                                        id: areaInteractivityDelegate
                                         width: parent ? parent.width : 0
-                                        spacing: 4
+                                        height: innerAreaCol.height
                                         property int listIdx: index
+                                        property real deleteProgress: 0.0
+                                        property string condVarType: {
+                                            var v = itemConditionVar
+                                            if (!v || v === "") return ""
+                                            for (var i = 0; i < variablesModel.count; i++) {
+                                                if (variablesModel.get(i).varName === v) return variablesModel.get(i).varType
+                                            }
+                                            return ""
+                                        }
+
+                                        NumberAnimation {
+                                            id: areaDeleteAnim
+                                            target: areaInteractivityDelegate
+                                            property: "deleteProgress"
+                                            to: 1.0
+                                            duration: 1200
+                                            easing.type: Easing.Linear
+                                            onFinished: {
+                                                if (areaInteractivityDelegate.deleteProgress >= 1.0)
+                                                    areaInteractivityModel.remove(areaInteractivityDelegate.listIdx)
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            acceptedButtons: Qt.RightButton
+                                            z: 10
+                                            onPressed: mouse => { areaInteractivityDelegate.deleteProgress = 0; areaDeleteAnim.start() }
+                                            onReleased: mouse => { areaDeleteAnim.stop(); areaInteractivityDelegate.deleteProgress = 0 }
+                                            onExited: { areaDeleteAnim.stop(); areaInteractivityDelegate.deleteProgress = 0 }
+                                        }
+
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 4
+                                            color: "#ff4444"
+                                            opacity: areaInteractivityDelegate.deleteProgress * 0.75
+                                            visible: areaInteractivityDelegate.deleteProgress > 0
+                                            z: 9
+                                        }
+
+                                        Column {
+                                            id: innerAreaCol
+                                            width: parent.width
+                                            spacing: 4
 
                                         Item { width: 1; height: 2 }
 
@@ -6324,7 +6380,28 @@ Window {
                                                 Layout.preferredHeight: 26
                                                 model: ["cue", "if", "else"]
                                                 currentIndex: Math.max(0, ["cue","if","else"].indexOf(itemAction))
-                                                onActivated: areaInteractivityModel.setProperty(parent.parent.listIdx, "itemAction", currentValue)
+                                                onActivated: function(activatedIndex) {
+                                                    var newAction = ["cue","if","else"][activatedIndex]
+                                                    var itemIdx = areaInteractivityDelegate.listIdx
+                                                    if (newAction === "cue" || newAction === "else") {
+                                                        for (var i = 0; i < areaInteractivityModel.count; i++) {
+                                                            if (i === itemIdx) continue
+                                                            var e = areaInteractivityModel.get(i)
+                                                            if (newAction === "cue") {
+                                                                if ((e.itemAction === "cue" && e.itemCommand === "jump") ||
+                                                                    (e.itemAction === "else" && e.itemCommand === "jump")) {
+                                                                    currentIndex = Math.max(0, ["cue","if","else"].indexOf(itemAction)); return
+                                                                }
+                                                            } else {
+                                                                if (e.itemAction === "else" ||
+                                                                    (e.itemAction === "cue" && e.itemCommand === "jump")) {
+                                                                    currentIndex = Math.max(0, ["cue","if","else"].indexOf(itemAction)); return
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    areaInteractivityModel.setProperty(itemIdx, "itemAction", newAction)
+                                                }
                                                 contentItem: Text {
                                                     leftPadding: 6; rightPadding: 18
                                                     text: parent.displayText
@@ -6347,6 +6424,174 @@ Window {
                                                     y: parent.height + 2; width: parent.width; height: 68; padding: 1
                                                     background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
                                                     contentItem: ListView { clip: true; model: areaActionCombo.delegateModel; currentIndex: areaActionCombo.currentIndex }
+                                                }
+                                            }
+
+                                            // "if" condition — variable name
+                                            ComboBox {
+                                                id: areaCondVarCombo
+                                                visible: itemAction === "if"
+                                                Layout.fillWidth: true
+                                                Layout.preferredWidth: 0
+                                                Layout.minimumWidth: 0
+                                                Layout.preferredHeight: 26
+                                                model: {
+                                                    var names = ["(none)"]
+                                                    for (var i = 0; i < variablesModel.count; i++) {
+                                                        var n = variablesModel.get(i).varName
+                                                        if (n !== "") names.push(n)
+                                                    }
+                                                    return names
+                                                }
+                                                currentIndex: {
+                                                    var v = itemConditionVar
+                                                    if (!v || v === "") return 0
+                                                    for (var i = 0; i < variablesModel.count; i++) {
+                                                        if (variablesModel.get(i).varName === v) return i + 1
+                                                    }
+                                                    return 0
+                                                }
+                                                onActivated: function(idx) {
+                                                    var itemIdx = areaInteractivityDelegate.listIdx
+                                                    var varName = idx === 0 ? "" : variablesModel.get(idx - 1).varName
+                                                    var varType = idx === 0 ? "" : variablesModel.get(idx - 1).varType
+                                                    areaInteractivityModel.setProperty(itemIdx, "itemConditionVar", varName)
+                                                    var op = areaInteractivityModel.get(itemIdx).itemConditionOp
+                                                    if (varType !== "number" && (op === ">" || op === "<"))
+                                                        areaInteractivityModel.setProperty(itemIdx, "itemConditionOp", "is")
+                                                    areaInteractivityModel.setProperty(itemIdx, "itemConditionVal", "")
+                                                }
+                                                contentItem: Text {
+                                                    leftPadding: 4; rightPadding: 14
+                                                    text: parent.displayText
+                                                    font.pixelSize: 10; color: "white"
+                                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                }
+                                                indicator: Text {
+                                                    x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                                }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                                delegate: ItemDelegate {
+                                                    width: parent ? parent.width : 60; height: 20; padding: 0
+                                                    contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                }
+                                                popup: Popup {
+                                                    y: parent.height + 2
+                                                    width: Math.max(parent.width, 80)
+                                                    height: Math.min((variablesModel.count + 1) * 20 + 2, 102); padding: 1
+                                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: areaCondVarCombo.delegateModel; currentIndex: areaCondVarCombo.currentIndex }
+                                                }
+                                            }
+
+                                            // "if" condition — operator
+                                            ComboBox {
+                                                id: areaCondOpCombo
+                                                visible: itemAction === "if"
+                                                Layout.preferredWidth: 44
+                                                Layout.preferredHeight: 26
+                                                model: areaInteractivityDelegate.condVarType === "number" ? ["is","not",">","<"] : ["is","not"]
+                                                currentIndex: Math.max(0, model.indexOf(itemConditionOp || "is"))
+                                                onActivated: function(idx) {
+                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemConditionOp", model[idx])
+                                                }
+                                                contentItem: Text {
+                                                    leftPadding: 4; rightPadding: 14
+                                                    text: parent.displayText
+                                                    font.pixelSize: 10; color: "white"
+                                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                }
+                                                indicator: Text {
+                                                    x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                                }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                                delegate: ItemDelegate {
+                                                    width: parent ? parent.width : 44; height: 20; padding: 0
+                                                    contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                }
+                                                popup: Popup {
+                                                    y: parent.height + 2; width: parent.width
+                                                    height: (areaInteractivityDelegate.condVarType === "number" ? 4 : 2) * 20 + 2; padding: 1
+                                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: areaCondOpCombo.delegateModel; currentIndex: areaCondOpCombo.currentIndex }
+                                                }
+                                            }
+
+                                            // "if" condition — value
+                                            Item {
+                                                visible: itemAction === "if"
+                                                Layout.fillWidth: true
+                                                Layout.preferredWidth: 0
+                                                Layout.minimumWidth: 0
+                                                Layout.preferredHeight: 26
+
+                                                Rectangle {
+                                                    anchors.fill: parent
+                                                    visible: areaInteractivityDelegate.condVarType === "text"
+                                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                    TextInput {
+                                                        anchors.left: parent.left; anchors.right: parent.right
+                                                        anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                        text: areaInteractivityDelegate.condVarType === "text" ? (itemConditionVal || "") : ""
+                                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                        onEditingFinished: areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemConditionVal", text)
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    anchors.fill: parent
+                                                    visible: areaInteractivityDelegate.condVarType === "number"
+                                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                    TextInput {
+                                                        anchors.left: parent.left; anchors.right: parent.right
+                                                        anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                        validator: DoubleValidator {}
+                                                        text: areaInteractivityDelegate.condVarType === "number" ? (itemConditionVal || "") : ""
+                                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                        onEditingFinished: areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemConditionVal", text)
+                                                    }
+                                                }
+                                                ComboBox {
+                                                    id: areaBoolValCombo
+                                                    anchors.fill: parent
+                                                    visible: areaInteractivityDelegate.condVarType === "true or false"
+                                                    model: ["true", "false"]
+                                                    currentIndex: (itemConditionVal === "false") ? 1 : 0
+                                                    onActivated: function(idx) {
+                                                        areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemConditionVal", idx === 0 ? "true" : "false")
+                                                    }
+                                                    contentItem: Text {
+                                                        leftPadding: 4; rightPadding: 14; text: parent.displayText
+                                                        font.pixelSize: 10; color: "white"
+                                                        verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                    }
+                                                    indicator: Text {
+                                                        x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                                        text: "▾"; font.pixelSize: 9; color: "white"
+                                                    }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                                    delegate: ItemDelegate {
+                                                        width: parent ? parent.width : 50; height: 20; padding: 0
+                                                        contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                        background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                    }
+                                                    popup: Popup {
+                                                        y: parent.height + 2; width: parent.width; height: 42; padding: 1
+                                                        background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                        contentItem: ListView { clip: true; model: areaBoolValCombo.delegateModel; currentIndex: areaBoolValCombo.currentIndex }
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    anchors.fill: parent
+                                                    visible: areaInteractivityDelegate.condVarType === ""
+                                                    color: "transparent"; border.color: "#555"; border.width: 1; radius: 4
                                                 }
                                             }
 
@@ -6385,8 +6630,9 @@ Window {
 
                                             Rectangle {
                                                 Layout.fillWidth: true
-                                                Layout.preferredWidth: 0
-                                                Layout.minimumWidth: 0
+                                                Layout.preferredWidth: itemAction === "if" ? 26 : 0
+                                                Layout.minimumWidth: itemAction === "if" ? 26 : 0
+                                                Layout.maximumWidth: itemAction === "if" ? 26 : 10000
                                                 Layout.preferredHeight: 26
                                                 visible: itemCommand === "jump"
                                                 radius: 4
@@ -6413,8 +6659,7 @@ Window {
                                                     onEntered: parent.hovered = true
                                                     onExited: parent.hovered = false
                                                     onClicked: {
-                                                        var col = parent.parent.parent
-                                                        sceneEditorButtons.interactivityPickerTargetIdx = col.listIdx
+                                                        sceneEditorButtons.interactivityPickerTargetIdx = areaInteractivityDelegate.listIdx
                                                         sceneEditorButtons.interactivityPickerTargetModel = "area"
                                                         sceneEditorButtons.interactivityPickerOpen = !sceneEditorButtons.interactivityPickerOpen
                                                     }
@@ -6458,14 +6703,14 @@ Window {
                                                         MouseArea {
                                                             anchors.fill: parent
                                                             onClicked: {
-                                                                var outerCol = parent.parent.parent.parent
-                                                                areaInteractivityModel.setProperty(outerCol.listIdx, "itemTransition", modelData.key)
+                                                                areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemTransition", modelData.key)
                                                             }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
+                                        } // close innerAreaCol Column
                                     }
                                 }
                             }
@@ -8239,7 +8484,17 @@ Window {
                                             hoverEnabled: true
                                             onEntered: parent.hovered = true
                                             onExited: parent.hovered = false
-                                            onClicked: selectInteractivityModel.append({ itemAction: "cue", itemCommand: "jump", itemTransition: "cut", itemTargetSceneId: -1, itemTargetSceneName: "" })
+                                            onClicked: {
+                                                var defaultAction = "cue"
+                                                for (var i = 0; i < selectInteractivityModel.count; i++) {
+                                                    var e = selectInteractivityModel.get(i)
+                                                    if ((e.itemAction === "cue" && e.itemCommand === "jump") ||
+                                                        (e.itemAction === "else" && e.itemCommand === "jump")) {
+                                                        defaultAction = "if"; break
+                                                    }
+                                                }
+                                                selectInteractivityModel.append({ itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "" })
+                                            }
                                         }
                                     }
                                 }
@@ -8247,10 +8502,56 @@ Window {
                                 Repeater {
                                     model: selectInteractivityModel
                                     delegate: Component {
-                                        Column {
+                                        Item {
+                                            id: selInteractivityDelegate
                                             width: parent ? parent.width : 0
-                                            spacing: 4
+                                            height: innerSelCol.height
                                             property int listIdx: index
+                                            property real deleteProgress: 0.0
+                                            property string condVarType: {
+                                                var v = itemConditionVar
+                                                if (!v || v === "") return ""
+                                                for (var i = 0; i < variablesModel.count; i++) {
+                                                    if (variablesModel.get(i).varName === v) return variablesModel.get(i).varType
+                                                }
+                                                return ""
+                                            }
+
+                                            NumberAnimation {
+                                                id: selDeleteAnim
+                                                target: selInteractivityDelegate
+                                                property: "deleteProgress"
+                                                to: 1.0
+                                                duration: 1200
+                                                easing.type: Easing.Linear
+                                                onFinished: {
+                                                    if (selInteractivityDelegate.deleteProgress >= 1.0)
+                                                        selectInteractivityModel.remove(selInteractivityDelegate.listIdx)
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                acceptedButtons: Qt.RightButton
+                                                z: 10
+                                                onPressed: mouse => { selInteractivityDelegate.deleteProgress = 0; selDeleteAnim.start() }
+                                                onReleased: mouse => { selDeleteAnim.stop(); selInteractivityDelegate.deleteProgress = 0 }
+                                                onExited: { selDeleteAnim.stop(); selInteractivityDelegate.deleteProgress = 0 }
+                                            }
+
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: 4
+                                                color: "#ff4444"
+                                                opacity: selInteractivityDelegate.deleteProgress * 0.75
+                                                visible: selInteractivityDelegate.deleteProgress > 0
+                                                z: 9
+                                            }
+
+                                            Column {
+                                                id: innerSelCol
+                                                width: parent.width
+                                                spacing: 4
 
                                             Item { width: 1; height: 2 }
 
@@ -8265,7 +8566,28 @@ Window {
                                                     Layout.preferredHeight: 26
                                                     model: ["cue", "if", "else"]
                                                     currentIndex: Math.max(0, ["cue","if","else"].indexOf(itemAction))
-                                                    onActivated: selectInteractivityModel.setProperty(parent.parent.listIdx, "itemAction", currentValue)
+                                                    onActivated: function(activatedIndex) {
+                                                        var newAction = ["cue","if","else"][activatedIndex]
+                                                        var itemIdx = selInteractivityDelegate.listIdx
+                                                        if (newAction === "cue" || newAction === "else") {
+                                                            for (var i = 0; i < selectInteractivityModel.count; i++) {
+                                                                if (i === itemIdx) continue
+                                                                var e = selectInteractivityModel.get(i)
+                                                                if (newAction === "cue") {
+                                                                    if ((e.itemAction === "cue" && e.itemCommand === "jump") ||
+                                                                        (e.itemAction === "else" && e.itemCommand === "jump")) {
+                                                                        currentIndex = Math.max(0, ["cue","if","else"].indexOf(itemAction)); return
+                                                                    }
+                                                                } else {
+                                                                    if (e.itemAction === "else" ||
+                                                                        (e.itemAction === "cue" && e.itemCommand === "jump")) {
+                                                                        currentIndex = Math.max(0, ["cue","if","else"].indexOf(itemAction)); return
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        selectInteractivityModel.setProperty(itemIdx, "itemAction", newAction)
+                                                    }
                                                     contentItem: Text {
                                                         leftPadding: 6; rightPadding: 18
                                                         text: parent.displayText
@@ -8288,6 +8610,174 @@ Window {
                                                         y: parent.height + 2; width: parent.width; height: 68; padding: 1
                                                         background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
                                                         contentItem: ListView { clip: true; model: selActionCombo.delegateModel; currentIndex: selActionCombo.currentIndex }
+                                                    }
+                                                }
+
+                                                // "if" condition — variable name
+                                                ComboBox {
+                                                    id: selCondVarCombo
+                                                    visible: itemAction === "if"
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredWidth: 0
+                                                    Layout.minimumWidth: 0
+                                                    Layout.preferredHeight: 26
+                                                    model: {
+                                                        var names = ["(none)"]
+                                                        for (var i = 0; i < variablesModel.count; i++) {
+                                                            var n = variablesModel.get(i).varName
+                                                            if (n !== "") names.push(n)
+                                                        }
+                                                        return names
+                                                    }
+                                                    currentIndex: {
+                                                        var v = itemConditionVar
+                                                        if (!v || v === "") return 0
+                                                        for (var i = 0; i < variablesModel.count; i++) {
+                                                            if (variablesModel.get(i).varName === v) return i + 1
+                                                        }
+                                                        return 0
+                                                    }
+                                                    onActivated: function(idx) {
+                                                        var itemIdx = selInteractivityDelegate.listIdx
+                                                        var varName = idx === 0 ? "" : variablesModel.get(idx - 1).varName
+                                                        var varType = idx === 0 ? "" : variablesModel.get(idx - 1).varType
+                                                        selectInteractivityModel.setProperty(itemIdx, "itemConditionVar", varName)
+                                                        var op = selectInteractivityModel.get(itemIdx).itemConditionOp
+                                                        if (varType !== "number" && (op === ">" || op === "<"))
+                                                            selectInteractivityModel.setProperty(itemIdx, "itemConditionOp", "is")
+                                                        selectInteractivityModel.setProperty(itemIdx, "itemConditionVal", "")
+                                                    }
+                                                    contentItem: Text {
+                                                        leftPadding: 4; rightPadding: 14
+                                                        text: parent.displayText
+                                                        font.pixelSize: 10; color: "white"
+                                                        verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                    }
+                                                    indicator: Text {
+                                                        x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                                        text: "▾"; font.pixelSize: 9; color: "white"
+                                                    }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                                    delegate: ItemDelegate {
+                                                        width: parent ? parent.width : 60; height: 20; padding: 0
+                                                        contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                        background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                    }
+                                                    popup: Popup {
+                                                        y: parent.height + 2
+                                                        width: Math.max(parent.width, 80)
+                                                        height: Math.min((variablesModel.count + 1) * 20 + 2, 102); padding: 1
+                                                        background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                        contentItem: ListView { clip: true; model: selCondVarCombo.delegateModel; currentIndex: selCondVarCombo.currentIndex }
+                                                    }
+                                                }
+
+                                                // "if" condition — operator
+                                                ComboBox {
+                                                    id: selCondOpCombo
+                                                    visible: itemAction === "if"
+                                                    Layout.preferredWidth: 44
+                                                    Layout.preferredHeight: 26
+                                                    model: selInteractivityDelegate.condVarType === "number" ? ["is","not",">","<"] : ["is","not"]
+                                                    currentIndex: Math.max(0, model.indexOf(itemConditionOp || "is"))
+                                                    onActivated: function(idx) {
+                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemConditionOp", model[idx])
+                                                    }
+                                                    contentItem: Text {
+                                                        leftPadding: 4; rightPadding: 14
+                                                        text: parent.displayText
+                                                        font.pixelSize: 10; color: "white"
+                                                        verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                    }
+                                                    indicator: Text {
+                                                        x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                                        text: "▾"; font.pixelSize: 9; color: "white"
+                                                    }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                                    delegate: ItemDelegate {
+                                                        width: parent ? parent.width : 44; height: 20; padding: 0
+                                                        contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                        background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                    }
+                                                    popup: Popup {
+                                                        y: parent.height + 2; width: parent.width
+                                                        height: (selInteractivityDelegate.condVarType === "number" ? 4 : 2) * 20 + 2; padding: 1
+                                                        background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                        contentItem: ListView { clip: true; model: selCondOpCombo.delegateModel; currentIndex: selCondOpCombo.currentIndex }
+                                                    }
+                                                }
+
+                                                // "if" condition — value
+                                                Item {
+                                                    visible: itemAction === "if"
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredWidth: 0
+                                                    Layout.minimumWidth: 0
+                                                    Layout.preferredHeight: 26
+
+                                                    Rectangle {
+                                                        anchors.fill: parent
+                                                        visible: selInteractivityDelegate.condVarType === "text"
+                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                        TextInput {
+                                                            anchors.left: parent.left; anchors.right: parent.right
+                                                            anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                            text: selInteractivityDelegate.condVarType === "text" ? (itemConditionVal || "") : ""
+                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                            onEditingFinished: selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemConditionVal", text)
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        anchors.fill: parent
+                                                        visible: selInteractivityDelegate.condVarType === "number"
+                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                        TextInput {
+                                                            anchors.left: parent.left; anchors.right: parent.right
+                                                            anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                            validator: DoubleValidator {}
+                                                            text: selInteractivityDelegate.condVarType === "number" ? (itemConditionVal || "") : ""
+                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                            onEditingFinished: selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemConditionVal", text)
+                                                        }
+                                                    }
+                                                    ComboBox {
+                                                        id: selBoolValCombo
+                                                        anchors.fill: parent
+                                                        visible: selInteractivityDelegate.condVarType === "true or false"
+                                                        model: ["true", "false"]
+                                                        currentIndex: (itemConditionVal === "false") ? 1 : 0
+                                                        onActivated: function(idx) {
+                                                            selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemConditionVal", idx === 0 ? "true" : "false")
+                                                        }
+                                                        contentItem: Text {
+                                                            leftPadding: 4; rightPadding: 14; text: parent.displayText
+                                                            font.pixelSize: 10; color: "white"
+                                                            verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                        }
+                                                        indicator: Text {
+                                                            x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                                            text: "▾"; font.pixelSize: 9; color: "white"
+                                                        }
+                                                        background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                                        delegate: ItemDelegate {
+                                                            width: parent ? parent.width : 50; height: 20; padding: 0
+                                                            contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                            background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                        }
+                                                        popup: Popup {
+                                                            y: parent.height + 2; width: parent.width; height: 42; padding: 1
+                                                            background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                            contentItem: ListView { clip: true; model: selBoolValCombo.delegateModel; currentIndex: selBoolValCombo.currentIndex }
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        anchors.fill: parent
+                                                        visible: selInteractivityDelegate.condVarType === ""
+                                                        color: "transparent"; border.color: "#555"; border.width: 1; radius: 4
                                                     }
                                                 }
 
@@ -8326,8 +8816,9 @@ Window {
 
                                                 Rectangle {
                                                     Layout.fillWidth: true
-                                                    Layout.preferredWidth: 0
-                                                    Layout.minimumWidth: 0
+                                                    Layout.preferredWidth: itemAction === "if" ? 26 : 0
+                                                    Layout.minimumWidth: itemAction === "if" ? 26 : 0
+                                                    Layout.maximumWidth: itemAction === "if" ? 26 : 10000
                                                     Layout.preferredHeight: 26
                                                     visible: itemCommand === "jump"
                                                     radius: 4
@@ -8354,8 +8845,7 @@ Window {
                                                         onEntered: parent.hovered = true
                                                         onExited: parent.hovered = false
                                                         onClicked: {
-                                                            var col = parent.parent.parent
-                                                            sceneEditorButtons.interactivityPickerTargetIdx = col.listIdx
+                                                            sceneEditorButtons.interactivityPickerTargetIdx = selInteractivityDelegate.listIdx
                                                             sceneEditorButtons.interactivityPickerTargetModel = "select"
                                                             sceneEditorButtons.interactivityPickerOpen = !sceneEditorButtons.interactivityPickerOpen
                                                         }
@@ -8399,14 +8889,14 @@ Window {
                                                             MouseArea {
                                                                 anchors.fill: parent
                                                                 onClicked: {
-                                                                    var outerCol = parent.parent.parent.parent
-                                                                    selectInteractivityModel.setProperty(outerCol.listIdx, "itemTransition", modelData.key)
+                                                                    selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemTransition", modelData.key)
                                                                 }
                                                             }
                                                         }
                                                     }
                                                 }
                                             }
+                                            } // close innerSelCol Column
                                         }
                                     }
                                 }
@@ -9797,8 +10287,11 @@ Window {
 
                                             TextInput {
                                                 id: nameInput
-                                                anchors.fill: parent
-                                                anchors.margins: 9
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.leftMargin: 4
+                                                anchors.rightMargin: 4
+                                                anchors.verticalCenter: parent.verticalCenter
                                                 color: "white"
                                                 font.pixelSize: 11
                                                 clip: true
@@ -9835,8 +10328,11 @@ Window {
 
                                                 TextInput {
                                                     id: numberInput
-                                                    anchors.fill: parent
-                                                    anchors.margins: 9
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
                                                     color: "white"
                                                     font.pixelSize: 11
                                                     clip: true
@@ -9869,8 +10365,11 @@ Window {
 
                                                 TextInput {
                                                     id: textValueInput
-                                                    anchors.fill: parent
-                                                    anchors.margins: 9
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
                                                     color: "white"
                                                     font.pixelSize: 11
                                                     clip: true
