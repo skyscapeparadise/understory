@@ -5545,11 +5545,11 @@ Window {
 
             Rectangle {
                 id: navigationViewportOverlay
-                visible: sceneEditorButtons.navigationOpen
+                visible: sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen
                 anchors.fill: parent
                 radius: 20
                 color: Qt.rgba(0, 0, 0, 0.6)
-                opacity: sceneEditorButtons.navigationOpen ? 1 : 0
+                opacity: (sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? 1 : 0
                 z: 998
 
                 Behavior on opacity {
@@ -5557,6 +5557,16 @@ Window {
                         duration: 220
                         easing.type: Easing.InOutQuad
                     }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.ArrowCursor
+                    hoverEnabled: true
+                    propagateComposedEvents: true
+                    onClicked: mouse.accepted = false
+                    onPressed: mouse.accepted = false
+                    onReleased: mouse.accepted = false
                 }
 
                 ScrollView {
@@ -5621,6 +5631,7 @@ Window {
                                 Rectangle {
                                     anchors.fill: parent
                                     color: "black"
+                                    radius: 30
                                     opacity: hovered && !isLast ? 0.25 : 0.0
                                     Behavior on opacity { NumberAnimation { duration: 120 } }
                                 }
@@ -5628,9 +5639,52 @@ Window {
                                 MouseArea {
                                     anchors.fill: parent
                                     hoverEnabled: true
+                                    cursorShape: sceneEditorButtons.navigationOpen && !isLast ? Qt.OpenHandCursor : Qt.ArrowCursor
+                                    preventStealing: sceneEditorButtons.navigationOpen && !isLast
+
+                                    property bool dragStarted: false
+                                    property point pressPos
+
                                     onEntered: hovered = true
                                     onExited: hovered = false
+
+                                    onPressed: {
+                                        pressPos = Qt.point(mouseX, mouseY)
+                                        dragStarted = false
+                                    }
+
+                                    onPositionChanged: {
+                                        if (pressed && sceneEditorButtons.navigationOpen && !isLast) {
+                                            var dx = mouseX - pressPos.x
+                                            var dy = mouseY - pressPos.y
+                                            if (Math.sqrt(dx * dx + dy * dy) > 8) {
+                                                if (!dragStarted) {
+                                                    dragStarted = true
+                                                    navDragGhost.draggedSceneId = model.sceneId
+                                                    navDragGhost.draggedSceneName = model.sceneName || ""
+                                                    navDragGhost.draggedThumbnailRev = model.thumbnailRev || 0
+                                                }
+                                                var pos = mapToItem(sceneEditor, mouseX, mouseY)
+                                                navDragGhost.x = pos.x - navDragGhost.width / 2
+                                                navDragGhost.y = pos.y - navDragGhost.height / 2
+                                                navDragGhost.visible = true
+                                            }
+                                        }
+                                    }
+
+                                    onReleased: {
+                                        if (dragStarted) {
+                                            navDragGhost.Drag.drop()
+                                            navDragGhost.visible = false
+                                            // dragStarted intentionally NOT reset here so onClicked can detect it
+                                        }
+                                    }
+
                                     onClicked: {
+                                        if (dragStarted) {
+                                            dragStarted = false
+                                            return
+                                        }
                                         if (isLast) {
                                             var newId = storyManager.createScene("new scene");
                                             if (newId !== -1) {
@@ -5645,7 +5699,22 @@ Window {
                                                 viewport.clearForNewScene();
                                                 sceneNameInput.text = "new scene";
                                                 sceneEditorButtons.navigationOpen = false;
+                                                sceneEditorButtons.interactivityPickerOpen = false;
                                             }
+                                        } else if (sceneEditorButtons.interactivityPickerOpen) {
+                                            var pickedId = model.sceneId
+                                            var pickedName = model.sceneName || storyManager.getSceneName(pickedId)
+                                            var idx = sceneEditorButtons.interactivityPickerTargetIdx
+                                            if (sceneEditorButtons.interactivityPickerTargetModel === "area") {
+                                                areaInteractivityModel.setProperty(idx, "itemTargetSceneId", pickedId)
+                                                areaInteractivityModel.setProperty(idx, "itemTargetSceneName", pickedName)
+                                            } else if (sceneEditorButtons.interactivityPickerTargetModel === "select") {
+                                                selectInteractivityModel.setProperty(idx, "itemTargetSceneId", pickedId)
+                                                selectInteractivityModel.setProperty(idx, "itemTargetSceneName", pickedName)
+                                            }
+                                            sceneEditorButtons.interactivityPickerOpen = false
+                                            sceneEditorButtons.interactivityPickerTargetIdx = -1
+                                            sceneEditorButtons.interactivityPickerTargetModel = ""
                                         } else {
                                             var targetId = scenesRectModel.get(index).sceneId;
                                             if (targetId !== mainWindow.currentSceneId) {
@@ -5659,6 +5728,7 @@ Window {
                                                         sceneNameInput.text = storyManager.getSceneName(targetId);
                                                         navigationViewportSelectionFlash.running = true;
                                                         sceneEditorButtons.navigationOpen = false;
+                                                        sceneEditorButtons.interactivityPickerOpen = false;
                                                     });
                                                     return;
                                                 }
@@ -5668,6 +5738,7 @@ Window {
                                             }
                                             navigationViewportSelectionFlash.running = true;
                                             sceneEditorButtons.navigationOpen = false;
+                                            sceneEditorButtons.interactivityPickerOpen = false;
                                         }
                                     }
                                 }
@@ -5914,6 +5985,7 @@ Window {
                                         sceneEditorButtons.variablesOpen = false;
                                         sceneEditorButtons.conditionsOpen = false;
                                         sceneEditorButtons.navigationOpen = false;
+                                        sceneEditorButtons.interactivityPickerOpen = false;
                                     }
                                 }
                                 onEntered: hovered = true
@@ -5938,6 +6010,12 @@ Window {
                 property bool conditionsOpen: false
                 property bool variablesOpen: false
                 property bool navigationOpen: false
+                property bool navOverlayOpen: false
+                property bool interactivityPickerOpen: false
+                property int interactivityPickerTargetIdx: -1
+                property string interactivityPickerTargetModel: ""
+
+                onNavigationOpenChanged: { if (!navigationOpen) navOverlayOpen = false }
 
                 Repeater {
                     model: ["conditions", "variables", "timeline", "close scene"]
@@ -6051,7 +6129,7 @@ Window {
 
                 Rectangle {
                     id: areaSettings
-                    visible: buttonGrid.selectedTool === "newarea"
+                    visible: buttonGrid.selectedTool === "newarea" && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -6068,6 +6146,8 @@ Window {
                         anchors.left: parent.left
                         anchors.leftMargin: 20
                     }
+
+                    ListModel { id: areaInteractivityModel }
 
                     ScrollView {
                         id: areaPropsScroll
@@ -6182,7 +6262,7 @@ Window {
 
                             RowLayout {
                                 width: parent.width
-                                height: 24
+                                height: 26
 
                                 Text {
                                     text: "interactivity"
@@ -6218,6 +6298,174 @@ Window {
                                         hoverEnabled: true
                                         onEntered: parent.hovered = true
                                         onExited: parent.hovered = false
+                                        onClicked: areaInteractivityModel.append({ itemAction: "cue", itemCommand: "jump", itemTransition: "cut", itemTargetSceneId: -1, itemTargetSceneName: "" })
+                                    }
+                                }
+                            }
+
+                            Repeater {
+                                model: areaInteractivityModel
+                                delegate: Component {
+                                    Column {
+                                        width: parent ? parent.width : 0
+                                        spacing: 4
+                                        property int listIdx: index
+
+                                        Item { width: 1; height: 2 }
+
+                                        RowLayout {
+                                            width: parent.width
+                                            height: 26
+                                            spacing: 4
+
+                                            ComboBox {
+                                                id: areaActionCombo
+                                                Layout.preferredWidth: 62
+                                                Layout.preferredHeight: 26
+                                                model: ["cue", "if", "else"]
+                                                currentIndex: Math.max(0, ["cue","if","else"].indexOf(itemAction))
+                                                onActivated: areaInteractivityModel.setProperty(parent.parent.listIdx, "itemAction", currentValue)
+                                                contentItem: Text {
+                                                    leftPadding: 6; rightPadding: 18
+                                                    text: parent.displayText
+                                                    font.pixelSize: 11; color: "white"
+                                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                }
+                                                indicator: Text {
+                                                    x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter
+                                                    text: "▾"; font.pixelSize: 10; color: "white"
+                                                }
+                                                background: Rectangle {
+                                                    radius: 4; color: "transparent"; border.color: "white"; border.width: 1
+                                                }
+                                                delegate: ItemDelegate {
+                                                    width: parent ? parent.width : 62; height: 22; padding: 0
+                                                    contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                }
+                                                popup: Popup {
+                                                    y: parent.height + 2; width: parent.width; height: 68; padding: 1
+                                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: areaActionCombo.delegateModel; currentIndex: areaActionCombo.currentIndex }
+                                                }
+                                            }
+
+                                            ComboBox {
+                                                id: areaCommandCombo
+                                                Layout.fillWidth: true
+                                                Layout.preferredWidth: 0
+                                                Layout.minimumWidth: 0
+                                                Layout.preferredHeight: 26
+                                                model: ["jump"]
+                                                currentIndex: 0
+                                                contentItem: Text {
+                                                    leftPadding: 6; rightPadding: 18
+                                                    text: parent.displayText
+                                                    font.pixelSize: 11; color: "white"
+                                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                }
+                                                indicator: Text {
+                                                    x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter
+                                                    text: "▾"; font.pixelSize: 10; color: "white"
+                                                }
+                                                background: Rectangle {
+                                                    radius: 4; color: "transparent"; border.color: "white"; border.width: 1
+                                                }
+                                                delegate: ItemDelegate {
+                                                    width: parent ? parent.width : 80; height: 22; padding: 0
+                                                    contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                }
+                                                popup: Popup {
+                                                    y: parent.height + 2; width: parent.width; height: 24; padding: 1
+                                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: areaCommandCombo.delegateModel; currentIndex: areaCommandCombo.currentIndex }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredWidth: 0
+                                                Layout.minimumWidth: 0
+                                                Layout.preferredHeight: 26
+                                                visible: itemCommand === "jump"
+                                                radius: 4
+                                                property bool hovered: false
+                                                property bool toggled: sceneEditorButtons.interactivityPickerOpen
+                                                color: toggled || hovered ? "white" : "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: itemTargetSceneName !== "" ? itemTargetSceneName : "+"
+                                                    font.pixelSize: itemTargetSceneName !== "" ? 11 : 18
+                                                    font.bold: itemTargetSceneName === ""
+                                                    color: (parent.toggled || parent.hovered) ? "darkslategrey" : "white"
+                                                    elide: Text.ElideRight
+                                                    width: parent.width - 8
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                }
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    onEntered: parent.hovered = true
+                                                    onExited: parent.hovered = false
+                                                    onClicked: {
+                                                        var col = parent.parent.parent
+                                                        sceneEditorButtons.interactivityPickerTargetIdx = col.listIdx
+                                                        sceneEditorButtons.interactivityPickerTargetModel = "area"
+                                                        sceneEditorButtons.interactivityPickerOpen = !sceneEditorButtons.interactivityPickerOpen
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Item {
+                                            width: parent.width
+                                            height: itemCommand === "jump" ? Math.round((parent.width - 16) / 5) : 0
+                                            visible: itemCommand === "jump"
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                spacing: 4
+
+                                                Repeater {
+                                                    model: [
+                                                        { icon: "cut",      key: "cut"      },
+                                                        { icon: "dissolve", key: "dissolve" },
+                                                        { icon: "wipe",     key: "wipe"     },
+                                                        { icon: "push",     key: "push"     },
+                                                        { icon: "look",     key: "look"     }
+                                                    ]
+                                                    delegate: Rectangle {
+                                                        Layout.fillWidth: true
+                                                        Layout.fillHeight: true
+                                                        radius: 4
+                                                        property bool isActive: itemTransition === modelData.key
+                                                        color: isActive ? "#477B78" : "transparent"
+                                                        border.color: "white"
+                                                        border.width: 1
+                                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                                        Image {
+                                                            anchors.centerIn: parent
+                                                            width: Math.round(parent.height * 0.72)
+                                                            height: width
+                                                            source: "icons/" + modelData.icon + ".svg"
+                                                            fillMode: Image.PreserveAspectFit
+                                                        }
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            onClicked: {
+                                                                var outerCol = parent.parent.parent.parent
+                                                                areaInteractivityModel.setProperty(outerCol.listIdx, "itemTransition", modelData.key)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -6229,7 +6477,7 @@ Window {
 
                 Rectangle {
                     id: imageSettings
-                    visible: buttonGrid.selectedTool === "newimage"
+                    visible: buttonGrid.selectedTool === "newimage" && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -6406,7 +6654,7 @@ Window {
 
                 Rectangle {
                     id: videoSettings
-                    visible: buttonGrid.selectedTool === "newvideo"
+                    visible: buttonGrid.selectedTool === "newvideo" && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -6583,7 +6831,7 @@ Window {
 
                 Rectangle {
                     id: textSettings
-                    visible: buttonGrid.selectedTool === "newtext"
+                    visible: buttonGrid.selectedTool === "newtext" && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -7030,7 +7278,7 @@ Window {
 
                 Rectangle {
                     id: selectSettings
-                    visible: buttonGrid.selectedTool === "select"
+                    visible: buttonGrid.selectedTool === "select" && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -7173,6 +7421,8 @@ Window {
                         anchors.left: parent.left
                         anchors.leftMargin: 20
                     }
+
+                    ListModel { id: selectInteractivityModel }
 
                     ScrollView {
                         id: selectPropsScroll
@@ -7949,11 +8199,11 @@ Window {
                             Column {
                                 visible: selectSettings.hasActiveArea
                                 width: parent.width
-                                spacing: 0
+                                spacing: 4
 
                                 RowLayout {
                                     width: parent.width
-                                    height: 24
+                                    height: 26
 
                                     Text {
                                         text: "interactivity"
@@ -7966,19 +8216,198 @@ Window {
                                     }
 
                                     Rectangle {
-                                        Layout.preferredWidth: 24
-                                        Layout.preferredHeight: 24
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
                                         radius: 4
-                                        color: "transparent"
+                                        property bool hovered: false
+                                        color: hovered ? "white" : "transparent"
                                         border.color: "white"
                                         border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
                                         Text {
                                             anchors.centerIn: parent
+                                            anchors.verticalCenterOffset: 0
+                                            anchors.horizontalCenterOffset: -0.5
                                             text: "+"
-                                            font.pixelSize: 16
-                                            color: "white"
+                                            font.pixelSize: 18
+                                            font.bold: true
+                                            color: parent.hovered ? "darkslategrey" : "white"
+                                            Behavior on color { ColorAnimation { duration: 100 } }
                                         }
-                                        MouseArea { anchors.fill: parent }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onEntered: parent.hovered = true
+                                            onExited: parent.hovered = false
+                                            onClicked: selectInteractivityModel.append({ itemAction: "cue", itemCommand: "jump", itemTransition: "cut", itemTargetSceneId: -1, itemTargetSceneName: "" })
+                                        }
+                                    }
+                                }
+
+                                Repeater {
+                                    model: selectInteractivityModel
+                                    delegate: Component {
+                                        Column {
+                                            width: parent ? parent.width : 0
+                                            spacing: 4
+                                            property int listIdx: index
+
+                                            Item { width: 1; height: 2 }
+
+                                            RowLayout {
+                                                width: parent.width
+                                                height: 26
+                                                spacing: 4
+
+                                                ComboBox {
+                                                    id: selActionCombo
+                                                    Layout.preferredWidth: 62
+                                                    Layout.preferredHeight: 26
+                                                    model: ["cue", "if", "else"]
+                                                    currentIndex: Math.max(0, ["cue","if","else"].indexOf(itemAction))
+                                                    onActivated: selectInteractivityModel.setProperty(parent.parent.listIdx, "itemAction", currentValue)
+                                                    contentItem: Text {
+                                                        leftPadding: 6; rightPadding: 18
+                                                        text: parent.displayText
+                                                        font.pixelSize: 11; color: "white"
+                                                        verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                    }
+                                                    indicator: Text {
+                                                        x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter
+                                                        text: "▾"; font.pixelSize: 10; color: "white"
+                                                    }
+                                                    background: Rectangle {
+                                                        radius: 4; color: "transparent"; border.color: "white"; border.width: 1
+                                                    }
+                                                    delegate: ItemDelegate {
+                                                        width: parent ? parent.width : 62; height: 22; padding: 0
+                                                        contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
+                                                        background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                    }
+                                                    popup: Popup {
+                                                        y: parent.height + 2; width: parent.width; height: 68; padding: 1
+                                                        background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                        contentItem: ListView { clip: true; model: selActionCombo.delegateModel; currentIndex: selActionCombo.currentIndex }
+                                                    }
+                                                }
+
+                                                ComboBox {
+                                                    id: selCommandCombo
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredWidth: 0
+                                                    Layout.minimumWidth: 0
+                                                    Layout.preferredHeight: 26
+                                                    model: ["jump"]
+                                                    currentIndex: 0
+                                                    contentItem: Text {
+                                                        leftPadding: 6; rightPadding: 18
+                                                        text: parent.displayText
+                                                        font.pixelSize: 11; color: "white"
+                                                        verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                    }
+                                                    indicator: Text {
+                                                        x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter
+                                                        text: "▾"; font.pixelSize: 10; color: "white"
+                                                    }
+                                                    background: Rectangle {
+                                                        radius: 4; color: "transparent"; border.color: "white"; border.width: 1
+                                                    }
+                                                    delegate: ItemDelegate {
+                                                        width: parent ? parent.width : 80; height: 22; padding: 0
+                                                        contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
+                                                        background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                                    }
+                                                    popup: Popup {
+                                                        y: parent.height + 2; width: parent.width; height: 24; padding: 1
+                                                        background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                        contentItem: ListView { clip: true; model: selCommandCombo.delegateModel; currentIndex: selCommandCombo.currentIndex }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredWidth: 0
+                                                    Layout.minimumWidth: 0
+                                                    Layout.preferredHeight: 26
+                                                    visible: itemCommand === "jump"
+                                                    radius: 4
+                                                    property bool hovered: false
+                                                    property bool toggled: sceneEditorButtons.interactivityPickerOpen
+                                                    color: toggled || hovered ? "white" : "transparent"
+                                                    border.color: "white"
+                                                    border.width: 1
+                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: itemTargetSceneName !== "" ? itemTargetSceneName : "+"
+                                                        font.pixelSize: itemTargetSceneName !== "" ? 11 : 18
+                                                        font.bold: itemTargetSceneName === ""
+                                                        color: (parent.toggled || parent.hovered) ? "darkslategrey" : "white"
+                                                        elide: Text.ElideRight
+                                                        width: parent.width - 8
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                                    }
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        onEntered: parent.hovered = true
+                                                        onExited: parent.hovered = false
+                                                        onClicked: {
+                                                            var col = parent.parent.parent
+                                                            sceneEditorButtons.interactivityPickerTargetIdx = col.listIdx
+                                                            sceneEditorButtons.interactivityPickerTargetModel = "select"
+                                                            sceneEditorButtons.interactivityPickerOpen = !sceneEditorButtons.interactivityPickerOpen
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            Item {
+                                                width: parent.width
+                                                height: itemCommand === "jump" ? Math.round((parent.width - 16) / 5) : 0
+                                                visible: itemCommand === "jump"
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    spacing: 4
+
+                                                    Repeater {
+                                                        model: [
+                                                            { icon: "cut",      key: "cut"      },
+                                                            { icon: "dissolve", key: "dissolve" },
+                                                            { icon: "wipe",     key: "wipe"     },
+                                                            { icon: "push",     key: "push"     },
+                                                            { icon: "look",     key: "look"     }
+                                                        ]
+                                                        delegate: Rectangle {
+                                                            Layout.fillWidth: true
+                                                            Layout.fillHeight: true
+                                                            radius: 4
+                                                            property bool isActive: itemTransition === modelData.key
+                                                            color: isActive ? "#477B78" : "transparent"
+                                                            border.color: "white"
+                                                            border.width: 1
+                                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                                            Image {
+                                                                anchors.centerIn: parent
+                                                                width: Math.round(parent.height * 0.72)
+                                                                height: width
+                                                                source: "icons/" + modelData.icon + ".svg"
+                                                                fillMode: Image.PreserveAspectFit
+                                                            }
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                onClicked: {
+                                                                    var outerCol = parent.parent.parent.parent
+                                                                    selectInteractivityModel.setProperty(outerCol.listIdx, "itemTransition", modelData.key)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -7999,7 +8428,7 @@ Window {
 
                 Rectangle {
                     id: newshaderSettings
-                    visible: buttonGrid.selectedTool === "newshader"
+                    visible: buttonGrid.selectedTool === "newshader" && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -8418,7 +8847,7 @@ Window {
 
                 Rectangle {
                     id: simulateSettings
-                    visible: buttonGrid.selectedTool === "simulate"
+                    visible: buttonGrid.selectedTool === "simulate" && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -8439,7 +8868,7 @@ Window {
 
                 Rectangle {
                     id: relayerSettings
-                    visible: buttonGrid.selectedTool === "relayer"
+                    visible: buttonGrid.selectedTool === "relayer" && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -8460,7 +8889,7 @@ Window {
 
                 Rectangle {
                     id: destroySettings
-                    visible: buttonGrid.selectedTool === "destroy"
+                    visible: buttonGrid.selectedTool === "destroy" && !sceneEditorButtons.navigationOpen
                     height: parent.height
                     width: parent.width
                     radius: parent.radius
@@ -8486,6 +8915,31 @@ Window {
                     width: parent.width
                     radius: parent.radius
                     color: "transparent"
+
+                    property string deleteTarget: ""
+                    property real deleteProgress: 0.0
+
+                    function cancelNavDelete() {
+                        deleteTarget = ""
+                        deleteProgress = 0.0
+                    }
+
+                    Timer {
+                        interval: 16
+                        repeat: true
+                        running: navigationSettings.deleteTarget !== ""
+                        onTriggered: {
+                            navigationSettings.deleteProgress += 16.0 / 600.0
+                            if (navigationSettings.deleteProgress >= 1.0) {
+                                var t = navigationSettings.deleteTarget
+                                navigationSettings.cancelNavDelete()
+                                if (t === "n") { nSettingsArea.linkedSceneId = -1; nSettingsArea.linkedSceneName = ""; nSettingsArea.linkedThumbnailRev = 0 }
+                                else if (t === "s") { sSettingsArea.linkedSceneId = -1; sSettingsArea.linkedSceneName = ""; sSettingsArea.linkedThumbnailRev = 0 }
+                                else if (t === "e") { eSettingsArea.linkedSceneId = -1; eSettingsArea.linkedSceneName = ""; eSettingsArea.linkedThumbnailRev = 0 }
+                                else if (t === "w") { wSettingsArea.linkedSceneId = -1; wSettingsArea.linkedSceneName = ""; wSettingsArea.linkedThumbnailRev = 0 }
+                            }
+                        }
+                    }
 
                     Canvas {
                         id: cutoutCanvas
@@ -8584,6 +9038,13 @@ Window {
                             }
                         }
 
+                        Timer {
+                            id: layoutAreasDismissTimer
+                            interval: 120
+                            repeat: false
+                            onTriggered: sceneEditorButtons.navigationOpen = false
+                        }
+
                         MouseArea {
                             anchors.fill: parent
                             hoverEnabled: true
@@ -8593,7 +9054,7 @@ Window {
                             onReleased: navigationLayoutButton.pressed = false
 
                             onClicked: {
-                                console.log("layout areas clicked");
+                                layoutAreasDismissTimer.start();
                             }
                         }
                     }
@@ -8604,26 +9065,102 @@ Window {
                         height: 70
                         radius: 12
                         color: "transparent"
-                        border.color: "white"
+                        border.color: linkedSceneId !== -1 ? "#5DA9A4" : "white"
                         border.width: 2
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.top: parent.top
                         anchors.topMargin: 20
+                        clip: true
+
+                        property int linkedSceneId: -1
+                        property string linkedSceneName: ""
+                        property int linkedThumbnailRev: 0
+
+                        Item {
+                            id: nThumbClip
+                            anchors.fill: parent
+                            visible: parent.linkedSceneId !== -1
+                            layer.enabled: true
+                            layer.effect: OpacityMask {
+                                maskSource: Rectangle {
+                                    width: nThumbClip.width
+                                    height: nThumbClip.height
+                                    radius: 12
+                                    color: "white"
+                                }
+                            }
+                            Image {
+                                anchors.fill: parent
+                                source: nSettingsArea.linkedSceneId !== -1 && nSettingsArea.linkedThumbnailRev > 0
+                                    ? ("image://thumbnails/" + nSettingsArea.linkedSceneId + "?rev=" + nSettingsArea.linkedThumbnailRev) : ""
+                                fillMode: Image.PreserveAspectCrop
+                                cache: false
+                            }
+                        }
 
                         Rectangle {
                             width: parent.width - 50
                             height: parent.height - 50
                             anchors.centerIn: parent
                             color: "transparent"
+                            visible: parent.linkedSceneId === -1
 
                             Image {
                                 id: nHeading
-                                x: parent.x
-                                y: parent.y
                                 height: parent.height
                                 anchors.centerIn: parent
                                 fillMode: Image.PreserveAspectFit
                                 source: "headings/n_heading.svg"
+                            }
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 4
+                            text: parent.linkedSceneName
+                            font.pixelSize: 9
+                            color: "white"
+                            style: Text.Outline
+                            styleColor: "black"
+                            visible: parent.linkedSceneId !== -1
+                            elide: Text.ElideMiddle
+                            width: parent.width - 8
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 12
+                            color: Qt.rgba(1, 0, 0, navigationSettings.deleteProgress * 0.6)
+                            border.color: Qt.rgba(1, 0, 0, 0.4 + navigationSettings.deleteProgress * 0.6)
+                            border.width: navigationSettings.deleteTarget === "n" ? 2 : 0
+                            visible: navigationSettings.deleteTarget === "n"
+                            Behavior on color { ColorAnimation { duration: 40 } }
+                        }
+
+                        DropArea {
+                            anchors.fill: parent
+                            keys: ["navScene"]
+                            onDropped: function(drop) {
+                                nSettingsArea.linkedSceneId = navDragGhost.draggedSceneId
+                                nSettingsArea.linkedSceneName = navDragGhost.draggedSceneName
+                                nSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev
+                                drop.accept()
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            enabled: nSettingsArea.linkedSceneId !== -1
+                            onPressed: function(mouse) {
+                                if (mouse.button === Qt.RightButton)
+                                    navigationSettings.deleteTarget = "n"
+                            }
+                            onReleased: function(mouse) {
+                                if (mouse.button === Qt.RightButton && navigationSettings.deleteTarget === "n")
+                                    navigationSettings.cancelNavDelete()
                             }
                         }
                     }
@@ -8634,26 +9171,102 @@ Window {
                         height: 70
                         radius: 12
                         color: "transparent"
-                        border.color: "white"
+                        border.color: linkedSceneId !== -1 ? "#5DA9A4" : "white"
                         border.width: 2
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
                         anchors.bottomMargin: 20
+                        clip: true
+
+                        property int linkedSceneId: -1
+                        property string linkedSceneName: ""
+                        property int linkedThumbnailRev: 0
+
+                        Item {
+                            id: sThumbClip
+                            anchors.fill: parent
+                            visible: parent.linkedSceneId !== -1
+                            layer.enabled: true
+                            layer.effect: OpacityMask {
+                                maskSource: Rectangle {
+                                    width: sThumbClip.width
+                                    height: sThumbClip.height
+                                    radius: 12
+                                    color: "white"
+                                }
+                            }
+                            Image {
+                                anchors.fill: parent
+                                source: sSettingsArea.linkedSceneId !== -1 && sSettingsArea.linkedThumbnailRev > 0
+                                    ? ("image://thumbnails/" + sSettingsArea.linkedSceneId + "?rev=" + sSettingsArea.linkedThumbnailRev) : ""
+                                fillMode: Image.PreserveAspectCrop
+                                cache: false
+                            }
+                        }
 
                         Rectangle {
                             width: parent.width - 50
                             height: parent.height - 50
                             anchors.centerIn: parent
                             color: "transparent"
+                            visible: parent.linkedSceneId === -1
 
                             Image {
                                 id: sHeading
-                                x: parent.x
-                                y: parent.y
                                 height: parent.height
                                 anchors.centerIn: parent
                                 fillMode: Image.PreserveAspectFit
                                 source: "headings/s_heading.svg"
+                            }
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 4
+                            text: parent.linkedSceneName
+                            font.pixelSize: 9
+                            color: "white"
+                            style: Text.Outline
+                            styleColor: "black"
+                            visible: parent.linkedSceneId !== -1
+                            elide: Text.ElideMiddle
+                            width: parent.width - 8
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 12
+                            color: Qt.rgba(1, 0, 0, navigationSettings.deleteProgress * 0.6)
+                            border.color: Qt.rgba(1, 0, 0, 0.4 + navigationSettings.deleteProgress * 0.6)
+                            border.width: navigationSettings.deleteTarget === "s" ? 2 : 0
+                            visible: navigationSettings.deleteTarget === "s"
+                            Behavior on color { ColorAnimation { duration: 40 } }
+                        }
+
+                        DropArea {
+                            anchors.fill: parent
+                            keys: ["navScene"]
+                            onDropped: function(drop) {
+                                sSettingsArea.linkedSceneId = navDragGhost.draggedSceneId
+                                sSettingsArea.linkedSceneName = navDragGhost.draggedSceneName
+                                sSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev
+                                drop.accept()
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            enabled: sSettingsArea.linkedSceneId !== -1
+                            onPressed: function(mouse) {
+                                if (mouse.button === Qt.RightButton)
+                                    navigationSettings.deleteTarget = "s"
+                            }
+                            onReleased: function(mouse) {
+                                if (mouse.button === Qt.RightButton && navigationSettings.deleteTarget === "s")
+                                    navigationSettings.cancelNavDelete()
                             }
                         }
                     }
@@ -8664,26 +9277,102 @@ Window {
                         height: 70
                         radius: 12
                         color: "transparent"
-                        border.color: "white"
+                        border.color: linkedSceneId !== -1 ? "#5DA9A4" : "white"
                         border.width: 2
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.right: parent.right
                         anchors.rightMargin: 20
+                        clip: true
+
+                        property int linkedSceneId: -1
+                        property string linkedSceneName: ""
+                        property int linkedThumbnailRev: 0
+
+                        Item {
+                            id: eThumbClip
+                            anchors.fill: parent
+                            visible: parent.linkedSceneId !== -1
+                            layer.enabled: true
+                            layer.effect: OpacityMask {
+                                maskSource: Rectangle {
+                                    width: eThumbClip.width
+                                    height: eThumbClip.height
+                                    radius: 12
+                                    color: "white"
+                                }
+                            }
+                            Image {
+                                anchors.fill: parent
+                                source: eSettingsArea.linkedSceneId !== -1 && eSettingsArea.linkedThumbnailRev > 0
+                                    ? ("image://thumbnails/" + eSettingsArea.linkedSceneId + "?rev=" + eSettingsArea.linkedThumbnailRev) : ""
+                                fillMode: Image.PreserveAspectCrop
+                                cache: false
+                            }
+                        }
 
                         Rectangle {
                             width: parent.width - 50
                             height: parent.height - 50
                             anchors.centerIn: parent
                             color: "transparent"
+                            visible: parent.linkedSceneId === -1
 
                             Image {
                                 id: eHeading
-                                x: parent.x
-                                y: parent.y
                                 height: parent.height
                                 anchors.centerIn: parent
                                 fillMode: Image.PreserveAspectFit
                                 source: "headings/e_heading.svg"
+                            }
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 4
+                            text: parent.linkedSceneName
+                            font.pixelSize: 9
+                            color: "white"
+                            style: Text.Outline
+                            styleColor: "black"
+                            visible: parent.linkedSceneId !== -1
+                            elide: Text.ElideMiddle
+                            width: parent.width - 8
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 12
+                            color: Qt.rgba(1, 0, 0, navigationSettings.deleteProgress * 0.6)
+                            border.color: Qt.rgba(1, 0, 0, 0.4 + navigationSettings.deleteProgress * 0.6)
+                            border.width: navigationSettings.deleteTarget === "e" ? 2 : 0
+                            visible: navigationSettings.deleteTarget === "e"
+                            Behavior on color { ColorAnimation { duration: 40 } }
+                        }
+
+                        DropArea {
+                            anchors.fill: parent
+                            keys: ["navScene"]
+                            onDropped: function(drop) {
+                                eSettingsArea.linkedSceneId = navDragGhost.draggedSceneId
+                                eSettingsArea.linkedSceneName = navDragGhost.draggedSceneName
+                                eSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev
+                                drop.accept()
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            enabled: eSettingsArea.linkedSceneId !== -1
+                            onPressed: function(mouse) {
+                                if (mouse.button === Qt.RightButton)
+                                    navigationSettings.deleteTarget = "e"
+                            }
+                            onReleased: function(mouse) {
+                                if (mouse.button === Qt.RightButton && navigationSettings.deleteTarget === "e")
+                                    navigationSettings.cancelNavDelete()
                             }
                         }
                     }
@@ -8694,26 +9383,102 @@ Window {
                         height: 70
                         radius: 12
                         color: "transparent"
-                        border.color: "white"
+                        border.color: linkedSceneId !== -1 ? "#5DA9A4" : "white"
                         border.width: 2
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                        clip: true
+
+                        property int linkedSceneId: -1
+                        property string linkedSceneName: ""
+                        property int linkedThumbnailRev: 0
+
+                        Item {
+                            id: wThumbClip
+                            anchors.fill: parent
+                            visible: parent.linkedSceneId !== -1
+                            layer.enabled: true
+                            layer.effect: OpacityMask {
+                                maskSource: Rectangle {
+                                    width: wThumbClip.width
+                                    height: wThumbClip.height
+                                    radius: 12
+                                    color: "white"
+                                }
+                            }
+                            Image {
+                                anchors.fill: parent
+                                source: wSettingsArea.linkedSceneId !== -1 && wSettingsArea.linkedThumbnailRev > 0
+                                    ? ("image://thumbnails/" + wSettingsArea.linkedSceneId + "?rev=" + wSettingsArea.linkedThumbnailRev) : ""
+                                fillMode: Image.PreserveAspectCrop
+                                cache: false
+                            }
+                        }
 
                         Rectangle {
                             width: parent.width - 50
                             height: parent.height - 50
                             anchors.centerIn: parent
                             color: "transparent"
+                            visible: parent.linkedSceneId === -1
 
                             Image {
                                 id: wHeading
-                                x: parent.x
-                                y: parent.y
                                 height: parent.height
                                 anchors.centerIn: parent
                                 fillMode: Image.PreserveAspectFit
                                 source: "headings/w_heading.svg"
+                            }
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 4
+                            text: parent.linkedSceneName
+                            font.pixelSize: 9
+                            color: "white"
+                            style: Text.Outline
+                            styleColor: "black"
+                            visible: parent.linkedSceneId !== -1
+                            elide: Text.ElideMiddle
+                            width: parent.width - 8
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 12
+                            color: Qt.rgba(1, 0, 0, navigationSettings.deleteProgress * 0.6)
+                            border.color: Qt.rgba(1, 0, 0, 0.4 + navigationSettings.deleteProgress * 0.6)
+                            border.width: navigationSettings.deleteTarget === "w" ? 2 : 0
+                            visible: navigationSettings.deleteTarget === "w"
+                            Behavior on color { ColorAnimation { duration: 40 } }
+                        }
+
+                        DropArea {
+                            anchors.fill: parent
+                            keys: ["navScene"]
+                            onDropped: function(drop) {
+                                wSettingsArea.linkedSceneId = navDragGhost.draggedSceneId
+                                wSettingsArea.linkedSceneName = navDragGhost.draggedSceneName
+                                wSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev
+                                drop.accept()
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            enabled: wSettingsArea.linkedSceneId !== -1
+                            onPressed: function(mouse) {
+                                if (mouse.button === Qt.RightButton)
+                                    navigationSettings.deleteTarget = "w"
+                            }
+                            onReleased: function(mouse) {
+                                if (mouse.button === Qt.RightButton && navigationSettings.deleteTarget === "w")
+                                    navigationSettings.cancelNavDelete()
                             }
                         }
                     }
@@ -9425,8 +10190,73 @@ Window {
 
                     onClicked: {
                         sceneEditorButtons.navigationOpen = !sceneEditorButtons.navigationOpen;
+                        if (sceneEditorButtons.navigationOpen)
+                            sceneEditorButtons.navOverlayOpen = true;
                     }
                 }
+            }
+        }
+
+        // Drag ghost for navigation scene drag-and-drop
+        Rectangle {
+            id: navDragGhost
+            width: 120
+            height: 75
+            radius: 12
+            z: 1000
+            visible: false
+            color: "black"
+            layer.enabled: true
+
+            property int draggedSceneId: -1
+            property string draggedSceneName: ""
+            property int draggedThumbnailRev: 0
+
+            Drag.active: visible
+            Drag.keys: ["navScene"]
+            Drag.hotSpot.x: width / 2
+            Drag.hotSpot.y: height / 2
+
+            Item {
+                anchors.fill: parent
+                layer.enabled: true
+                layer.effect: OpacityMask {
+                    maskSource: Rectangle {
+                        width: navDragGhost.width
+                        height: navDragGhost.height
+                        radius: navDragGhost.radius
+                        color: "white"
+                    }
+                }
+                Image {
+                    anchors.fill: parent
+                    source: navDragGhost.draggedSceneId !== -1 && navDragGhost.draggedThumbnailRev > 0
+                        ? ("image://thumbnails/" + navDragGhost.draggedSceneId + "?rev=" + navDragGhost.draggedThumbnailRev) : ""
+                    fillMode: Image.PreserveAspectCrop
+                    cache: false
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 6
+                text: navDragGhost.draggedSceneName
+                font.pixelSize: 9
+                color: "white"
+                style: Text.Outline
+                styleColor: "black"
+                elide: Text.ElideMiddle
+                width: parent.width - 8
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                color: "transparent"
+                border.color: "white"
+                border.width: 2
+                radius: 12
             }
         }
     }
@@ -9554,6 +10384,7 @@ Window {
                     sceneEditorButtons.conditionsOpen = false;
                     sceneEditorButtons.variablesOpen = false;
                     sceneEditorButtons.navigationOpen = false;
+                    sceneEditorButtons.interactivityPickerOpen = false;
                     // Populate the scene name field from the DB
                     if (mainWindow.currentSceneId !== -1)
                         sceneNameInput.text = storyManager.getSceneName(mainWindow.currentSceneId);
