@@ -6800,24 +6800,31 @@ Window {
 
                                         Item {
                                             width: parent.width
-                                            height: itemCommand === "sound" ? 34 : 0
+                                            height: itemCommand === "sound" ? 26 : 0
                                             visible: itemCommand === "sound"
 
                                             Rectangle {
                                                 anchors.fill: parent
                                                 radius: 4
-                                                color: "transparent"
-                                                border.color: itemSoundPath !== "" ? "white" : "#555"
-                                                border.width: 1
+                                                color: "black"
 
-                                                Text {
+                                                Image {
+                                                    id: areaDropSoundIcon
                                                     anchors.centerIn: parent
-                                                    visible: itemSoundPath === ""
-                                                    text: "drop sound or click to browse"
-                                                    font.pixelSize: 10; color: "#666"
+                                                    width: 20; height: 20
+                                                    source: "icons/dropsound.svg"
+                                                    fillMode: Image.PreserveAspectFit
+                                                    visible: false
+                                                }
+                                                ColorOverlay {
+                                                    anchors.fill: areaDropSoundIcon
+                                                    source: areaDropSoundIcon
+                                                    color: "#666"
+                                                    opacity: itemSoundPath !== "" ? 0.3 : 1.0
+                                                    Behavior on opacity { NumberAnimation { duration: 100 } }
                                                 }
                                                 Text {
-                                                    anchors.fill: parent; anchors.margins: 6
+                                                    anchors.fill: parent; anchors.margins: 4
                                                     visible: itemSoundPath !== ""
                                                     text: itemSoundPath.replace(/.*[\/\\]/, "")
                                                     font.pixelSize: 10; color: "white"
@@ -9259,24 +9266,31 @@ Window {
 
                                             Item {
                                                 width: parent.width
-                                                height: itemCommand === "sound" ? 34 : 0
+                                                height: itemCommand === "sound" ? 26 : 0
                                                 visible: itemCommand === "sound"
 
                                                 Rectangle {
                                                     anchors.fill: parent
                                                     radius: 4
-                                                    color: "transparent"
-                                                    border.color: itemSoundPath !== "" ? "white" : "#555"
-                                                    border.width: 1
+                                                    color: "black"
 
-                                                    Text {
+                                                    Image {
+                                                        id: selDropSoundIcon
                                                         anchors.centerIn: parent
-                                                        visible: itemSoundPath === ""
-                                                        text: "drop sound or click to browse"
-                                                        font.pixelSize: 10; color: "#666"
+                                                        width: 20; height: 20
+                                                        source: "icons/dropsound.svg"
+                                                        fillMode: Image.PreserveAspectFit
+                                                        visible: false
+                                                    }
+                                                    ColorOverlay {
+                                                        anchors.fill: selDropSoundIcon
+                                                        source: selDropSoundIcon
+                                                        color: "#666"
+                                                        opacity: itemSoundPath !== "" ? 0.3 : 1.0
+                                                        Behavior on opacity { NumberAnimation { duration: 100 } }
                                                     }
                                                     Text {
-                                                        anchors.fill: parent; anchors.margins: 6
+                                                        anchors.fill: parent; anchors.margins: 4
                                                         visible: itemSoundPath !== ""
                                                         text: itemSoundPath.replace(/.*[\/\\]/, "")
                                                         font.pixelSize: 10; color: "white"
