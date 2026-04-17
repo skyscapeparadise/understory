@@ -1368,7 +1368,8 @@ Window {
                     if (el.type === "area") {
                         areasModel.append({
                             x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
-                            name: el.name || "", stackOrder: z
+                            name: el.name || "", stackOrder: z,
+                            interactivityJson: el.interactivityJson || "[]"
                         });
                     } else if (el.type === "text") {
                         textBoxesModel.append({
@@ -1408,6 +1409,8 @@ Window {
             }
 
             function collectSceneElements() {
+                // Flush the currently-edited area's interactivity to areasModel before serializing.
+                selectSettings.saveCurrentInteractivity();
                 var elements = [];
                 var i, m;
                 for (i = 0; i < areasModel.count; i++) {
@@ -1415,7 +1418,8 @@ Window {
                     elements.push({ type: "area",
                         x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
                         w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
-                        name: m.name || "", z_order: m.stackOrder });
+                        name: m.name || "", z_order: m.stackOrder,
+                        interactivityJson: m.interactivityJson || "[]" });
                 }
                 for (i = 0; i < textBoxesModel.count; i++) {
                     m = textBoxesModel.get(i);
@@ -1451,6 +1455,60 @@ Window {
                         uniformsJson: m.uniformsJson });
                 }
                 return JSON.stringify(elements);
+            }
+
+            // Serialize a ListModel of interactivity items to a JSON string.
+            function serializeInteractivityModel(mdl) {
+                var items = [];
+                for (var i = 0; i < mdl.count; i++) {
+                    var e = mdl.get(i);
+                    items.push({
+                        itemTrigger: e.itemTrigger, itemAction: e.itemAction,
+                        itemCommand: e.itemCommand, itemTransition: e.itemTransition,
+                        itemTransitionSpeed: e.itemTransitionSpeed,
+                        itemTargetSceneId: e.itemTargetSceneId, itemTargetSceneName: e.itemTargetSceneName,
+                        itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
+                        itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
+                        itemUpdateVar: e.itemUpdateVar, itemUpdateOp: e.itemUpdateOp, itemUpdateVal: e.itemUpdateVal
+                    });
+                }
+                return JSON.stringify(items);
+            }
+
+            // Populate a ListModel from a JSON string of interactivity items.
+            function loadInteractivityModel(mdl, json) {
+                mdl.clear();
+                var items = [];
+                try { items = JSON.parse(json || "[]"); } catch(e) {}
+                for (var i = 0; i < items.length; i++) {
+                    var e = items[i];
+                    mdl.append({
+                        itemTrigger:          e.itemTrigger          || "click",
+                        itemAction:           e.itemAction           || "cue",
+                        itemCommand:          e.itemCommand          || "jump",
+                        itemTransition:       e.itemTransition       || "cut",
+                        itemTransitionSpeed:  e.itemTransitionSpeed  !== undefined ? e.itemTransitionSpeed : 1.0,
+                        itemTargetSceneId:    e.itemTargetSceneId    !== undefined ? e.itemTargetSceneId : -1,
+                        itemTargetSceneName:  e.itemTargetSceneName  || "",
+                        itemConditionVar:     e.itemConditionVar     || "",
+                        itemConditionOp:      e.itemConditionOp      || "is",
+                        itemConditionVal:     e.itemConditionVal     || "",
+                        itemSoundPath:        e.itemSoundPath        || "",
+                        itemUpdateVar:        e.itemUpdateVar        || "",
+                        itemUpdateOp:         e.itemUpdateOp         || "=",
+                        itemUpdateVal:        e.itemUpdateVal        || ""
+                    });
+                }
+            }
+
+            // Execute a cut-to-scene jump: save current scene, load target scene.
+            function jumpToScene(targetSceneId) {
+                if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId) return;
+                selectSettings.saveCurrentInteractivity();
+                storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
+                mainWindow.currentSceneId = targetSceneId;
+                viewport.loadSceneIntoViewport(targetSceneId);
+                sceneNameInput.text = storyManager.getSceneName(targetSceneId);
             }
 
             // Capture a 540×300 thumbnail of the scene content with a black background.
@@ -1569,7 +1627,8 @@ Window {
                             x2: Math.max(viewport.areaX1, viewport.areaX2),
                             y2: Math.max(viewport.areaY1, viewport.areaY2),
                             name: areaSpatialProps.propName,
-                            stackOrder: viewport.nextStackOrder++
+                            stackOrder: viewport.nextStackOrder++,
+                            interactivityJson: viewport.serializeInteractivityModel(areaInteractivityModel)
                         });
                         viewport.selectArea(areasModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -1869,6 +1928,50 @@ Window {
                                     duration: 80
                                 }
                             }
+                        }
+                    }
+
+                    // Simulate: click/hover to trigger interactivity in preview mode
+                    // Note: viewportCursorArea (z:999, hoverEnabled:true) consumes all hover events
+                    // so onEntered never fires here. Hover is detected via viewport.hoveredAreaIndex
+                    // which viewportCursorArea already maintains correctly.
+                    MouseArea {
+                        id: areaSimulateMouseArea
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: buttonGrid.selectedTool === "simulate"
+                        hoverEnabled: false
+                        z: 3
+                        cursorShape: Qt.PointingHandCursor
+
+                        function fireInteractivity(trigger) {
+                            var json = areasModel.get(index).interactivityJson || "[]"
+                            var items = []
+                            try { items = JSON.parse(json) } catch(e) {}
+                            for (var i = 0; i < items.length; i++) {
+                                var it = items[i]
+                                if (it.itemTrigger !== trigger) continue
+                                if (it.itemCommand !== "jump") continue
+                                if (it.itemTargetSceneId < 0) continue
+                                if (it.itemAction === "cue" && it.itemTransition === "cut") {
+                                    viewport.jumpToScene(it.itemTargetSceneId)
+                                    return
+                                }
+                            }
+                        }
+
+                        onClicked: fireInteractivity("click")
+                    }
+
+                    // Hover interactivity: triggered via hoveredAreaIndex since viewportCursorArea
+                    // at z:999 owns all hover events and already tracks this correctly.
+                    Connections {
+                        target: viewport
+                        enabled: buttonGrid.selectedTool === "simulate"
+                        function onHoveredAreaIndexChanged() {
+                            if (viewport.hoveredAreaIndex === index)
+                                areaSimulateMouseArea.fireInteractivity("hover")
                         }
                     }
 
@@ -7952,6 +8055,41 @@ Window {
                     readonly property bool hasActiveImage: (viewport.selectionRevision >= 0) && viewport.selectedImages.length === 1 && viewport.selectionCount === 1
                     readonly property bool hasActiveVideo: (viewport.selectionRevision >= 0) && viewport.selectedVideos.length === 1 && viewport.selectionCount === 1
                     readonly property bool hasActiveShader: (viewport.selectionRevision >= 0) && viewport.selectedShaders.length === 1 && viewport.selectionCount === 1
+
+                    // Tracks which areasModel index is currently loaded into selectInteractivityModel.
+                    property int syncedAreaIdx: -1
+
+                    // Serialize selectInteractivityModel back into areasModel for the currently synced area.
+                    function saveCurrentInteractivity() {
+                        if (syncedAreaIdx >= 0 && syncedAreaIdx < areasModel.count) {
+                            areasModel.setProperty(syncedAreaIdx, "interactivityJson",
+                                viewport.serializeInteractivityModel(selectInteractivityModel))
+                        }
+                    }
+
+                    // Load/save interactivity whenever the area selection changes.
+                    Connections {
+                        target: viewport
+                        function onSelectionRevisionChanged() {
+                            selectSettings.saveCurrentInteractivity()
+                            if (selectSettings.hasActiveArea) {
+                                var idx = viewport.selectedAreas[0]
+                                selectSettings.syncedAreaIdx = idx
+                                viewport.loadInteractivityModel(selectInteractivityModel, areasModel.get(idx).interactivityJson)
+                            } else {
+                                selectSettings.syncedAreaIdx = -1
+                                selectInteractivityModel.clear()
+                            }
+                        }
+                    }
+
+                    // Also save when the tool changes away from select (e.g. switching to simulate).
+                    Connections {
+                        target: buttonGrid
+                        function onSelectedToolChanged() {
+                            selectSettings.saveCurrentInteractivity()
+                        }
+                    }
 
                     // Uniform list for the currently selected shader (excludes time, which is auto-animated).
                     property var shaderUniforms: []
