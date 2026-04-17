@@ -6156,6 +6156,7 @@ Window {
                     width: parent.width
                     radius: parent.radius
                     color: "transparent"
+                    property string interactivityTab: "click"
 
                     Text {
                         id: areaSettingsHeading
@@ -6285,6 +6286,7 @@ Window {
                             RowLayout {
                                 width: parent.width
                                 height: 26
+                                spacing: 4
 
                                 Text {
                                     text: "interactivity"
@@ -6292,9 +6294,36 @@ Window {
                                     font.capitalization: Font.AllUppercase
                                     font.letterSpacing: 1
                                     color: "white"
-                                    Layout.fillWidth: true
                                     verticalAlignment: Text.AlignVCenter
+                                    Layout.rightMargin: 4
                                 }
+
+                                Repeater {
+                                    model: ["click", "hover"]
+                                    delegate: Rectangle {
+                                        Layout.preferredWidth: 36
+                                        Layout.preferredHeight: 18
+                                        radius: 3
+                                        property bool active: areaSettings.interactivityTab === modelData
+                                        color: active ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData
+                                            font.pixelSize: 10
+                                            color: parent.active ? "#1a1a1d" : "white"
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: areaSettings.interactivityTab = modelData
+                                        }
+                                    }
+                                }
+
+                                Item { Layout.fillWidth: true }
 
                                 Rectangle {
                                     Layout.preferredWidth: 26
@@ -6321,9 +6350,11 @@ Window {
                                         onEntered: parent.hovered = true
                                         onExited: parent.hovered = false
                                         onClicked: {
+                                            var tab = areaSettings.interactivityTab
                                             var defaultAction = "cue"
                                             for (var i = 0; i < areaInteractivityModel.count; i++) {
                                                 var e = areaInteractivityModel.get(i)
+                                                if (e.itemTrigger !== tab) continue
                                                 if ((e.itemAction === "cue" && e.itemCommand === "jump") ||
                                                     (e.itemAction === "else" && e.itemCommand === "jump")) {
                                                     defaultAction = "if"; break
@@ -6336,7 +6367,7 @@ Window {
                                                 }
                                                 if (firstVar === "") return
                                             }
-                                            areaInteractivityModel.append({ itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
+                                            areaInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 1.0, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
                                         }
                                     }
                                 }
@@ -6348,7 +6379,8 @@ Window {
                                     Item {
                                         id: areaInteractivityDelegate
                                         width: parent ? parent.width : 0
-                                        height: innerAreaCol.height
+                                        height: itemTrigger === areaSettings.interactivityTab ? innerAreaCol.height : 0
+                                        visible: itemTrigger === areaSettings.interactivityTab
                                         property int listIdx: index
                                         property real deleteProgress: 0.0
                                         property string condVarType: {
@@ -6377,16 +6409,20 @@ Window {
                                             easing.type: Easing.Linear
                                             onFinished: {
                                                 if (areaInteractivityDelegate.deleteProgress >= 1.0) {
-                                                    var wasIf = areaInteractivityModel.get(areaInteractivityDelegate.listIdx).itemAction === "if"
+                                                    var item = areaInteractivityModel.get(areaInteractivityDelegate.listIdx)
+                                                    var wasIf = item.itemAction === "if"
+                                                    var trigger = item.itemTrigger
                                                     areaInteractivityModel.remove(areaInteractivityDelegate.listIdx)
                                                     if (wasIf) {
                                                         var hasIf = false
                                                         for (var i = 0; i < areaInteractivityModel.count; i++) {
-                                                            if (areaInteractivityModel.get(i).itemAction === "if") { hasIf = true; break }
+                                                            var e = areaInteractivityModel.get(i)
+                                                            if (e.itemTrigger === trigger && e.itemAction === "if") { hasIf = true; break }
                                                         }
                                                         if (!hasIf) {
                                                             for (var i = areaInteractivityModel.count - 1; i >= 0; i--) {
-                                                                if (areaInteractivityModel.get(i).itemAction === "else")
+                                                                var e = areaInteractivityModel.get(i)
+                                                                if (e.itemTrigger === trigger && e.itemAction === "else")
                                                                     areaInteractivityModel.remove(i)
                                                             }
                                                         }
@@ -6437,8 +6473,10 @@ Window {
                                                     if (!hasVars) return ["cue"]
                                                     var opts = ["cue", "if"]
                                                     var thisIdx = areaInteractivityDelegate.listIdx
+                                                    var thisTrigger = itemTrigger
                                                     for (var i = 0; i < areaInteractivityModel.count; i++) {
-                                                        if (i !== thisIdx && areaInteractivityModel.get(i).itemAction === "if") {
+                                                        var e = areaInteractivityModel.get(i)
+                                                        if (i !== thisIdx && e.itemTrigger === thisTrigger && e.itemAction === "if") {
                                                             opts.push("else"); break
                                                         }
                                                     }
@@ -6449,10 +6487,12 @@ Window {
                                                     var newAction = areaActionCombo.model[activatedIndex]
                                                     var itemIdx = areaInteractivityDelegate.listIdx
                                                     var revertIdx = Math.max(0, areaActionCombo.model.indexOf(itemAction))
+                                                    var trigger = itemTrigger
                                                     if (newAction === "cue") {
                                                         for (var i = 0; i < areaInteractivityModel.count; i++) {
                                                             if (i === itemIdx) continue
                                                             var e = areaInteractivityModel.get(i)
+                                                            if (e.itemTrigger !== trigger) continue
                                                             if ((e.itemAction === "cue" && e.itemCommand === "jump") ||
                                                                 (e.itemAction === "else" && e.itemCommand === "jump")) {
                                                                 currentIndex = revertIdx; return
@@ -6463,6 +6503,7 @@ Window {
                                                         for (var i = 0; i < areaInteractivityModel.count; i++) {
                                                             if (i === itemIdx) continue
                                                             var e = areaInteractivityModel.get(i)
+                                                            if (e.itemTrigger !== trigger) continue
                                                             if (e.itemAction === "else" || (e.itemAction === "cue" && e.itemCommand === "jump")) {
                                                                 currentIndex = revertIdx; return
                                                             }
@@ -6793,6 +6834,80 @@ Window {
                                                                 areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemTransition", modelData.key)
                                                             }
                                                         }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Item {
+                                            width: parent.width
+                                            height: (itemCommand === "jump" && itemTransition !== "cut") ? 22 : 0
+                                            visible: itemCommand === "jump" && itemTransition !== "cut"
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                spacing: 6
+
+                                                Slider {
+                                                    id: areaTransSpeedSlider
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 22
+                                                    from: 0; to: 1; stepSize: 0
+                                                    Component.onCompleted: {
+                                                        var s = itemTransitionSpeed || 1.0
+                                                        value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                                                    }
+                                                    onMoved: {
+                                                        var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
+                                                        var rounded = Math.round(speed * 100) / 100
+                                                        areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemTransitionSpeed", rounded)
+                                                        areaTransSpeedField.text = rounded.toFixed(1)
+                                                    }
+                                                    background: Rectangle {
+                                                        x: areaTransSpeedSlider.leftPadding
+                                                        y: areaTransSpeedSlider.topPadding + areaTransSpeedSlider.availableHeight / 2 - height / 2
+                                                        implicitWidth: 200; implicitHeight: 4
+                                                        width: areaTransSpeedSlider.availableWidth; height: 4
+                                                        radius: 2; color: "#333"
+                                                        Rectangle {
+                                                            width: areaTransSpeedSlider.visualPosition * parent.width
+                                                            height: parent.height; color: "#5DA9A4"; radius: 2
+                                                        }
+                                                    }
+                                                    handle: Rectangle {
+                                                        x: areaTransSpeedSlider.leftPadding + areaTransSpeedSlider.visualPosition * (areaTransSpeedSlider.availableWidth - width)
+                                                        y: areaTransSpeedSlider.topPadding + areaTransSpeedSlider.availableHeight / 2 - height / 2
+                                                        implicitWidth: 12; implicitHeight: 12; radius: 6
+                                                        color: areaTransSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    Layout.preferredWidth: 52
+                                                    Layout.preferredHeight: 22
+                                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                    TextInput {
+                                                        id: areaTransSpeedField
+                                                        anchors.left: parent.left; anchors.right: areaSuffix.left
+                                                        anchors.leftMargin: 4; anchors.rightMargin: 2
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                        validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                                        Component.onCompleted: text = (itemTransitionSpeed || 1.0).toFixed(1)
+                                                        Keys.onReturnPressed: focus = false
+                                                        Keys.onEscapePressed: focus = false
+                                                        onEditingFinished: {
+                                                            var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                            text = speed.toFixed(1)
+                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemTransitionSpeed", speed)
+                                                            areaTransSpeedSlider.value = speed <= 2.0 ? speed / 4.0 : 0.5 + (speed - 2.0) / 16.0
+                                                        }
+                                                    }
+                                                    Text {
+                                                        id: areaSuffix
+                                                        anchors.right: parent.right; anchors.rightMargin: 4
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        text: "sec"; font.pixelSize: 10; color: "#aaa"
                                                     }
                                                 }
                                             }
@@ -7831,6 +7946,7 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
+                    property string interactivityTab: "click"
                     readonly property bool hasActiveArea: (viewport.selectionRevision >= 0) && viewport.selectedAreas.length === 1 && viewport.selectionCount === 1
                     readonly property bool hasActiveTb: (viewport.selectionRevision >= 0) && viewport.selectedTbs.length === 1 && viewport.selectionCount === 1
                     readonly property bool hasActiveImage: (viewport.selectionRevision >= 0) && viewport.selectedImages.length === 1 && viewport.selectionCount === 1
@@ -8751,6 +8867,7 @@ Window {
                                 RowLayout {
                                     width: parent.width
                                     height: 26
+                                    spacing: 4
 
                                     Text {
                                         text: "interactivity"
@@ -8758,9 +8875,36 @@ Window {
                                         font.capitalization: Font.AllUppercase
                                         font.letterSpacing: 1
                                         color: "white"
-                                        Layout.fillWidth: true
                                         verticalAlignment: Text.AlignVCenter
+                                        Layout.rightMargin: 4
                                     }
+
+                                    Repeater {
+                                        model: ["click", "hover"]
+                                        delegate: Rectangle {
+                                            Layout.preferredWidth: 36
+                                            Layout.preferredHeight: 18
+                                            radius: 3
+                                            property bool active: selectSettings.interactivityTab === modelData
+                                            color: active ? "white" : "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: modelData
+                                                font.pixelSize: 10
+                                                color: parent.active ? "#1a1a1d" : "white"
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: selectSettings.interactivityTab = modelData
+                                            }
+                                        }
+                                    }
+
+                                    Item { Layout.fillWidth: true }
 
                                     Rectangle {
                                         Layout.preferredWidth: 26
@@ -8787,9 +8931,11 @@ Window {
                                             onEntered: parent.hovered = true
                                             onExited: parent.hovered = false
                                             onClicked: {
+                                                var tab = selectSettings.interactivityTab
                                                 var defaultAction = "cue"
                                                 for (var i = 0; i < selectInteractivityModel.count; i++) {
                                                     var e = selectInteractivityModel.get(i)
+                                                    if (e.itemTrigger !== tab) continue
                                                     if ((e.itemAction === "cue" && e.itemCommand === "jump") ||
                                                         (e.itemAction === "else" && e.itemCommand === "jump")) {
                                                         defaultAction = "if"; break
@@ -8802,7 +8948,7 @@ Window {
                                                     }
                                                     if (firstVar === "") return
                                                 }
-                                                selectInteractivityModel.append({ itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
+                                                selectInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 1.0, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
                                             }
                                         }
                                     }
@@ -8814,7 +8960,8 @@ Window {
                                         Item {
                                             id: selInteractivityDelegate
                                             width: parent ? parent.width : 0
-                                            height: innerSelCol.height
+                                            height: itemTrigger === selectSettings.interactivityTab ? innerSelCol.height : 0
+                                            visible: itemTrigger === selectSettings.interactivityTab
                                             property int listIdx: index
                                             property real deleteProgress: 0.0
                                             property string condVarType: {
@@ -8843,16 +8990,20 @@ Window {
                                                 easing.type: Easing.Linear
                                                 onFinished: {
                                                     if (selInteractivityDelegate.deleteProgress >= 1.0) {
-                                                        var wasIf = selectInteractivityModel.get(selInteractivityDelegate.listIdx).itemAction === "if"
+                                                        var item = selectInteractivityModel.get(selInteractivityDelegate.listIdx)
+                                                        var wasIf = item.itemAction === "if"
+                                                        var trigger = item.itemTrigger
                                                         selectInteractivityModel.remove(selInteractivityDelegate.listIdx)
                                                         if (wasIf) {
                                                             var hasIf = false
                                                             for (var i = 0; i < selectInteractivityModel.count; i++) {
-                                                                if (selectInteractivityModel.get(i).itemAction === "if") { hasIf = true; break }
+                                                                var e = selectInteractivityModel.get(i)
+                                                                if (e.itemTrigger === trigger && e.itemAction === "if") { hasIf = true; break }
                                                             }
                                                             if (!hasIf) {
                                                                 for (var i = selectInteractivityModel.count - 1; i >= 0; i--) {
-                                                                    if (selectInteractivityModel.get(i).itemAction === "else")
+                                                                    var e = selectInteractivityModel.get(i)
+                                                                    if (e.itemTrigger === trigger && e.itemAction === "else")
                                                                         selectInteractivityModel.remove(i)
                                                                 }
                                                             }
@@ -8903,8 +9054,10 @@ Window {
                                                         if (!hasVars) return ["cue"]
                                                         var opts = ["cue", "if"]
                                                         var thisIdx = selInteractivityDelegate.listIdx
+                                                        var thisTrigger = itemTrigger
                                                         for (var i = 0; i < selectInteractivityModel.count; i++) {
-                                                            if (i !== thisIdx && selectInteractivityModel.get(i).itemAction === "if") {
+                                                            var e = selectInteractivityModel.get(i)
+                                                            if (i !== thisIdx && e.itemTrigger === thisTrigger && e.itemAction === "if") {
                                                                 opts.push("else"); break
                                                             }
                                                         }
@@ -8915,10 +9068,12 @@ Window {
                                                         var newAction = selActionCombo.model[activatedIndex]
                                                         var itemIdx = selInteractivityDelegate.listIdx
                                                         var revertIdx = Math.max(0, selActionCombo.model.indexOf(itemAction))
+                                                        var trigger = itemTrigger
                                                         if (newAction === "cue") {
                                                             for (var i = 0; i < selectInteractivityModel.count; i++) {
                                                                 if (i === itemIdx) continue
                                                                 var e = selectInteractivityModel.get(i)
+                                                                if (e.itemTrigger !== trigger) continue
                                                                 if ((e.itemAction === "cue" && e.itemCommand === "jump") ||
                                                                     (e.itemAction === "else" && e.itemCommand === "jump")) {
                                                                     currentIndex = revertIdx; return
@@ -8929,6 +9084,7 @@ Window {
                                                             for (var i = 0; i < selectInteractivityModel.count; i++) {
                                                                 if (i === itemIdx) continue
                                                                 var e = selectInteractivityModel.get(i)
+                                                                if (e.itemTrigger !== trigger) continue
                                                                 if (e.itemAction === "else" || (e.itemAction === "cue" && e.itemCommand === "jump")) {
                                                                     currentIndex = revertIdx; return
                                                                 }
@@ -9259,6 +9415,80 @@ Window {
                                                                     selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemTransition", modelData.key)
                                                                 }
                                                             }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            Item {
+                                                width: parent.width
+                                                height: (itemCommand === "jump" && itemTransition !== "cut") ? 22 : 0
+                                                visible: itemCommand === "jump" && itemTransition !== "cut"
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    spacing: 6
+
+                                                    Slider {
+                                                        id: selTransSpeedSlider
+                                                        Layout.fillWidth: true
+                                                        Layout.preferredHeight: 22
+                                                        from: 0; to: 1; stepSize: 0
+                                                        Component.onCompleted: {
+                                                            var s = itemTransitionSpeed || 1.0
+                                                            value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                                                        }
+                                                        onMoved: {
+                                                            var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
+                                                            var rounded = Math.round(speed * 100) / 100
+                                                            selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemTransitionSpeed", rounded)
+                                                            selTransSpeedField.text = rounded.toFixed(1)
+                                                        }
+                                                        background: Rectangle {
+                                                            x: selTransSpeedSlider.leftPadding
+                                                            y: selTransSpeedSlider.topPadding + selTransSpeedSlider.availableHeight / 2 - height / 2
+                                                            implicitWidth: 200; implicitHeight: 4
+                                                            width: selTransSpeedSlider.availableWidth; height: 4
+                                                            radius: 2; color: "#333"
+                                                            Rectangle {
+                                                                width: selTransSpeedSlider.visualPosition * parent.width
+                                                                height: parent.height; color: "#5DA9A4"; radius: 2
+                                                            }
+                                                        }
+                                                        handle: Rectangle {
+                                                            x: selTransSpeedSlider.leftPadding + selTransSpeedSlider.visualPosition * (selTransSpeedSlider.availableWidth - width)
+                                                            y: selTransSpeedSlider.topPadding + selTransSpeedSlider.availableHeight / 2 - height / 2
+                                                            implicitWidth: 12; implicitHeight: 12; radius: 6
+                                                            color: selTransSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                        }
+                                                    }
+
+                                                    Rectangle {
+                                                        Layout.preferredWidth: 52
+                                                        Layout.preferredHeight: 22
+                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                        TextInput {
+                                                            id: selTransSpeedField
+                                                            anchors.left: parent.left; anchors.right: selSuffix.left
+                                                            anchors.leftMargin: 4; anchors.rightMargin: 2
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                            validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                                            Component.onCompleted: text = (itemTransitionSpeed || 1.0).toFixed(1)
+                                                            Keys.onReturnPressed: focus = false
+                                                            Keys.onEscapePressed: focus = false
+                                                            onEditingFinished: {
+                                                                var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                text = speed.toFixed(1)
+                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemTransitionSpeed", speed)
+                                                                selTransSpeedSlider.value = speed <= 2.0 ? speed / 4.0 : 0.5 + (speed - 2.0) / 16.0
+                                                            }
+                                                        }
+                                                        Text {
+                                                            id: selSuffix
+                                                            anchors.right: parent.right; anchors.rightMargin: 4
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            text: "sec"; font.pixelSize: 10; color: "#aaa"
                                                         }
                                                     }
                                                 }
@@ -10688,15 +10918,21 @@ Window {
                                                         if (mdl.get(i).itemConditionVar === deletedName)
                                                             mdl.remove(i)
                                                     }
-                                                    // If no "if" items remain, remove any orphaned "else" items too
-                                                    var hasIf = false
-                                                    for (var i = 0; i < mdl.count; i++) {
-                                                        if (mdl.get(i).itemAction === "if") { hasIf = true; break }
-                                                    }
-                                                    if (!hasIf) {
-                                                        for (var i = mdl.count - 1; i >= 0; i--) {
-                                                            if (mdl.get(i).itemAction === "else")
-                                                                mdl.remove(i)
+                                                    // Per-trigger: if no "if" items remain for a trigger, remove orphaned "else" items
+                                                    var triggers = ["click", "hover"]
+                                                    for (var t = 0; t < triggers.length; t++) {
+                                                        var trig = triggers[t]
+                                                        var hasIf = false
+                                                        for (var i = 0; i < mdl.count; i++) {
+                                                            var e = mdl.get(i)
+                                                            if (e.itemTrigger === trig && e.itemAction === "if") { hasIf = true; break }
+                                                        }
+                                                        if (!hasIf) {
+                                                            for (var i = mdl.count - 1; i >= 0; i--) {
+                                                                var e = mdl.get(i)
+                                                                if (e.itemTrigger === trig && e.itemAction === "else")
+                                                                    mdl.remove(i)
+                                                            }
                                                         }
                                                     }
                                                 }
