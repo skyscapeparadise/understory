@@ -191,6 +191,7 @@ Item {
                 itemCommand: e.itemCommand, itemTransition: e.itemTransition,
                 itemTransitionSpeed: e.itemTransitionSpeed,
                 itemWipeFeather: e.itemWipeFeather, itemWipeDirection: e.itemWipeDirection,
+                itemPushDirection: e.itemPushDirection,
                 itemTargetSceneId: e.itemTargetSceneId, itemTargetSceneName: e.itemTargetSceneName,
                 itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
                 itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
@@ -214,6 +215,7 @@ Item {
                 itemTransitionSpeed: e.itemTransitionSpeed !== undefined ? e.itemTransitionSpeed : 1.0,
                 itemWipeFeather:     e.itemWipeFeather     !== undefined ? e.itemWipeFeather     : 0.0,
                 itemWipeDirection:   e.itemWipeDirection   || "right",
+                itemPushDirection:   e.itemPushDirection   || "right",
                 itemTargetSceneId:   e.itemTargetSceneId   !== undefined ? e.itemTargetSceneId : -1,
                 itemTargetSceneName: e.itemTargetSceneName || "",
                 itemConditionVar:    e.itemConditionVar    || "",
@@ -317,7 +319,8 @@ Item {
                                                             it.itemTransition    || "cut",
                                                             ms,
                                                             it.itemWipeFeather   || 0.0,
-                                                            it.itemWipeDirection || "right")
+                                                            it.itemWipeDirection || "right",
+                                                            it.itemPushDirection || "right")
                                     return
                                 }
                             }

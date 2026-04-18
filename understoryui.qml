@@ -923,6 +923,12 @@ Window {
             property real   wipeFeather:   0.0
             property int    wipeDirection: 0   // 0=right 1=left 2=down 3=up
 
+            // ── Slide (push) transition state ────────────────────────────────────
+            property bool   sliding:              false
+            property real   slideProgress:        0.0   // animates 0→1 during slide
+            property string pendingSlideDirection: "right"
+            property int    slideDirection:       0   // 0=right 1=left 2=down 3=up
+
             // Thin wrappers — viewport and sidebar code can use these bare names
             property var areasModel:     activeContent ? activeContent.areasModel     : null
             property var textBoxesModel: activeContent ? activeContent.textBoxesModel : null
@@ -1389,17 +1395,18 @@ Window {
             // transition: "cut" | "dissolve" | "wipe"   durationMs: length of animated transitions.
             // wipeFeather: 0.0–0.5   wipeDirection: "right"|"left"|"down"|"up"
             // When staging signals readyForDisplay the Connections below start the transition.
-            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection) {
+            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection) {
                 if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId) return
-                if (dissolving || wiping) return   // don't interrupt an in-progress transition
+                if (dissolving || wiping || sliding) return   // don't interrupt an in-progress transition
                 selectSettings.saveCurrentInteractivity()
                 storyManager.saveSceneElements(mainWindow.currentSceneId, activeContent.collectElements())
                 pendingJumpSceneId = targetSceneId
                 pendingJumpSceneName = storyManager.getSceneName(targetSceneId)
                 pendingTransition      = transition     || "cut"
                 pendingDuration        = durationMs !== undefined ? durationMs : 500
-                pendingWipeFeather     = wipeFeather  !== undefined ? wipeFeather  : 0.0
-                pendingWipeDirection   = wipeDirection || "right"
+                pendingWipeFeather     = wipeFeather   !== undefined ? wipeFeather  : 0.0
+                pendingWipeDirection   = wipeDirection  || "right"
+                pendingSlideDirection  = pushDirection  || "right"
                 var raw = storyManager.loadSceneElements(targetSceneId)
                 var elements
                 try { elements = JSON.parse(raw) } catch(e) { elements = [] }
@@ -1408,10 +1415,14 @@ Window {
 
             // Swap foreground/staging layers — called after a cut, or at end of dissolve/wipe.
             function performSwap() {
-                // Clean up wipe state before flip so opacity bindings reset cleanly.
+                // Clean up shader transition state before flip so opacity bindings reset cleanly.
                 if (wiping) {
                     wiping       = false
                     wipeProgress = 0.0
+                }
+                if (sliding) {
+                    sliding       = false
+                    slideProgress = 0.0
                 }
                 foregroundLayer = 1 - foregroundLayer
                 nextStackOrder = activeContent.nextStackOrder
@@ -1449,6 +1460,21 @@ Window {
                 easing.type: Easing.Linear
                 onStopped: {
                     if (viewport.wiping) {
+                        viewport.performSwap()
+                    }
+                }
+            }
+
+            // Slide animation — sweeps slideProgress from 0→1 over pendingDuration ms.
+            NumberAnimation {
+                id: slideAnim
+                target: viewport
+                property: "slideProgress"
+                from: 0.0
+                to: 1.0
+                easing.type: Easing.InOutQuad
+                onStopped: {
+                    if (viewport.sliding) {
                         viewport.performSwap()
                     }
                 }
@@ -1818,15 +1844,15 @@ Window {
                 // During a dissolve or wipe, staging layer must render above foreground.
                 // During wipe both layers are captured into FBO textures by ShaderEffectSource,
                 // so both are hidden (opacity 0) and the wipeEffect ShaderEffect at z:15 is shown.
-                z: ((viewport.dissolving || viewport.wiping) && viewport.foregroundLayer !== 0) ? 11 : 10
+                z: ((viewport.dissolving || viewport.wiping || viewport.sliding) && viewport.foregroundLayer !== 0) ? 11 : 10
                 viewportRef:   viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 0
                 // Foreground: fully opaque.  Staging during dissolve: fades 0→1.
-                // During wipe: both layers stay at opacity 1 so FBO textures have full color,
+                // During wipe/slide: both layers stay at opacity 1 so FBO textures have full color,
                 // but hideSource:true on the ShaderEffectSources hides them from the scene.
                 // Staging at rest: opacity 0 (keeps video frames decoding silently).
-                opacity: viewport.wiping ? 1.0 :
+                opacity: (viewport.wiping || viewport.sliding) ? 1.0 :
                          viewport.foregroundLayer === 0 ? 1.0 :
                          viewport.dissolving ? viewport.dissolveOpacity : 0.0
 
@@ -1834,18 +1860,24 @@ Window {
                     target: sceneLayerA
                     function onReadyForDisplay() {
                         if (viewport.foregroundLayer !== 0) {
+                            var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
                             if (viewport.pendingTransition === "dissolve") {
                                 dissolveAnim.duration = viewport.pendingDuration
                                 viewport.dissolving = true
                                 dissolveAnim.start()
                             } else if (viewport.pendingTransition === "wipe") {
-                                var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
                                 viewport.wipeFeather   = viewport.pendingWipeFeather
                                 viewport.wipeDirection = dirMap[viewport.pendingWipeDirection] !== undefined
                                                          ? dirMap[viewport.pendingWipeDirection] : 0
                                 wipeAnim.duration = viewport.pendingDuration
                                 viewport.wiping = true
                                 wipeAnim.start()
+                            } else if (viewport.pendingTransition === "push") {
+                                viewport.slideDirection = dirMap[viewport.pendingSlideDirection] !== undefined
+                                                          ? dirMap[viewport.pendingSlideDirection] : 0
+                                slideAnim.duration = viewport.pendingDuration
+                                viewport.sliding = true
+                                slideAnim.start()
                             } else {
                                 viewport.performSwap()
                             }
@@ -1857,11 +1889,11 @@ Window {
             SceneContent {
                 id: sceneLayerB
                 anchors.fill: parent
-                z: ((viewport.dissolving || viewport.wiping) && viewport.foregroundLayer !== 1) ? 11 : 10
+                z: ((viewport.dissolving || viewport.wiping || viewport.sliding) && viewport.foregroundLayer !== 1) ? 11 : 10
                 viewportRef:   viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 1
-                opacity: viewport.wiping ? 1.0 :
+                opacity: (viewport.wiping || viewport.sliding) ? 1.0 :
                          viewport.foregroundLayer === 1 ? 1.0 :
                          viewport.dissolving ? viewport.dissolveOpacity : 0.0
 
@@ -1869,18 +1901,24 @@ Window {
                     target: sceneLayerB
                     function onReadyForDisplay() {
                         if (viewport.foregroundLayer !== 1) {
+                            var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
                             if (viewport.pendingTransition === "dissolve") {
                                 dissolveAnim.duration = viewport.pendingDuration
                                 viewport.dissolving = true
                                 dissolveAnim.start()
                             } else if (viewport.pendingTransition === "wipe") {
-                                var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
                                 viewport.wipeFeather   = viewport.pendingWipeFeather
                                 viewport.wipeDirection = dirMap[viewport.pendingWipeDirection] !== undefined
                                                          ? dirMap[viewport.pendingWipeDirection] : 0
                                 wipeAnim.duration = viewport.pendingDuration
                                 viewport.wiping = true
                                 wipeAnim.start()
+                            } else if (viewport.pendingTransition === "push") {
+                                viewport.slideDirection = dirMap[viewport.pendingSlideDirection] !== undefined
+                                                          ? dirMap[viewport.pendingSlideDirection] : 0
+                                slideAnim.duration = viewport.pendingDuration
+                                viewport.sliding = true
+                                slideAnim.start()
                             } else {
                                 viewport.performSwap()
                             }
@@ -1889,27 +1927,26 @@ Window {
                 }
             }
 
-            // GPU textures for shader-based transitions (wipe, look).
-            // live: only while a wipe is playing — no GPU cost at rest.
-            // hideSource: hides the source layer from the scene while the wipeEffect composites it.
+            // GPU textures for shader-based transitions (wipe, slide/push, look).
+            // live: only while a shader transition is playing — no GPU cost at rest.
+            // hideSource: hides the source layer from the scene while the ShaderEffect composites it.
             ShaderEffectSource {
                 id: texA
                 sourceItem: sceneLayerA
-                live: viewport.wiping
-                hideSource: viewport.wiping
+                live: viewport.wiping || viewport.sliding
+                hideSource: viewport.wiping || viewport.sliding
                 visible: false
             }
 
             ShaderEffectSource {
                 id: texB
                 sourceItem: sceneLayerB
-                live: viewport.wiping
-                hideSource: viewport.wiping
+                live: viewport.wiping || viewport.sliding
+                hideSource: viewport.wiping || viewport.sliding
                 visible: false
             }
 
             // Wipe transition overlay — composites texA/texB via wipe.frag.qsb.
-            // Sits above both scene layers (z:15) and is only shown during a wipe.
             ShaderEffect {
                 id: wipeEffect
                 anchors.fill: parent
@@ -1925,6 +1962,21 @@ Window {
                 property real progress:  viewport.wipeProgress
                 property real feather:   viewport.wipeFeather
                 property int  direction: viewport.wipeDirection
+            }
+
+            // Slide (push) transition overlay — composites texA/texB via slide.frag.qsb.
+            ShaderEffect {
+                id: slideEffect
+                anchors.fill: parent
+                z: 15
+                visible: viewport.sliding
+                fragmentShader: "slide.frag.qsb"
+
+                property var sourceIn:  viewport.foregroundLayer === 0 ? texB : texA
+                property var sourceOut: viewport.foregroundLayer === 0 ? texA : texB
+
+                property real progress:  viewport.slideProgress
+                property int  direction: viewport.slideDirection
             }
 
             // In-progress rubber-band (only visible while dragging)
@@ -3683,7 +3735,7 @@ Window {
                                                 }
                                                 if (firstVar === "") return
                                             }
-                                            areaInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
+                                            areaInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
                                         }
                                     }
                                 }
@@ -4238,6 +4290,38 @@ Window {
                                                         anchors.right: parent.right; anchors.rightMargin: 4
                                                         anchors.verticalCenter: parent.verticalCenter
                                                         text: "sec"; font.pixelSize: 10; color: "#aaa"
+                                                    }
+                                                }
+
+                                                Repeater {
+                                                    model: ["left", "up", "down", "right"]
+                                                    delegate: Rectangle {
+                                                        Layout.preferredWidth: 22
+                                                        Layout.preferredHeight: 22
+                                                        visible: itemTransition === "push"
+                                                        radius: 4
+                                                        property bool isActive: itemPushDirection === modelData
+                                                        color: isActive ? "white" : "transparent"
+                                                        border.color: "white"; border.width: 1
+                                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                                        Image {
+                                                            id: areaPushDirIcon
+                                                            anchors.centerIn: parent
+                                                            width: 14; height: 14
+                                                            source: "icons/" + modelData + ".svg"
+                                                            fillMode: Image.PreserveAspectFit
+                                                            visible: false
+                                                        }
+                                                        ColorOverlay {
+                                                            anchors.fill: areaPushDirIcon
+                                                            source: areaPushDirIcon
+                                                            color: isActive ? "#477B78" : "white"
+                                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                                        }
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            onClicked: areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemPushDirection", modelData)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -6416,7 +6500,7 @@ Window {
                                                     }
                                                     if (firstVar === "") return
                                                 }
-                                                selectInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
+                                                selectInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
                                             }
                                         }
                                     }
@@ -6971,6 +7055,38 @@ Window {
                                                             anchors.right: parent.right; anchors.rightMargin: 4
                                                             anchors.verticalCenter: parent.verticalCenter
                                                             text: "sec"; font.pixelSize: 10; color: "#aaa"
+                                                        }
+                                                    }
+
+                                                    Repeater {
+                                                        model: ["left", "up", "down", "right"]
+                                                        delegate: Rectangle {
+                                                            Layout.preferredWidth: 22
+                                                            Layout.preferredHeight: 22
+                                                            visible: itemTransition === "push"
+                                                            radius: 4
+                                                            property bool isActive: itemPushDirection === modelData
+                                                            color: isActive ? "white" : "transparent"
+                                                            border.color: "white"; border.width: 1
+                                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                                            Image {
+                                                                id: selPushDirIcon
+                                                                anchors.centerIn: parent
+                                                                width: 14; height: 14
+                                                                source: "icons/" + modelData + ".svg"
+                                                                fillMode: Image.PreserveAspectFit
+                                                                visible: false
+                                                            }
+                                                            ColorOverlay {
+                                                                anchors.fill: selPushDirIcon
+                                                                source: selPushDirIcon
+                                                                color: isActive ? "#477B78" : "white"
+                                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                            }
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                onClicked: selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemPushDirection", modelData)
+                                                            }
                                                         }
                                                     }
                                                 }
