@@ -190,6 +190,7 @@ Item {
                 itemTrigger: e.itemTrigger, itemAction: e.itemAction,
                 itemCommand: e.itemCommand, itemTransition: e.itemTransition,
                 itemTransitionSpeed: e.itemTransitionSpeed,
+                itemWipeFeather: e.itemWipeFeather, itemWipeDirection: e.itemWipeDirection,
                 itemTargetSceneId: e.itemTargetSceneId, itemTargetSceneName: e.itemTargetSceneName,
                 itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
                 itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
@@ -211,6 +212,8 @@ Item {
                 itemCommand:         e.itemCommand         || "jump",
                 itemTransition:      e.itemTransition      || "cut",
                 itemTransitionSpeed: e.itemTransitionSpeed !== undefined ? e.itemTransitionSpeed : 1.0,
+                itemWipeFeather:     e.itemWipeFeather     !== undefined ? e.itemWipeFeather     : 0.0,
+                itemWipeDirection:   e.itemWipeDirection   || "right",
                 itemTargetSceneId:   e.itemTargetSceneId   !== undefined ? e.itemTargetSceneId : -1,
                 itemTargetSceneName: e.itemTargetSceneName || "",
                 itemConditionVar:    e.itemConditionVar    || "",
@@ -311,7 +314,10 @@ Item {
                                     // itemTransitionSpeed is in seconds; convert to ms
                                     var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
                                     viewportRef.jumpToScene(it.itemTargetSceneId,
-                                                            it.itemTransition || "cut", ms)
+                                                            it.itemTransition    || "cut",
+                                                            ms,
+                                                            it.itemWipeFeather   || 0.0,
+                                                            it.itemWipeDirection || "right")
                                     return
                                 }
                             }
