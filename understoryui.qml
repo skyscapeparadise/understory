@@ -1238,7 +1238,7 @@ Window {
             }
 
             function findHoveredArea(px, py) {
-                if (buttonGrid.selectedTool !== "select")
+                if (buttonGrid.selectedTool !== "select" && buttonGrid.selectedTool !== "simulate")
                     return -1;
                 for (var i = 0; i < areasModel.count; i++) {
                     var a = areasModel.get(i);
@@ -5628,6 +5628,7 @@ Window {
                 onPositionChanged: viewport.hoveredAreaIndex = viewport.findHoveredArea(mouseX, mouseY)
                 onExited: viewport.hoveredAreaIndex = -1
             }
+
 
             Image {
                 x: (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.shaderDragging ? viewport.shaderX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -8 : 0)
