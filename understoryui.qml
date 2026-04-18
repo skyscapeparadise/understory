@@ -907,6 +907,12 @@ Window {
 
             property int pendingJumpSceneId: -1
             property string pendingJumpSceneName: ""
+            property string pendingTransition: "cut"
+            property real pendingDuration: 500   // ms
+
+            // ── Dissolve transition state ────────────────────────────────────────
+            property bool dissolving: false
+            property real dissolveOpacity: 0.0   // animates 0→1 on the staging layer
 
             // Thin wrappers — viewport and sidebar code can use these bare names
             property var areasModel:     activeContent ? activeContent.areasModel     : null
@@ -1371,26 +1377,48 @@ Window {
             }
 
             // Begin a scene jump: save current scene, load destination into staging layer.
-            // When staging signals readyForDisplay, performSwap() completes the transition.
-            function jumpToScene(targetSceneId) {
+            // transition: "cut" | "dissolve"   durationMs: length of animated transitions.
+            // When staging signals readyForDisplay the Connections below start the transition.
+            function jumpToScene(targetSceneId, transition, durationMs) {
                 if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId) return
+                if (dissolving) return   // don't interrupt an in-progress dissolve
                 selectSettings.saveCurrentInteractivity()
                 storyManager.saveSceneElements(mainWindow.currentSceneId, activeContent.collectElements())
                 pendingJumpSceneId = targetSceneId
                 pendingJumpSceneName = storyManager.getSceneName(targetSceneId)
+                pendingTransition = transition  || "cut"
+                pendingDuration   = durationMs !== undefined ? durationMs : 500
                 var raw = storyManager.loadSceneElements(targetSceneId)
                 var elements
                 try { elements = JSON.parse(raw) } catch(e) { elements = [] }
                 stagingContent.loadScene(elements)
             }
 
-            // Swap foreground/staging layers after staging signals readyForDisplay.
+            // Swap foreground/staging layers — called after a cut, or at end of dissolve.
             function performSwap() {
                 foregroundLayer = 1 - foregroundLayer
                 nextStackOrder = activeContent.nextStackOrder
                 mainWindow.currentSceneId = pendingJumpSceneId
                 sceneNameInput.text = pendingJumpSceneName
                 stagingContent.clear()
+            }
+
+            // Dissolve animation — fades the staging layer in over pendingDuration ms.
+            // On completion it calls performSwap() which flips foregroundLayer.
+            NumberAnimation {
+                id: dissolveAnim
+                target: viewport
+                property: "dissolveOpacity"
+                from: 0.0
+                to: 1.0
+                easing.type: Easing.InOutQuad
+                onStopped: {
+                    if (viewport.dissolving) {
+                        viewport.dissolving = false
+                        viewport.dissolveOpacity = 0.0
+                        viewport.performSwap()
+                    }
+                }
             }
 
             // Capture a 540×300 thumbnail of the scene content with a black background.
@@ -1754,21 +1782,29 @@ Window {
             SceneContent {
                 id: sceneLayerA
                 anchors.fill: parent
-                z: 10
+                // During a dissolve the staging layer must render above the foreground.
+                z: (viewport.dissolving && viewport.foregroundLayer !== 0) ? 11 : 10
                 viewportRef:   viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 0
-                // opacity: 0 hides staging content without stopping video decoding —
-                // frames are rendered into the VideoOutput texture even at opacity 0,
-                // so when the swap fires the first frame is already ready.
-                // (For shader transitions, both layers will be composited via texA/texB.)
-                opacity: viewport.foregroundLayer === 0 ? 1 : 0
+                // Foreground: fully opaque.
+                // Staging during dissolve: fades from 0→1 via dissolveOpacity.
+                // Staging at rest: opacity 0 (but still decoding video frames).
+                opacity: viewport.foregroundLayer === 0 ? 1.0 :
+                         viewport.dissolving ? viewport.dissolveOpacity : 0.0
 
                 Connections {
                     target: sceneLayerA
-                    // Only swap when sceneLayerA is the staging (background) layer
                     function onReadyForDisplay() {
-                        if (viewport.foregroundLayer !== 0) viewport.performSwap()
+                        if (viewport.foregroundLayer !== 0) {
+                            if (viewport.pendingTransition === "dissolve") {
+                                dissolveAnim.duration = viewport.pendingDuration
+                                viewport.dissolving = true
+                                dissolveAnim.start()
+                            } else {
+                                viewport.performSwap()
+                            }
+                        }
                     }
                 }
             }
@@ -1776,17 +1812,25 @@ Window {
             SceneContent {
                 id: sceneLayerB
                 anchors.fill: parent
-                z: 10
+                z: (viewport.dissolving && viewport.foregroundLayer !== 1) ? 11 : 10
                 viewportRef:   viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 1
-                opacity: viewport.foregroundLayer === 1 ? 1 : 0
+                opacity: viewport.foregroundLayer === 1 ? 1.0 :
+                         viewport.dissolving ? viewport.dissolveOpacity : 0.0
 
                 Connections {
                     target: sceneLayerB
-                    // Only swap when sceneLayerB is the staging (background) layer
                     function onReadyForDisplay() {
-                        if (viewport.foregroundLayer !== 1) viewport.performSwap()
+                        if (viewport.foregroundLayer !== 1) {
+                            if (viewport.pendingTransition === "dissolve") {
+                                dissolveAnim.duration = viewport.pendingDuration
+                                viewport.dissolving = true
+                                dissolveAnim.start()
+                            } else {
+                                viewport.performSwap()
+                            }
+                        }
                     }
                 }
             }

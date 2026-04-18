@@ -307,8 +307,11 @@ Item {
                                 if (it.itemTrigger !== trigger) continue
                                 if (it.itemCommand !== "jump") continue
                                 if (it.itemTargetSceneId < 0) continue
-                                if (it.itemAction === "cue" && it.itemTransition === "cut") {
-                                    viewportRef.jumpToScene(it.itemTargetSceneId)
+                                if (it.itemAction === "cue") {
+                                    // itemTransitionSpeed is in seconds; convert to ms
+                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
+                                    viewportRef.jumpToScene(it.itemTargetSceneId,
+                                                            it.itemTransition || "cut", ms)
                                     return
                                 }
                             }
