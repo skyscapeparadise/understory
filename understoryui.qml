@@ -266,10 +266,21 @@ Window {
                                 }
                             }
                             Image {
+                                id: storyThumbImg
                                 anchors.fill: parent
                                 source: parent.parent.thumbPath !== "" ? ("file://" + parent.parent.thumbPath) : ""
                                 fillMode: Image.PreserveAspectCrop
                                 cache: false
+                                Connections {
+                                    target: storyManager
+                                    function onStoryChanged() {
+                                        var p = storyThumbImg.parent.parent.thumbPath
+                                        if (p !== "") {
+                                            storyThumbImg.source = ""
+                                            storyThumbImg.source = "file://" + p
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -2927,7 +2938,7 @@ Window {
                 ShaderEffectSource {
                     id: thumbnailShaderSource
                     anchors.fill: parent
-                    sourceItem: sceneLayerA
+                    sourceItem: viewport.activeContent
                     live: true
                     hideSource: false
                 }
