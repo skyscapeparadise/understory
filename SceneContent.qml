@@ -193,7 +193,7 @@ Item {
                 itemWipeFeather: e.itemWipeFeather, itemWipeDirection: e.itemWipeDirection,
                 itemPushDirection: e.itemPushDirection,
                 itemLookYaw: e.itemLookYaw, itemLookPitch: e.itemLookPitch,
-                itemLookFovMM: e.itemLookFovMM, itemLookOvershoot: e.itemLookOvershoot,
+                itemLookFovMM: e.itemLookFovMM, itemLookOvershoot: e.itemLookOvershoot, itemLookShutter: e.itemLookShutter,
                 itemTargetSceneId: e.itemTargetSceneId, itemTargetSceneName: e.itemTargetSceneName,
                 itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
                 itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
@@ -221,7 +221,8 @@ Item {
                 itemLookYaw:         e.itemLookYaw         !== undefined ? e.itemLookYaw         : 90.0,
                 itemLookPitch:       e.itemLookPitch       !== undefined ? e.itemLookPitch       : 0.0,
                 itemLookFovMM:       e.itemLookFovMM       !== undefined ? e.itemLookFovMM       : 24.0,
-                itemLookOvershoot:   e.itemLookOvershoot   !== undefined ? e.itemLookOvershoot   : 1.70158,
+                itemLookOvershoot:   e.itemLookOvershoot   !== undefined ? e.itemLookOvershoot   : 1.0,
+                itemLookShutter:     e.itemLookShutter     !== undefined ? e.itemLookShutter     : 0.10,
                 itemTargetSceneId:   e.itemTargetSceneId   !== undefined ? e.itemTargetSceneId : -1,
                 itemTargetSceneName: e.itemTargetSceneName || "",
                 itemConditionVar:    e.itemConditionVar    || "",
@@ -262,12 +263,18 @@ Item {
                     property real origAspect: 1
                     property bool isBeingDeleted: isInteractive && (buttonGridRef.selectedTool === "destroy" || viewportRef.tempDestroyMode) && viewportRef.deleteTargetType === "area" && viewportRef.deleteTargetIndex === index
 
-                    // Visual border (inset by 28px to match model coordinates)
+                    // Visual border (inset by 28px to match model coordinates).
+                    // Hidden during simulate mode, shader transitions, and thumbnail capture —
+                    // areas are invisible hotspots in those contexts, not editor decorations.
                     Rectangle {
                         x: 28
                         y: 28
                         width: parent.width - 56
                         height: parent.height - 56
+                        visible: isInteractive &&
+                                 buttonGridRef.selectedTool !== "simulate" &&
+                                 !viewportRef.wiping && !viewportRef.sliding && !viewportRef.looking &&
+                                 !viewportRef.capturingThumbnail
                         color: areaDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, viewportRef.deleteProgress * 0.6) : (areaDelegate.isActive && index === viewportRef.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent")
                         border.color: areaDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((areaDelegate.isActive || areaDelegate.isRelayerHovered) ? "white" : "#666666")
                         border.width: (areaDelegate.isActive && index === viewportRef.hoveredAreaIndex) || areaDelegate.isRelayerHovered ? 2 : 1
@@ -330,7 +337,8 @@ Item {
                                                             it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
                                                             it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
                                                             it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
-                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.70158)
+                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
+                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
                                     return
                                 }
                             }

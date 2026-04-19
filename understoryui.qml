@@ -943,15 +943,17 @@ Window {
             // ── Look transition state ─────────────────────────────────────────────
             property bool   looking:              false
             property real   lookProgress:         0.0      // animates 0→1 during look
-            property real   pendingLookYaw:       90.0     // degrees, positive = right
-            property real   pendingLookPitch:     0.0      // degrees, positive = up
-            property real   pendingLookFovMM:     24.0     // mm focal length (full-frame equiv.)
-            property real   pendingLookOvershoot: 1.70158  // back-ease-out s param
+            property real   pendingLookYaw:       90.0   // degrees, positive = right
+            property real   pendingLookPitch:     0.0    // degrees, positive = up
+            property real   pendingLookFovMM:     24.0   // mm focal length (full-frame equiv.)
+            property real   pendingLookOvershoot: 1.0    // back-ease-out s param
+            property real   pendingLookShutter:   0.10   // fraction of anim spanned per frame
             // Live values fed into the ShaderEffect during a look:
             property real   lookYaw:       90.0
             property real   lookPitch:     0.0
             property real   lookFovMM:     24.0
-            property real   lookOvershoot: 1.70158
+            property real   lookOvershoot: 1.0
+            property real   lookShutter:   0.10
 
             // Thin wrappers — viewport and sidebar code can use these bare names
             property var areasModel:     activeContent ? activeContent.areasModel     : null
@@ -1420,7 +1422,7 @@ Window {
             // wipeFeather: 0.0–0.5   wipeDirection: "right"|"left"|"down"|"up"
             // When staging signals readyForDisplay the Connections below start the transition.
             function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection,
-                                     lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal) {
+                                     lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal, lookShutterVal) {
                 if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId) return
                 if (dissolving || wiping || sliding || looking) return   // don't interrupt an in-progress transition
                 selectSettings.saveCurrentInteractivity()
@@ -1432,10 +1434,11 @@ Window {
                 pendingWipeFeather     = wipeFeather   !== undefined ? wipeFeather  : 0.0
                 pendingWipeDirection   = wipeDirection  || "right"
                 pendingSlideDirection  = pushDirection  || "right"
-                pendingLookYaw        = lookYawDeg       !== undefined ? lookYawDeg       : 90.0
-                pendingLookPitch      = lookPitchDeg     !== undefined ? lookPitchDeg     : 0.0
-                pendingLookFovMM      = lookFovMMVal     !== undefined ? lookFovMMVal     : 24.0
-                pendingLookOvershoot  = lookOvershootVal !== undefined ? lookOvershootVal : 1.70158
+                pendingLookYaw        = lookYawDeg      !== undefined ? lookYawDeg      : 90.0
+                pendingLookPitch      = lookPitchDeg    !== undefined ? lookPitchDeg    : 0.0
+                pendingLookFovMM      = lookFovMMVal    !== undefined ? lookFovMMVal    : 24.0
+                pendingLookOvershoot  = lookOvershootVal !== undefined ? lookOvershootVal : 1.0
+                pendingLookShutter    = lookShutterVal  !== undefined ? lookShutterVal  : 0.10
                 var raw = storyManager.loadSceneElements(targetSceneId)
                 var elements
                 try { elements = JSON.parse(raw) } catch(e) { elements = [] }
@@ -1932,6 +1935,7 @@ Window {
                                 viewport.lookPitch     = viewport.pendingLookPitch
                                 viewport.lookFovMM     = viewport.pendingLookFovMM
                                 viewport.lookOvershoot = viewport.pendingLookOvershoot
+                                viewport.lookShutter   = viewport.pendingLookShutter
                                 lookAnim.duration = viewport.pendingDuration
                                 viewport.looking = true
                                 lookAnim.start()
@@ -1981,6 +1985,7 @@ Window {
                                 viewport.lookPitch     = viewport.pendingLookPitch
                                 viewport.lookFovMM     = viewport.pendingLookFovMM
                                 viewport.lookOvershoot = viewport.pendingLookOvershoot
+                                viewport.lookShutter   = viewport.pendingLookShutter
                                 lookAnim.duration = viewport.pendingDuration
                                 viewport.looking = true
                                 lookAnim.start()
@@ -2060,6 +2065,7 @@ Window {
                 property real pitch:     viewport.lookPitch
                 property real fovMM:     viewport.lookFovMM
                 property real overshoot: viewport.lookOvershoot
+                property real shutter:   viewport.lookShutter
             }
 
             // In-progress rubber-band (only visible while dragging)
@@ -3818,7 +3824,7 @@ Window {
                                                 }
                                                 if (firstVar === "") return
                                             }
-                                            areaInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.70158, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
+                                            areaInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.4, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.0, itemLookShutter: 0.10, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
                                         }
                                     }
                                 }
@@ -4513,10 +4519,10 @@ Window {
                                             }
                                         }
 
-                                        // Look controls — FOV, overshoot, sphere picker, direction presets
+                                        // Look controls — FOV, overshoot, shutter, sphere picker, direction presets
                                         Item {
                                             width: parent.width
-                                            height: (itemCommand === "jump" && itemTransition === "look") ? 168 : 0
+                                            height: (itemCommand === "jump" && itemTransition === "look") ? 196 : 0
                                             visible: itemCommand === "jump" && itemTransition === "look"
                                             clip: true
 
@@ -4579,7 +4585,7 @@ Window {
                                                         id: areaLookOvershootSlider
                                                         Layout.fillWidth: true; Layout.preferredHeight: 22
                                                         from: 0.0; to: 3.0; stepSize: 0
-                                                        Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.70158)
+                                                        Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0)
                                                         onMoved: {
                                                             var v = Math.round(value * 100) / 100
                                                             areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookOvershoot", v)
@@ -4605,13 +4611,59 @@ Window {
                                                             anchors.verticalCenter: parent.verticalCenter
                                                             color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
                                                             validator: DoubleValidator { bottom: 0.0; top: 3.0 }
-                                                            Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.70158).toFixed(2)
+                                                            Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0).toFixed(2)
                                                             Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
                                                             onEditingFinished: {
                                                                 var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
                                                                 text = v.toFixed(2)
                                                                 areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookOvershoot", v)
                                                                 areaLookOvershootSlider.value = v
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                // Shutter slider row
+                                                RowLayout {
+                                                    width: parent.width; height: 22; spacing: 6
+                                                    Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                    Slider {
+                                                        id: areaLookShutterSlider
+                                                        Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                        from: 0.0; to: 0.5; stepSize: 0
+                                                        Component.onCompleted: value = (itemLookShutter !== undefined ? itemLookShutter : 0.10)
+                                                        onMoved: {
+                                                            var v = Math.round(value * 1000) / 1000
+                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookShutter", v)
+                                                            areaLookShutterField.text = v.toFixed(2)
+                                                        }
+                                                        background: Rectangle {
+                                                            x: areaLookShutterSlider.leftPadding; y: areaLookShutterSlider.topPadding + areaLookShutterSlider.availableHeight / 2 - height / 2
+                                                            implicitWidth: 200; implicitHeight: 4; width: areaLookShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                            Rectangle { width: areaLookShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                        }
+                                                        handle: Rectangle {
+                                                            x: areaLookShutterSlider.leftPadding + areaLookShutterSlider.visualPosition * (areaLookShutterSlider.availableWidth - width)
+                                                            y: areaLookShutterSlider.topPadding + areaLookShutterSlider.availableHeight / 2 - height / 2
+                                                            implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                        TextInput {
+                                                            id: areaLookShutterField
+                                                            anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                            validator: DoubleValidator { bottom: 0.0; top: 0.5 }
+                                                            Component.onCompleted: text = (itemLookShutter !== undefined ? itemLookShutter : 0.10).toFixed(2)
+                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                            onEditingFinished: {
+                                                                var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                text = v.toFixed(2)
+                                                                areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookShutter", v)
+                                                                areaLookShutterSlider.value = v
                                                             }
                                                         }
                                                     }
@@ -6826,7 +6878,7 @@ Window {
                                                     }
                                                     if (firstVar === "") return
                                                 }
-                                                selectInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.70158, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
+                                                selectInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.4, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.0, itemLookShutter: 0.10, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
                                             }
                                         }
                                     }
@@ -7521,10 +7573,10 @@ Window {
                                                 }
                                             }
 
-                                            // Look controls — FOV, overshoot, sphere picker, direction presets
+                                            // Look controls — FOV, overshoot, shutter, sphere picker, direction presets
                                             Item {
                                                 width: parent.width
-                                                height: (itemCommand === "jump" && itemTransition === "look") ? 168 : 0
+                                                height: (itemCommand === "jump" && itemTransition === "look") ? 196 : 0
                                                 visible: itemCommand === "jump" && itemTransition === "look"
                                                 clip: true
 
@@ -7587,7 +7639,7 @@ Window {
                                                             id: selLookOvershootSlider
                                                             Layout.fillWidth: true; Layout.preferredHeight: 22
                                                             from: 0.0; to: 3.0; stepSize: 0
-                                                            Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.70158)
+                                                            Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0)
                                                             onMoved: {
                                                                 var v = Math.round(value * 100) / 100
                                                                 selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookOvershoot", v)
@@ -7613,13 +7665,59 @@ Window {
                                                                 anchors.verticalCenter: parent.verticalCenter
                                                                 color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
                                                                 validator: DoubleValidator { bottom: 0.0; top: 3.0 }
-                                                                Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.70158).toFixed(2)
+                                                                Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0).toFixed(2)
                                                                 Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
                                                                 onEditingFinished: {
                                                                     var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
                                                                     text = v.toFixed(2)
                                                                     selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookOvershoot", v)
                                                                     selLookOvershootSlider.value = v
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Shutter slider row
+                                                    RowLayout {
+                                                        width: parent.width; height: 22; spacing: 6
+                                                        Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                        Slider {
+                                                            id: selLookShutterSlider
+                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                            from: 0.0; to: 0.5; stepSize: 0
+                                                            Component.onCompleted: value = (itemLookShutter !== undefined ? itemLookShutter : 0.10)
+                                                            onMoved: {
+                                                                var v = Math.round(value * 1000) / 1000
+                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookShutter", v)
+                                                                selLookShutterField.text = v.toFixed(2)
+                                                            }
+                                                            background: Rectangle {
+                                                                x: selLookShutterSlider.leftPadding; y: selLookShutterSlider.topPadding + selLookShutterSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 200; implicitHeight: 4; width: selLookShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                Rectangle { width: selLookShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                            }
+                                                            handle: Rectangle {
+                                                                x: selLookShutterSlider.leftPadding + selLookShutterSlider.visualPosition * (selLookShutterSlider.availableWidth - width)
+                                                                y: selLookShutterSlider.topPadding + selLookShutterSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                            }
+                                                        }
+                                                        Rectangle {
+                                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                            TextInput {
+                                                                id: selLookShutterField
+                                                                anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                validator: DoubleValidator { bottom: 0.0; top: 0.5 }
+                                                                Component.onCompleted: text = (itemLookShutter !== undefined ? itemLookShutter : 0.10).toFixed(2)
+                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                onEditingFinished: {
+                                                                    var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                    text = v.toFixed(2)
+                                                                    selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookShutter", v)
+                                                                    selLookShutterSlider.value = v
                                                                 }
                                                             }
                                                         }
