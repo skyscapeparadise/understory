@@ -1440,6 +1440,7 @@ Window {
                 mainWindow.currentSceneId = pendingJumpSceneId
                 sceneNameInput.text = pendingJumpSceneName
                 stagingContent.clear()
+                checkOcclusion()
             }
 
             // Dissolve animation — fades the staging layer in over pendingDuration ms.
