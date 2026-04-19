@@ -35,7 +35,7 @@ from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication, QImage
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickImageProvider
 
-versionnumber = "0.2"
+versionnumber = "0.3"
 
 
 class ThumbnailProvider(QQuickImageProvider):
@@ -234,9 +234,12 @@ class StoryManager(QObject):
                 conn.execute("ALTER TABLE scenes ADD COLUMN thumbnail BLOB")
                 conn.commit()
             # migrate: create networks table if missing (older .story files)
-            tables = {r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()}
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
             if "networks" not in tables:
                 conn.executescript(
                     "CREATE TABLE networks ("
@@ -258,7 +261,9 @@ class StoryManager(QObject):
                 conn.commit()
             if "networks" in tables:
                 # migrate: add color column if missing (stories created before this feature)
-                net_cols = {r[1] for r in conn.execute("PRAGMA table_info(networks)").fetchall()}
+                net_cols = {
+                    r[1] for r in conn.execute("PRAGMA table_info(networks)").fetchall()
+                }
                 if "color" not in net_cols:
                     conn.execute(
                         "ALTER TABLE networks ADD COLUMN color TEXT NOT NULL DEFAULT '#2e2e33'"
@@ -528,9 +533,7 @@ class StoryManager(QObject):
             ).fetchone()
             if row:
                 return row[0]
-            cur = self._conn.execute(
-                "INSERT INTO networks (name) VALUES (?)", ("",)
-            )
+            cur = self._conn.execute("INSERT INTO networks (name) VALUES (?)", ("",))
             self._conn.commit()
             return cur.lastrowid
         except Exception as e:
@@ -586,9 +589,7 @@ class StoryManager(QObject):
         if not self._conn:
             return -1
         try:
-            cur = self._conn.execute(
-                "INSERT INTO networks (name) VALUES (?)", (name,)
-            )
+            cur = self._conn.execute("INSERT INTO networks (name) VALUES (?)", (name,))
             self._conn.commit()
             return cur.lastrowid
         except Exception as e:
@@ -636,8 +637,13 @@ class StoryManager(QObject):
 
     # Type mapping between QML display names and DB column values
     _QML_TO_DB_TYPE = {"true or false": "bool", "number": "float", "text": "string"}
-    _DB_TO_QML_TYPE = {"bool": "true or false", "int": "number", "float": "number",
-                       "string": "text", "color": "text"}
+    _DB_TO_QML_TYPE = {
+        "bool": "true or false",
+        "int": "number",
+        "float": "number",
+        "string": "text",
+        "color": "text",
+    }
 
     @Slot(result="QVariantList")
     def getVariables(self):
