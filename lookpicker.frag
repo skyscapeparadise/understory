@@ -9,6 +9,7 @@ layout(std140, binding = 0) uniform buf {
     float yaw;    // current look yaw in degrees
     float pitch;  // current look pitch in degrees
     float fovMM;  // focal length mm (full-frame equivalent)
+    float back;   // 0 = front hemisphere, 1 = back hemisphere
 } ubuf;
 
 // No samplers — fully procedural.
@@ -36,19 +37,21 @@ void main() {
     // Discard pixels outside the circle.
     if (r > 1.02) { fragColor = vec4(0.0); return; }
 
-    // Front-hemisphere sphere normal.
-    // ndc.y > 0 = screen bottom = world down, so flip Y for world-up convention.
     float zSphere = sqrt(max(0.0, 1.0 - r2));
-    vec3 sphereN  = normalize(vec3(ndc.x, -ndc.y, zSphere));
 
-    // ── Sphere shading ─────────────────────────────────────────────────────
+    // Front/back hemisphere: flip z so the back view shows the opposite hemisphere.
+    float zSign  = (ubuf.back > 0.5) ? -1.0 : 1.0;
+    vec3 sphereN = normalize(vec3(ndc.x, -ndc.y, zSphere * zSign));
+
+    // ── Concave white sphere — light as if viewing the interior ───────────
+    // A dark centre → bright rim radial gradient is the primary visual cue
+    // that the surface is concave.  A directional term adds subtle depth.
     vec3 lightDir = normalize(vec3(0.4, 0.7, 1.0));
-    float diffuse  = max(0.0, dot(sphereN, lightDir));
-    float spec     = pow(max(0.0, dot(reflect(-lightDir, sphereN), vec3(0.0, 0.0, 1.0))), 14.0);
-    float light    = 0.10 + diffuse * 0.50 + spec * 0.18;
-    vec4 color     = vec4(vec3(0.09, 0.11, 0.14) * light, 1.0);
+    float diffuse = max(0.0, dot(-sphereN, lightDir));
+    float light   = 0.35 + r2 * 0.55 + diffuse * 0.10;  // 0.35–1.00
+    vec4 color    = vec4(vec3(light), 1.0);
 
-    // ── 16:9 frame outline at (yaw, pitch) ────────────────────────────────
+    // ── 16:9 frame — transparent interior (negative space) ─────────────────
     float tanH = 18.0 / ubuf.fovMM;
     float tanV = tanH * (9.0 / 16.0);
     float yawRad   = ubuf.yaw   * PI / 180.0;
@@ -62,32 +65,29 @@ void main() {
         float fx =  local.x / (local.z * tanH);
         float fy = -local.y / (local.z * tanV); // flip Y: world-up → frame-top
 
-        float fw = 0.05; // outline half-width in frustum space
-        bool inX   = fx > -(1.0 + fw) && fx < (1.0 + fw);
-        bool inY   = fy > -(1.0 + fw) && fy < (1.0 + fw);
-        bool edgeX = abs(abs(fx) - 1.0) < fw && inY;
-        bool edgeY = abs(abs(fy) - 1.0) < fw && inX;
-
-        if (edgeX || edgeY) {
-            color = mix(color, vec4(1.0, 1.0, 1.0, 1.0), 0.88);
-        }
+        // Soft antialiasing at the frame boundary.
+        float fw = 0.03;
+        float insideX = smoothstep(-1.0 - fw, -1.0 + fw, fx) * (1.0 - smoothstep(1.0 - fw, 1.0 + fw, fx));
+        float insideY = smoothstep(-1.0 - fw, -1.0 + fw, fy) * (1.0 - smoothstep(1.0 - fw, 1.0 + fw, fy));
+        float cutout  = insideX * insideY;
+        color.a *= (1.0 - cutout);
     }
 
-    // ── Direction marker ───────────────────────────────────────────────────
-    // Sphere position of the look direction: (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch))
-    float mx = sin(yawRad) * cos(pitchRad);
-    float my = sin(pitchRad);          // world Y (positive = up)
-    float mz = cos(yawRad) * cos(pitchRad);
+    // ── Direction marker — white dot ───────────────────────────────────────
+    // Use the same rotation convention as the frame projection so the marker
+    // always sits at the frame centre: lookDir = rotPitch(rotYaw(+z, yaw), pitch).
+    // Spherical-coordinate formulas diverge from this at back-hemisphere yaw values.
+    vec3 lookDir = rotPitch(rotYaw(vec3(0.0, 0.0, 1.0), yawRad), pitchRad);
 
-    // "Beyond" = look direction is on or past the back hemisphere (z ≤ 0).
-    bool beyond = mz <= 0.0;
+    // "Beyond" = look direction is on the wrong hemisphere for the current view.
+    bool beyond = (ubuf.back > 0.5) ? lookDir.z >= 0.0 : lookDir.z <= 0.0;
 
-    // Clamp the marker to the rim when the actual angle is beyond the hemisphere.
-    float mr = sqrt(mx * mx + my * my);
-    if (beyond && mr > 0.001) { mx /= mr; my /= mr; } // project to equator
+    // Clamp marker to the rim when the angle is beyond the visible hemisphere.
+    float mr = sqrt(lookDir.x * lookDir.x + lookDir.y * lookDir.y);
+    if (beyond && mr > 0.001) { lookDir.x /= mr; lookDir.y /= mr; }
 
-    // Marker position in NDC: ndc.x = mx, ndc.y = -my (flip world-up to screen-up).
-    vec2 markerNDC = vec2(mx, -my);
+    // sphereN.y = -ndc.y in both modes, so markerNDC.y = -lookDir.y in both modes.
+    vec2 markerNDC = vec2(lookDir.x, -lookDir.y);
     float dotDist  = length(ndc - markerNDC);
     float dotR     = 0.085;
     float strokeW  = 0.020;
@@ -107,5 +107,5 @@ void main() {
 
     // ── Rim antialiasing ────────────────────────────────────────────────────
     float rimAlpha = 1.0 - smoothstep(0.96, 1.02, r);
-    fragColor = vec4(color.rgb, rimAlpha) * ubuf.qt_Opacity;
+    fragColor = vec4(color.rgb, color.a * rimAlpha) * ubuf.qt_Opacity;
 }

@@ -4306,8 +4306,8 @@ Window {
 
                                         Item {
                                             width: parent.width
-                                            height: (itemCommand === "jump" && itemTransition !== "cut") ? 22 : 0
-                                            visible: itemCommand === "jump" && itemTransition !== "cut"
+                                            height: (itemCommand === "jump" && itemTransition !== "cut" && itemTransition !== "look") ? 22 : 0
+                                            visible: itemCommand === "jump" && itemTransition !== "cut" && itemTransition !== "look"
 
                                             RowLayout {
                                                 anchors.fill: parent
@@ -4519,291 +4519,367 @@ Window {
                                             }
                                         }
 
-                                        // Look controls — FOV, overshoot, shutter, sphere picker, direction presets
+                                        // Look controls — speed/fov/overshoot/shutter/yaw/pitch | sphere picker + square presets
                                         Item {
                                             width: parent.width
-                                            height: (itemCommand === "jump" && itemTransition === "look") ? 196 : 0
+                                            height: (itemCommand === "jump" && itemTransition === "look") ? 126 : 0
                                             visible: itemCommand === "jump" && itemTransition === "look"
                                             clip: true
 
-                                            Column {
+                                            RowLayout {
                                                 anchors.fill: parent
-                                                spacing: 4
+                                                spacing: 8
 
-                                                // FOV slider row
-                                                RowLayout {
-                                                    width: parent.width; height: 22; spacing: 6
-                                                    Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                                    Slider {
-                                                        id: areaLookFovSlider
-                                                        Layout.fillWidth: true; Layout.preferredHeight: 22
-                                                        from: 10; to: 75; stepSize: 0
-                                                        Component.onCompleted: value = itemLookFovMM || 24.0
-                                                        onMoved: {
-                                                            var v = Math.round(value * 10) / 10
-                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookFovMM", v)
-                                                            areaLookFovField.text = Math.round(v).toString()
+                                                // ── Left: all sliders + yaw/pitch ──────────────────
+                                                ColumnLayout {
+                                                    Layout.fillWidth: true
+                                                    Layout.alignment: Qt.AlignTop
+                                                    spacing: 4
+
+                                                    // Speed slider row
+                                                    RowLayout {
+                                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                                        Text { text: "speed"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                        Slider {
+                                                            id: areaLookSpeedSlider
+                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                            from: 0; to: 1; stepSize: 0
+                                                            Component.onCompleted: {
+                                                                var s = itemTransitionSpeed || 0.4
+                                                                value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                                                            }
+                                                            onMoved: {
+                                                                var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
+                                                                var rounded = Math.round(speed * 100) / 100
+                                                                areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemTransitionSpeed", rounded)
+                                                                areaLookSpeedField.text = rounded.toFixed(1)
+                                                            }
+                                                            background: Rectangle {
+                                                                x: areaLookSpeedSlider.leftPadding; y: areaLookSpeedSlider.topPadding + areaLookSpeedSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 200; implicitHeight: 4; width: areaLookSpeedSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                Rectangle { width: areaLookSpeedSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                            }
+                                                            handle: Rectangle {
+                                                                x: areaLookSpeedSlider.leftPadding + areaLookSpeedSlider.visualPosition * (areaLookSpeedSlider.availableWidth - width)
+                                                                y: areaLookSpeedSlider.topPadding + areaLookSpeedSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                            }
                                                         }
-                                                        background: Rectangle {
-                                                            x: areaLookFovSlider.leftPadding; y: areaLookFovSlider.topPadding + areaLookFovSlider.availableHeight / 2 - height / 2
-                                                            implicitWidth: 200; implicitHeight: 4; width: areaLookFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                            Rectangle { width: areaLookFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                                        }
-                                                        handle: Rectangle {
-                                                            x: areaLookFovSlider.leftPadding + areaLookFovSlider.visualPosition * (areaLookFovSlider.availableWidth - width)
-                                                            y: areaLookFovSlider.topPadding + areaLookFovSlider.availableHeight / 2 - height / 2
-                                                            implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookFovSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                        Rectangle {
+                                                            Layout.preferredWidth: 52; Layout.preferredHeight: 22
+                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                            TextInput {
+                                                                id: areaLookSpeedField
+                                                                anchors.left: parent.left; anchors.right: areaLookSpeedSec.left
+                                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                                                Component.onCompleted: text = (itemTransitionSpeed || 0.4).toFixed(1)
+                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                onEditingFinished: {
+                                                                    var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                    text = speed.toFixed(1)
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemTransitionSpeed", speed)
+                                                                    areaLookSpeedSlider.value = speed <= 2.0 ? speed / 4.0 : 0.5 + (speed - 2.0) / 16.0
+                                                                }
+                                                            }
+                                                            Text { id: areaLookSpeedSec; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "sec"; font.pixelSize: 10; color: "#aaa" }
                                                         }
                                                     }
-                                                    Rectangle {
-                                                        Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                        TextInput {
-                                                            id: areaLookFovField
-                                                            anchors.left: parent.left; anchors.right: areaLookFovMmLabel.left
-                                                            anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                            validator: IntValidator { bottom: 10; top: 75 }
-                                                            Component.onCompleted: text = Math.round(itemLookFovMM || 24).toString()
-                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                            onEditingFinished: {
-                                                                var v = Math.min(75, Math.max(10, parseInt(text) || 24))
-                                                                text = v.toString()
+
+                                                    // FOV slider row
+                                                    RowLayout {
+                                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                                        Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                        Slider {
+                                                            id: areaLookFovSlider
+                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                            from: 10; to: 75; stepSize: 0
+                                                            Component.onCompleted: value = itemLookFovMM || 24.0
+                                                            onMoved: {
+                                                                var v = Math.round(value * 10) / 10
                                                                 areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookFovMM", v)
-                                                                areaLookFovSlider.value = v
+                                                                areaLookFovField.text = Math.round(v).toString()
+                                                            }
+                                                            background: Rectangle {
+                                                                x: areaLookFovSlider.leftPadding; y: areaLookFovSlider.topPadding + areaLookFovSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 200; implicitHeight: 4; width: areaLookFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                Rectangle { width: areaLookFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                            }
+                                                            handle: Rectangle {
+                                                                x: areaLookFovSlider.leftPadding + areaLookFovSlider.visualPosition * (areaLookFovSlider.availableWidth - width)
+                                                                y: areaLookFovSlider.topPadding + areaLookFovSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookFovSlider.pressed ? "#80cfff" : "#5DA9A4"
                                                             }
                                                         }
-                                                        Text { id: areaLookFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
+                                                        Rectangle {
+                                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                            TextInput {
+                                                                id: areaLookFovField
+                                                                anchors.left: parent.left; anchors.right: areaLookFovMmLabel.left
+                                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                validator: IntValidator { bottom: 10; top: 75 }
+                                                                Component.onCompleted: text = Math.round(itemLookFovMM || 24).toString()
+                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                onEditingFinished: {
+                                                                    var v = Math.min(75, Math.max(10, parseInt(text) || 24))
+                                                                    text = v.toString()
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookFovMM", v)
+                                                                    areaLookFovSlider.value = v
+                                                                }
+                                                            }
+                                                            Text { id: areaLookFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
+                                                        }
                                                     }
-                                                }
 
-                                                // Overshoot slider row
-                                                RowLayout {
-                                                    width: parent.width; height: 22; spacing: 6
-                                                    Text { text: "overshoot"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                                    Slider {
-                                                        id: areaLookOvershootSlider
-                                                        Layout.fillWidth: true; Layout.preferredHeight: 22
-                                                        from: 0.0; to: 3.0; stepSize: 0
-                                                        Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0)
-                                                        onMoved: {
-                                                            var v = Math.round(value * 100) / 100
-                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookOvershoot", v)
-                                                            areaLookOvershootField.text = v.toFixed(2)
-                                                        }
-                                                        background: Rectangle {
-                                                            x: areaLookOvershootSlider.leftPadding; y: areaLookOvershootSlider.topPadding + areaLookOvershootSlider.availableHeight / 2 - height / 2
-                                                            implicitWidth: 200; implicitHeight: 4; width: areaLookOvershootSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                            Rectangle { width: areaLookOvershootSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                                        }
-                                                        handle: Rectangle {
-                                                            x: areaLookOvershootSlider.leftPadding + areaLookOvershootSlider.visualPosition * (areaLookOvershootSlider.availableWidth - width)
-                                                            y: areaLookOvershootSlider.topPadding + areaLookOvershootSlider.availableHeight / 2 - height / 2
-                                                            implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookOvershootSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                                        }
-                                                    }
-                                                    Rectangle {
-                                                        Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                        TextInput {
-                                                            id: areaLookOvershootField
-                                                            anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 0; anchors.bottomMargin: 0
-                                                            anchors.verticalCenter: parent.verticalCenter
-                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                            validator: DoubleValidator { bottom: 0.0; top: 3.0 }
-                                                            Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0).toFixed(2)
-                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                            onEditingFinished: {
-                                                                var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
-                                                                text = v.toFixed(2)
+                                                    // Overshoot slider row
+                                                    RowLayout {
+                                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                                        Text { text: "overshoot"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                        Slider {
+                                                            id: areaLookOvershootSlider
+                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                            from: 0.0; to: 3.0; stepSize: 0
+                                                            Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0)
+                                                            onMoved: {
+                                                                var v = Math.round(value * 100) / 100
                                                                 areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookOvershoot", v)
-                                                                areaLookOvershootSlider.value = v
+                                                                areaLookOvershootField.text = v.toFixed(2)
+                                                            }
+                                                            background: Rectangle {
+                                                                x: areaLookOvershootSlider.leftPadding; y: areaLookOvershootSlider.topPadding + areaLookOvershootSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 200; implicitHeight: 4; width: areaLookOvershootSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                Rectangle { width: areaLookOvershootSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                            }
+                                                            handle: Rectangle {
+                                                                x: areaLookOvershootSlider.leftPadding + areaLookOvershootSlider.visualPosition * (areaLookOvershootSlider.availableWidth - width)
+                                                                y: areaLookOvershootSlider.topPadding + areaLookOvershootSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookOvershootSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                            }
+                                                        }
+                                                        Rectangle {
+                                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                            TextInput {
+                                                                id: areaLookOvershootField
+                                                                anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                validator: DoubleValidator { bottom: 0.0; top: 3.0 }
+                                                                Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0).toFixed(2)
+                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                onEditingFinished: {
+                                                                    var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                    text = v.toFixed(2)
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookOvershoot", v)
+                                                                    areaLookOvershootSlider.value = v
+                                                                }
                                                             }
                                                         }
                                                     }
-                                                }
 
-                                                // Shutter slider row
-                                                RowLayout {
-                                                    width: parent.width; height: 22; spacing: 6
-                                                    Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                                    Slider {
-                                                        id: areaLookShutterSlider
-                                                        Layout.fillWidth: true; Layout.preferredHeight: 22
-                                                        from: 0.0; to: 0.5; stepSize: 0
-                                                        Component.onCompleted: value = (itemLookShutter !== undefined ? itemLookShutter : 0.10)
-                                                        onMoved: {
-                                                            var v = Math.round(value * 1000) / 1000
-                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookShutter", v)
-                                                            areaLookShutterField.text = v.toFixed(2)
-                                                        }
-                                                        background: Rectangle {
-                                                            x: areaLookShutterSlider.leftPadding; y: areaLookShutterSlider.topPadding + areaLookShutterSlider.availableHeight / 2 - height / 2
-                                                            implicitWidth: 200; implicitHeight: 4; width: areaLookShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                            Rectangle { width: areaLookShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                                        }
-                                                        handle: Rectangle {
-                                                            x: areaLookShutterSlider.leftPadding + areaLookShutterSlider.visualPosition * (areaLookShutterSlider.availableWidth - width)
-                                                            y: areaLookShutterSlider.topPadding + areaLookShutterSlider.availableHeight / 2 - height / 2
-                                                            implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                                        }
-                                                    }
-                                                    Rectangle {
-                                                        Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                        TextInput {
-                                                            id: areaLookShutterField
-                                                            anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4
-                                                            anchors.verticalCenter: parent.verticalCenter
-                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                            validator: DoubleValidator { bottom: 0.0; top: 0.5 }
-                                                            Component.onCompleted: text = (itemLookShutter !== undefined ? itemLookShutter : 0.10).toFixed(2)
-                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                            onEditingFinished: {
-                                                                var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0))
-                                                                text = v.toFixed(2)
+                                                    // Shutter slider row
+                                                    RowLayout {
+                                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                                        Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                        Slider {
+                                                            id: areaLookShutterSlider
+                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                            from: 0.0; to: 0.5; stepSize: 0
+                                                            Component.onCompleted: value = (itemLookShutter !== undefined ? itemLookShutter : 0.10)
+                                                            onMoved: {
+                                                                var v = Math.round(value * 1000) / 1000
                                                                 areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookShutter", v)
-                                                                areaLookShutterSlider.value = v
+                                                                areaLookShutterField.text = v.toFixed(2)
+                                                            }
+                                                            background: Rectangle {
+                                                                x: areaLookShutterSlider.leftPadding; y: areaLookShutterSlider.topPadding + areaLookShutterSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 200; implicitHeight: 4; width: areaLookShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                Rectangle { width: areaLookShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                            }
+                                                            handle: Rectangle {
+                                                                x: areaLookShutterSlider.leftPadding + areaLookShutterSlider.visualPosition * (areaLookShutterSlider.availableWidth - width)
+                                                                y: areaLookShutterSlider.topPadding + areaLookShutterSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
                                                             }
                                                         }
-                                                    }
-                                                }
-
-                                                // Sphere picker + yaw/pitch fields
-                                                Item {
-                                                    width: parent.width; height: 90
-
-                                                    Row {
-                                                        anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-                                                        spacing: 8
-
-                                                        // Sphere picker widget
-                                                        Item {
-                                                            width: 90; height: 90
-                                                            ShaderEffect {
-                                                                anchors.fill: parent
-                                                                fragmentShader: "lookpicker.frag.qsb"
-                                                                property real yaw:   itemLookYaw   || 90.0
-                                                                property real pitch: itemLookPitch || 0.0
-                                                                property real fovMM: itemLookFovMM || 24.0
-                                                            }
-                                                            MouseArea {
-                                                                anchors.fill: parent
-                                                                onPressed:         areaLookPickerMouse(mouse.x, mouse.y)
-                                                                onPositionChanged: if (pressed) areaLookPickerMouse(mouse.x, mouse.y)
-                                                                function areaLookPickerMouse(mx, my) {
-                                                                    var cx = 45.0, cy = 45.0
-                                                                    var nx = (mx - cx) / cx
-                                                                    var ny = (my - cy) / cy
-                                                                    var r = Math.sqrt(nx * nx + ny * ny)
-                                                                    if (r > 1.0) { nx /= r; ny /= r; r = 1.0 }
-                                                                    var z = Math.sqrt(Math.max(0.0, 1.0 - r * r))
-                                                                    var worldNy = -ny
-                                                                    var newYaw   = Math.round(Math.atan2(nx, z) * 1800.0 / Math.PI) / 10
-                                                                    var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, worldNy))) * 1800.0 / Math.PI) / 10
-                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookYaw",   newYaw)
-                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookPitch", newPitch)
-                                                                    areaLookYawField.text   = newYaw.toFixed(1)
-                                                                    areaLookPitchField.text = newPitch.toFixed(1)
-                                                                }
-                                                            }
-                                                        }
-
-                                                        // Yaw + Pitch text fields stacked
-                                                        Column {
-                                                            anchors.verticalCenter: parent.verticalCenter
-                                                            spacing: 6
-
-                                                            RowLayout {
-                                                                spacing: 4
-                                                                Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; Layout.preferredWidth: 26; verticalAlignment: Text.AlignVCenter; height: 22 }
-                                                                Rectangle {
-                                                                    Layout.preferredWidth: 60; height: 22
-                                                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                                    TextInput {
-                                                                        id: areaLookYawField
-                                                                        anchors.left: parent.left; anchors.right: areaLookYawDeg.left
-                                                                        anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                                        validator: DoubleValidator { bottom: -9999; top: 9999 }
-                                                                        Component.onCompleted: text = (itemLookYaw !== undefined ? itemLookYaw : 90.0).toFixed(1)
-                                                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                                        onEditingFinished: {
-                                                                            var v = parseFloat(text) || 0.0
-                                                                            text = v.toFixed(1)
-                                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookYaw", v)
-                                                                        }
-                                                                    }
-                                                                    Text { id: areaLookYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
-                                                                }
-                                                            }
-
-                                                            RowLayout {
-                                                                spacing: 4
-                                                                Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; Layout.preferredWidth: 26; verticalAlignment: Text.AlignVCenter; height: 22 }
-                                                                Rectangle {
-                                                                    Layout.preferredWidth: 60; height: 22
-                                                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                                    TextInput {
-                                                                        id: areaLookPitchField
-                                                                        anchors.left: parent.left; anchors.right: areaLookPitchDeg.left
-                                                                        anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                                        validator: DoubleValidator { bottom: -9999; top: 9999 }
-                                                                        Component.onCompleted: text = (itemLookPitch !== undefined ? itemLookPitch : 0.0).toFixed(1)
-                                                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                                        onEditingFinished: {
-                                                                            var v = parseFloat(text) || 0.0
-                                                                            text = v.toFixed(1)
-                                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookPitch", v)
-                                                                        }
-                                                                    }
-                                                                    Text { id: areaLookPitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                        Rectangle {
+                                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                            TextInput {
+                                                                id: areaLookShutterField
+                                                                anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                validator: DoubleValidator { bottom: 0.0; top: 0.5 }
+                                                                Component.onCompleted: text = (itemLookShutter !== undefined ? itemLookShutter : 0.10).toFixed(2)
+                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                onEditingFinished: {
+                                                                    var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                    text = v.toFixed(2)
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookShutter", v)
+                                                                    areaLookShutterSlider.value = v
                                                                 }
                                                             }
                                                         }
                                                     }
+
+                                                    // Yaw and pitch fields side by side
+                                                    RowLayout {
+                                                        Layout.fillWidth: true; height: 22; spacing: 4
+                                                        Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
+                                                        Rectangle {
+                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                            TextInput {
+                                                                id: areaLookYawField
+                                                                anchors.left: parent.left; anchors.right: areaLookYawDeg.left
+                                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                                Component.onCompleted: text = (itemLookYaw !== undefined ? itemLookYaw : 90.0).toFixed(1)
+                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                onEditingFinished: {
+                                                                    var v = parseFloat(text) || 0.0
+                                                                    text = v.toFixed(1)
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookYaw", v)
+                                                                }
+                                                            }
+                                                            Text { id: areaLookYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                        }
+                                                        Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
+                                                        Rectangle {
+                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                            TextInput {
+                                                                id: areaLookPitchField
+                                                                anchors.left: parent.left; anchors.right: areaLookPitchDeg.left
+                                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                                Component.onCompleted: text = (itemLookPitch !== undefined ? itemLookPitch : 0.0).toFixed(1)
+                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                onEditingFinished: {
+                                                                    var v = parseFloat(text) || 0.0
+                                                                    text = v.toFixed(1)
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookPitch", v)
+                                                                }
+                                                            }
+                                                            Text { id: areaLookPitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                        }
+                                                    }
                                                 }
 
-                                                // Direction preset buttons
-                                                RowLayout {
-                                                    width: parent.width; height: 22; spacing: 4
-                                                    Item { Layout.fillWidth: true }
-                                                    Repeater {
-                                                        model: [
-                                                            { icon: "left",  yaw: -90.0, pitch:   0.0 },
-                                                            { icon: "up",    yaw:   0.0, pitch:  90.0 },
-                                                            { icon: "down",  yaw:   0.0, pitch: -90.0 },
-                                                            { icon: "right", yaw:  90.0, pitch:   0.0 }
-                                                        ]
-                                                        delegate: Rectangle {
-                                                            Layout.preferredWidth: 22; Layout.preferredHeight: 22; radius: 4
-                                                            property bool isActive: Math.abs((itemLookYaw || 90.0) - modelData.yaw) < 0.6 &&
-                                                                                    Math.abs((itemLookPitch || 0.0) - modelData.pitch) < 0.6
-                                                            color: isActive ? "white" : "transparent"
-                                                            border.color: "white"; border.width: 1
-                                                            Behavior on color { ColorAnimation { duration: 100 } }
-                                                            Image {
-                                                                id: areaLookDirIcon; anchors.centerIn: parent; width: 14; height: 14
-                                                                source: "icons/" + modelData.icon + ".svg"; fillMode: Image.PreserveAspectFit; visible: false
-                                                            }
-                                                            ColorOverlay {
-                                                                anchors.fill: areaLookDirIcon; source: areaLookDirIcon
-                                                                color: isActive ? "#477B78" : "white"
+                                                // ── Right: sphere picker + square preset buttons ────
+                                                ColumnLayout {
+                                                    Layout.preferredWidth: 76
+                                                    Layout.alignment: Qt.AlignTop
+                                                    spacing: 4
+                                                    property bool lookPickerBack: false
+
+                                                    // Front / back hemisphere toggle
+                                                    RowLayout {
+                                                        Layout.preferredWidth: 76; height: 16; spacing: 4
+                                                        Repeater {
+                                                            model: [{ label: "front", back: false }, { label: "back", back: true }]
+                                                            delegate: Rectangle {
+                                                                Layout.fillWidth: true; Layout.preferredHeight: 16; radius: 4
+                                                                property bool isActive: parent.parent.lookPickerBack === modelData.back
+                                                                color: isActive ? "white" : "transparent"
+                                                                border.color: "white"; border.width: 1
                                                                 Behavior on color { ColorAnimation { duration: 100 } }
-                                                            }
-                                                            MouseArea {
-                                                                anchors.fill: parent
-                                                                onClicked: {
-                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookYaw",   modelData.yaw)
-                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookPitch", modelData.pitch)
-                                                                    areaLookYawField.text   = modelData.yaw.toFixed(1)
-                                                                    areaLookPitchField.text = modelData.pitch.toFixed(1)
+                                                                Text {
+                                                                    anchors.centerIn: parent
+                                                                    text: modelData.label; font.pixelSize: 9
+                                                                    color: parent.isActive ? "#477B78" : "white"
+                                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                                }
+                                                                MouseArea {
+                                                                    anchors.fill: parent
+                                                                    onClicked: parent.parent.parent.lookPickerBack = modelData.back
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                    Item { Layout.fillWidth: true }
+
+                                                    Item {
+                                                        Layout.preferredWidth: 68; Layout.preferredHeight: 68
+                                                        Layout.alignment: Qt.AlignHCenter
+                                                        ShaderEffect {
+                                                            anchors.fill: parent
+                                                            fragmentShader: "lookpicker.frag.qsb"
+                                                            property real yaw:   itemLookYaw   !== undefined ? itemLookYaw   : 90.0
+                                                            property real pitch: itemLookPitch || 0.0
+                                                            property real fovMM: itemLookFovMM || 24.0
+                                                            property real back:  parent.parent.lookPickerBack ? 1.0 : 0.0
+                                                        }
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            onPressed:         areaLookPickerMouse(mouseX, mouseY)
+                                                            onPositionChanged: if (pressed) areaLookPickerMouse(mouseX, mouseY)
+                                                            function areaLookPickerMouse(mx, my) {
+                                                                var cx = 34.0, cy = 34.0
+                                                                var nx = (mx - cx) / cx
+                                                                var ny = (my - cy) / cy
+                                                                var r = Math.sqrt(nx * nx + ny * ny)
+                                                                if (r > 1.0) { nx /= r; ny /= r; r = 1.0 }
+                                                                var z  = Math.sqrt(Math.max(0.0, 1.0 - r * r))
+                                                                // lookDir components matching rotPitch(rotYaw(+z, yaw), pitch):
+                                                                //   lx = sin(yaw),  ly = sin(pitch)*cos(yaw),  lz = cos(pitch)*cos(yaw)
+                                                                var lx = nx, ly = -ny
+                                                                var lz = parent.parent.lookPickerBack ? -z : z
+                                                                var newYaw   = Math.round(Math.atan2(lx, lz) * 1800.0 / Math.PI) / 10
+                                                                var absCosy  = Math.sqrt(ly * ly + lz * lz)
+                                                                var sinPitch = absCosy > 0.0001 ? ly / (lz >= 0 ? absCosy : -absCosy) : 0.0
+                                                                var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, sinPitch))) * 1800.0 / Math.PI) / 10
+                                                                areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookYaw",   newYaw)
+                                                                areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookPitch", newPitch)
+                                                                areaLookYawField.text   = newYaw.toFixed(1)
+                                                                areaLookPitchField.text = newPitch.toFixed(1)
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Square preset buttons: 4 × 16px with spacing 4 = 76px total
+                                                    RowLayout {
+                                                        Layout.preferredWidth: 76; height: 16; spacing: 4
+                                                        Repeater {
+                                                            model: [
+                                                                { icon: "left",  yaw: -90.0, pitch:   0.0 },
+                                                                { icon: "up",    yaw:   0.0, pitch:  90.0 },
+                                                                { icon: "down",  yaw:   0.0, pitch: -90.0 },
+                                                                { icon: "right", yaw:  90.0, pitch:   0.0 }
+                                                            ]
+                                                            delegate: Rectangle {
+                                                                Layout.preferredWidth: 16; Layout.preferredHeight: 16; radius: 4
+                                                                property bool isActive: Math.abs((itemLookYaw !== undefined ? itemLookYaw : 90.0) - modelData.yaw) < 0.6 &&
+                                                                                        Math.abs((itemLookPitch !== undefined ? itemLookPitch : 0.0) - modelData.pitch) < 0.6
+                                                                color: isActive ? "white" : "transparent"
+                                                                border.color: "white"; border.width: 1
+                                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                                Image {
+                                                                    id: areaLookDirIcon; anchors.centerIn: parent; width: 12; height: 12
+                                                                    source: "icons/" + modelData.icon + ".svg"; fillMode: Image.PreserveAspectFit; visible: false
+                                                                }
+                                                                ColorOverlay {
+                                                                    anchors.fill: areaLookDirIcon; source: areaLookDirIcon
+                                                                    color: isActive ? "#477B78" : "white"
+                                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                                }
+                                                                MouseArea {
+                                                                    anchors.fill: parent
+                                                                    onClicked: {
+                                                                        areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookYaw",   modelData.yaw)
+                                                                        areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookPitch", modelData.pitch)
+                                                                        areaLookYawField.text   = modelData.yaw.toFixed(1)
+                                                                        areaLookPitchField.text = modelData.pitch.toFixed(1)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -7360,8 +7436,8 @@ Window {
 
                                             Item {
                                                 width: parent.width
-                                                height: (itemCommand === "jump" && itemTransition !== "cut") ? 22 : 0
-                                                visible: itemCommand === "jump" && itemTransition !== "cut"
+                                                height: (itemCommand === "jump" && itemTransition !== "cut" && itemTransition !== "look") ? 22 : 0
+                                                visible: itemCommand === "jump" && itemTransition !== "cut" && itemTransition !== "look"
 
                                                 RowLayout {
                                                     anchors.fill: parent
@@ -7573,289 +7649,365 @@ Window {
                                                 }
                                             }
 
-                                            // Look controls — FOV, overshoot, shutter, sphere picker, direction presets
+                                            // Look controls — speed/fov/overshoot/shutter/yaw/pitch | sphere picker + square presets
                                             Item {
                                                 width: parent.width
-                                                height: (itemCommand === "jump" && itemTransition === "look") ? 196 : 0
+                                                height: (itemCommand === "jump" && itemTransition === "look") ? 152 : 0
                                                 visible: itemCommand === "jump" && itemTransition === "look"
                                                 clip: true
 
-                                                Column {
+                                                RowLayout {
                                                     anchors.fill: parent
-                                                    spacing: 4
+                                                    spacing: 8
 
-                                                    // FOV slider row
-                                                    RowLayout {
-                                                        width: parent.width; height: 22; spacing: 6
-                                                        Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                                        Slider {
-                                                            id: selLookFovSlider
-                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
-                                                            from: 10; to: 75; stepSize: 0
-                                                            Component.onCompleted: value = itemLookFovMM || 24.0
-                                                            onMoved: {
-                                                                var v = Math.round(value * 10) / 10
-                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookFovMM", v)
-                                                                selLookFovField.text = Math.round(v).toString()
+                                                    // ── Left: all sliders + yaw/pitch ──────────────────
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        Layout.alignment: Qt.AlignTop
+                                                        spacing: 4
+
+                                                        // Speed slider row
+                                                        RowLayout {
+                                                            Layout.fillWidth: true; height: 22; spacing: 6
+                                                            Text { text: "speed"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                            Slider {
+                                                                id: selLookSpeedSlider
+                                                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                                from: 0; to: 1; stepSize: 0
+                                                                Component.onCompleted: {
+                                                                    var s = itemTransitionSpeed || 0.4
+                                                                    value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                                                                }
+                                                                onMoved: {
+                                                                    var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
+                                                                    var rounded = Math.round(speed * 100) / 100
+                                                                    selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemTransitionSpeed", rounded)
+                                                                    selLookSpeedField.text = rounded.toFixed(1)
+                                                                }
+                                                                background: Rectangle {
+                                                                    x: selLookSpeedSlider.leftPadding; y: selLookSpeedSlider.topPadding + selLookSpeedSlider.availableHeight / 2 - height / 2
+                                                                    implicitWidth: 200; implicitHeight: 4; width: selLookSpeedSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                    Rectangle { width: selLookSpeedSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                                }
+                                                                handle: Rectangle {
+                                                                    x: selLookSpeedSlider.leftPadding + selLookSpeedSlider.visualPosition * (selLookSpeedSlider.availableWidth - width)
+                                                                    y: selLookSpeedSlider.topPadding + selLookSpeedSlider.availableHeight / 2 - height / 2
+                                                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                                }
                                                             }
-                                                            background: Rectangle {
-                                                                x: selLookFovSlider.leftPadding; y: selLookFovSlider.topPadding + selLookFovSlider.availableHeight / 2 - height / 2
-                                                                implicitWidth: 200; implicitHeight: 4; width: selLookFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                                Rectangle { width: selLookFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                                            }
-                                                            handle: Rectangle {
-                                                                x: selLookFovSlider.leftPadding + selLookFovSlider.visualPosition * (selLookFovSlider.availableWidth - width)
-                                                                y: selLookFovSlider.topPadding + selLookFovSlider.availableHeight / 2 - height / 2
-                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookFovSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                            Rectangle {
+                                                                Layout.preferredWidth: 52; Layout.preferredHeight: 22
+                                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                TextInput {
+                                                                    id: selLookSpeedField
+                                                                    anchors.left: parent.left; anchors.right: selLookSpeedSec.left
+                                                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                    validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                                                    Component.onCompleted: text = (itemTransitionSpeed || 0.4).toFixed(1)
+                                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                    onEditingFinished: {
+                                                                        var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                        text = speed.toFixed(1)
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemTransitionSpeed", speed)
+                                                                        selLookSpeedSlider.value = speed <= 2.0 ? speed / 4.0 : 0.5 + (speed - 2.0) / 16.0
+                                                                    }
+                                                                }
+                                                                Text { id: selLookSpeedSec; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "sec"; font.pixelSize: 10; color: "#aaa" }
                                                             }
                                                         }
-                                                        Rectangle {
-                                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                            TextInput {
-                                                                id: selLookFovField
-                                                                anchors.left: parent.left; anchors.right: selLookFovMmLabel.left
-                                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                                validator: IntValidator { bottom: 10; top: 75 }
-                                                                Component.onCompleted: text = Math.round(itemLookFovMM || 24).toString()
-                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                                onEditingFinished: {
-                                                                    var v = Math.min(75, Math.max(10, parseInt(text) || 24))
-                                                                    text = v.toString()
+
+                                                        // FOV slider row
+                                                        RowLayout {
+                                                            Layout.fillWidth: true; height: 22; spacing: 6
+                                                            Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                            Slider {
+                                                                id: selLookFovSlider
+                                                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                                from: 10; to: 75; stepSize: 0
+                                                                Component.onCompleted: value = itemLookFovMM || 24.0
+                                                                onMoved: {
+                                                                    var v = Math.round(value * 10) / 10
                                                                     selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookFovMM", v)
-                                                                    selLookFovSlider.value = v
+                                                                    selLookFovField.text = Math.round(v).toString()
+                                                                }
+                                                                background: Rectangle {
+                                                                    x: selLookFovSlider.leftPadding; y: selLookFovSlider.topPadding + selLookFovSlider.availableHeight / 2 - height / 2
+                                                                    implicitWidth: 200; implicitHeight: 4; width: selLookFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                    Rectangle { width: selLookFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                                }
+                                                                handle: Rectangle {
+                                                                    x: selLookFovSlider.leftPadding + selLookFovSlider.visualPosition * (selLookFovSlider.availableWidth - width)
+                                                                    y: selLookFovSlider.topPadding + selLookFovSlider.availableHeight / 2 - height / 2
+                                                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookFovSlider.pressed ? "#80cfff" : "#5DA9A4"
                                                                 }
                                                             }
-                                                            Text { id: selLookFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
+                                                            Rectangle {
+                                                                Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                TextInput {
+                                                                    id: selLookFovField
+                                                                    anchors.left: parent.left; anchors.right: selLookFovMmLabel.left
+                                                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                    validator: IntValidator { bottom: 10; top: 75 }
+                                                                    Component.onCompleted: text = Math.round(itemLookFovMM || 24).toString()
+                                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                    onEditingFinished: {
+                                                                        var v = Math.min(75, Math.max(10, parseInt(text) || 24))
+                                                                        text = v.toString()
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookFovMM", v)
+                                                                        selLookFovSlider.value = v
+                                                                    }
+                                                                }
+                                                                Text { id: selLookFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
+                                                            }
                                                         }
-                                                    }
 
-                                                    // Overshoot slider row
-                                                    RowLayout {
-                                                        width: parent.width; height: 22; spacing: 6
-                                                        Text { text: "overshoot"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                                        Slider {
-                                                            id: selLookOvershootSlider
-                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
-                                                            from: 0.0; to: 3.0; stepSize: 0
-                                                            Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0)
-                                                            onMoved: {
-                                                                var v = Math.round(value * 100) / 100
-                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookOvershoot", v)
-                                                                selLookOvershootField.text = v.toFixed(2)
-                                                            }
-                                                            background: Rectangle {
-                                                                x: selLookOvershootSlider.leftPadding; y: selLookOvershootSlider.topPadding + selLookOvershootSlider.availableHeight / 2 - height / 2
-                                                                implicitWidth: 200; implicitHeight: 4; width: selLookOvershootSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                                Rectangle { width: selLookOvershootSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                                            }
-                                                            handle: Rectangle {
-                                                                x: selLookOvershootSlider.leftPadding + selLookOvershootSlider.visualPosition * (selLookOvershootSlider.availableWidth - width)
-                                                                y: selLookOvershootSlider.topPadding + selLookOvershootSlider.availableHeight / 2 - height / 2
-                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookOvershootSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                                            }
-                                                        }
-                                                        Rectangle {
-                                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                            TextInput {
-                                                                id: selLookOvershootField
-                                                                anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4
-                                                                anchors.verticalCenter: parent.verticalCenter
-                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                                validator: DoubleValidator { bottom: 0.0; top: 3.0 }
-                                                                Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0).toFixed(2)
-                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                                onEditingFinished: {
-                                                                    var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
-                                                                    text = v.toFixed(2)
+                                                        // Overshoot slider row
+                                                        RowLayout {
+                                                            Layout.fillWidth: true; height: 22; spacing: 6
+                                                            Text { text: "overshoot"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                            Slider {
+                                                                id: selLookOvershootSlider
+                                                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                                from: 0.0; to: 3.0; stepSize: 0
+                                                                Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0)
+                                                                onMoved: {
+                                                                    var v = Math.round(value * 100) / 100
                                                                     selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookOvershoot", v)
-                                                                    selLookOvershootSlider.value = v
+                                                                    selLookOvershootField.text = v.toFixed(2)
+                                                                }
+                                                                background: Rectangle {
+                                                                    x: selLookOvershootSlider.leftPadding; y: selLookOvershootSlider.topPadding + selLookOvershootSlider.availableHeight / 2 - height / 2
+                                                                    implicitWidth: 200; implicitHeight: 4; width: selLookOvershootSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                    Rectangle { width: selLookOvershootSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                                }
+                                                                handle: Rectangle {
+                                                                    x: selLookOvershootSlider.leftPadding + selLookOvershootSlider.visualPosition * (selLookOvershootSlider.availableWidth - width)
+                                                                    y: selLookOvershootSlider.topPadding + selLookOvershootSlider.availableHeight / 2 - height / 2
+                                                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookOvershootSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                                }
+                                                            }
+                                                            Rectangle {
+                                                                Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                TextInput {
+                                                                    id: selLookOvershootField
+                                                                    anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                                    anchors.verticalCenter: parent.verticalCenter
+                                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                    validator: DoubleValidator { bottom: 0.0; top: 3.0 }
+                                                                    Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.0).toFixed(2)
+                                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                    onEditingFinished: {
+                                                                        var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                        text = v.toFixed(2)
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookOvershoot", v)
+                                                                        selLookOvershootSlider.value = v
+                                                                    }
                                                                 }
                                                             }
                                                         }
-                                                    }
 
-                                                    // Shutter slider row
-                                                    RowLayout {
-                                                        width: parent.width; height: 22; spacing: 6
-                                                        Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                                        Slider {
-                                                            id: selLookShutterSlider
-                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
-                                                            from: 0.0; to: 0.5; stepSize: 0
-                                                            Component.onCompleted: value = (itemLookShutter !== undefined ? itemLookShutter : 0.10)
-                                                            onMoved: {
-                                                                var v = Math.round(value * 1000) / 1000
-                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookShutter", v)
-                                                                selLookShutterField.text = v.toFixed(2)
-                                                            }
-                                                            background: Rectangle {
-                                                                x: selLookShutterSlider.leftPadding; y: selLookShutterSlider.topPadding + selLookShutterSlider.availableHeight / 2 - height / 2
-                                                                implicitWidth: 200; implicitHeight: 4; width: selLookShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                                Rectangle { width: selLookShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                                            }
-                                                            handle: Rectangle {
-                                                                x: selLookShutterSlider.leftPadding + selLookShutterSlider.visualPosition * (selLookShutterSlider.availableWidth - width)
-                                                                y: selLookShutterSlider.topPadding + selLookShutterSlider.availableHeight / 2 - height / 2
-                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                                            }
-                                                        }
-                                                        Rectangle {
-                                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                            TextInput {
-                                                                id: selLookShutterField
-                                                                anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4
-                                                                anchors.verticalCenter: parent.verticalCenter
-                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                                validator: DoubleValidator { bottom: 0.0; top: 0.5 }
-                                                                Component.onCompleted: text = (itemLookShutter !== undefined ? itemLookShutter : 0.10).toFixed(2)
-                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                                onEditingFinished: {
-                                                                    var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0))
-                                                                    text = v.toFixed(2)
+                                                        // Shutter slider row
+                                                        RowLayout {
+                                                            Layout.fillWidth: true; height: 22; spacing: 6
+                                                            Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                            Slider {
+                                                                id: selLookShutterSlider
+                                                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                                from: 0.0; to: 0.5; stepSize: 0
+                                                                Component.onCompleted: value = (itemLookShutter !== undefined ? itemLookShutter : 0.10)
+                                                                onMoved: {
+                                                                    var v = Math.round(value * 1000) / 1000
                                                                     selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookShutter", v)
-                                                                    selLookShutterSlider.value = v
+                                                                    selLookShutterField.text = v.toFixed(2)
+                                                                }
+                                                                background: Rectangle {
+                                                                    x: selLookShutterSlider.leftPadding; y: selLookShutterSlider.topPadding + selLookShutterSlider.availableHeight / 2 - height / 2
+                                                                    implicitWidth: 200; implicitHeight: 4; width: selLookShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                    Rectangle { width: selLookShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                                }
+                                                                handle: Rectangle {
+                                                                    x: selLookShutterSlider.leftPadding + selLookShutterSlider.visualPosition * (selLookShutterSlider.availableWidth - width)
+                                                                    y: selLookShutterSlider.topPadding + selLookShutterSlider.availableHeight / 2 - height / 2
+                                                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
                                                                 }
                                                             }
-                                                        }
-                                                    }
-
-                                                    // Sphere picker + yaw/pitch fields
-                                                    Item {
-                                                        width: parent.width; height: 90
-
-                                                        Row {
-                                                            anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-                                                            spacing: 8
-
-                                                            Item {
-                                                                width: 90; height: 90
-                                                                ShaderEffect {
-                                                                    anchors.fill: parent
-                                                                    fragmentShader: "lookpicker.frag.qsb"
-                                                                    property real yaw:   itemLookYaw   || 90.0
-                                                                    property real pitch: itemLookPitch || 0.0
-                                                                    property real fovMM: itemLookFovMM || 24.0
-                                                                }
-                                                                MouseArea {
-                                                                    anchors.fill: parent
-                                                                    onPressed:         selLookPickerMouse(mouse.x, mouse.y)
-                                                                    onPositionChanged: if (pressed) selLookPickerMouse(mouse.x, mouse.y)
-                                                                    function selLookPickerMouse(mx, my) {
-                                                                        var cx = 45.0, cy = 45.0
-                                                                        var nx = (mx - cx) / cx
-                                                                        var ny = (my - cy) / cy
-                                                                        var r = Math.sqrt(nx * nx + ny * ny)
-                                                                        if (r > 1.0) { nx /= r; ny /= r; r = 1.0 }
-                                                                        var z = Math.sqrt(Math.max(0.0, 1.0 - r * r))
-                                                                        var worldNy = -ny
-                                                                        var newYaw   = Math.round(Math.atan2(nx, z) * 1800.0 / Math.PI) / 10
-                                                                        var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, worldNy))) * 1800.0 / Math.PI) / 10
-                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookYaw",   newYaw)
-                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookPitch", newPitch)
-                                                                        selLookYawField.text   = newYaw.toFixed(1)
-                                                                        selLookPitchField.text = newPitch.toFixed(1)
-                                                                    }
-                                                                }
-                                                            }
-
-                                                            Column {
-                                                                anchors.verticalCenter: parent.verticalCenter
-                                                                spacing: 6
-
-                                                                RowLayout {
-                                                                    spacing: 4
-                                                                    Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; Layout.preferredWidth: 26; verticalAlignment: Text.AlignVCenter; height: 22 }
-                                                                    Rectangle {
-                                                                        Layout.preferredWidth: 60; height: 22
-                                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                                        TextInput {
-                                                                            id: selLookYawField
-                                                                            anchors.left: parent.left; anchors.right: selLookYawDeg.left
-                                                                            anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                                            validator: DoubleValidator { bottom: -9999; top: 9999 }
-                                                                            Component.onCompleted: text = (itemLookYaw !== undefined ? itemLookYaw : 90.0).toFixed(1)
-                                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                                            onEditingFinished: {
-                                                                                var v = parseFloat(text) || 0.0
-                                                                                text = v.toFixed(1)
-                                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookYaw", v)
-                                                                            }
-                                                                        }
-                                                                        Text { id: selLookYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
-                                                                    }
-                                                                }
-
-                                                                RowLayout {
-                                                                    spacing: 4
-                                                                    Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; Layout.preferredWidth: 26; verticalAlignment: Text.AlignVCenter; height: 22 }
-                                                                    Rectangle {
-                                                                        Layout.preferredWidth: 60; height: 22
-                                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                                        TextInput {
-                                                                            id: selLookPitchField
-                                                                            anchors.left: parent.left; anchors.right: selLookPitchDeg.left
-                                                                            anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                                            validator: DoubleValidator { bottom: -9999; top: 9999 }
-                                                                            Component.onCompleted: text = (itemLookPitch !== undefined ? itemLookPitch : 0.0).toFixed(1)
-                                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                                            onEditingFinished: {
-                                                                                var v = parseFloat(text) || 0.0
-                                                                                text = v.toFixed(1)
-                                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookPitch", v)
-                                                                            }
-                                                                        }
-                                                                        Text { id: selLookPitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                            Rectangle {
+                                                                Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                TextInput {
+                                                                    id: selLookShutterField
+                                                                    anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                                    anchors.verticalCenter: parent.verticalCenter
+                                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                    validator: DoubleValidator { bottom: 0.0; top: 0.5 }
+                                                                    Component.onCompleted: text = (itemLookShutter !== undefined ? itemLookShutter : 0.10).toFixed(2)
+                                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                    onEditingFinished: {
+                                                                        var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                        text = v.toFixed(2)
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookShutter", v)
+                                                                        selLookShutterSlider.value = v
                                                                     }
                                                                 }
                                                             }
                                                         }
+
+                                                        // Yaw and pitch fields side by side
+                                                        RowLayout {
+                                                            Layout.fillWidth: true; height: 22; spacing: 4
+                                                            Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
+                                                            Rectangle {
+                                                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                TextInput {
+                                                                    id: selLookYawField
+                                                                    anchors.left: parent.left; anchors.right: selLookYawDeg.left
+                                                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                    validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                                    Component.onCompleted: text = (itemLookYaw !== undefined ? itemLookYaw : 90.0).toFixed(1)
+                                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                    onEditingFinished: {
+                                                                        var v = parseFloat(text) || 0.0
+                                                                        text = v.toFixed(1)
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookYaw", v)
+                                                                    }
+                                                                }
+                                                                Text { id: selLookYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                            }
+                                                            Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
+                                                            Rectangle {
+                                                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                TextInput {
+                                                                    id: selLookPitchField
+                                                                    anchors.left: parent.left; anchors.right: selLookPitchDeg.left
+                                                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                    validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                                    Component.onCompleted: text = (itemLookPitch !== undefined ? itemLookPitch : 0.0).toFixed(1)
+                                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                    onEditingFinished: {
+                                                                        var v = parseFloat(text) || 0.0
+                                                                        text = v.toFixed(1)
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookPitch", v)
+                                                                    }
+                                                                }
+                                                                Text { id: selLookPitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                            }
+                                                        }
                                                     }
 
-                                                    // Direction preset buttons
-                                                    RowLayout {
-                                                        width: parent.width; height: 22; spacing: 4
-                                                        Item { Layout.fillWidth: true }
-                                                        Repeater {
-                                                            model: [
-                                                                { icon: "left",  yaw: -90.0, pitch:   0.0 },
-                                                                { icon: "up",    yaw:   0.0, pitch:  90.0 },
-                                                                { icon: "down",  yaw:   0.0, pitch: -90.0 },
-                                                                { icon: "right", yaw:  90.0, pitch:   0.0 }
-                                                            ]
-                                                            delegate: Rectangle {
-                                                                Layout.preferredWidth: 22; Layout.preferredHeight: 22; radius: 4
-                                                                property bool isActive: Math.abs((itemLookYaw || 90.0) - modelData.yaw) < 0.6 &&
-                                                                                        Math.abs((itemLookPitch || 0.0) - modelData.pitch) < 0.6
-                                                                color: isActive ? "white" : "transparent"
-                                                                border.color: "white"; border.width: 1
-                                                                Behavior on color { ColorAnimation { duration: 100 } }
-                                                                Image {
-                                                                    id: selLookDirIcon; anchors.centerIn: parent; width: 14; height: 14
-                                                                    source: "icons/" + modelData.icon + ".svg"; fillMode: Image.PreserveAspectFit; visible: false
-                                                                }
-                                                                ColorOverlay {
-                                                                    anchors.fill: selLookDirIcon; source: selLookDirIcon
-                                                                    color: isActive ? "#477B78" : "white"
+                                                    // ── Right: sphere picker + square preset buttons ────
+                                                    ColumnLayout {
+                                                        Layout.preferredWidth: 76
+                                                        Layout.alignment: Qt.AlignTop
+                                                        spacing: 4
+                                                        property bool lookPickerBack: false
+
+                                                        // Front / back hemisphere toggle
+                                                        RowLayout {
+                                                            Layout.preferredWidth: 76; height: 16; spacing: 4
+                                                            Repeater {
+                                                                model: [{ label: "front", back: false }, { label: "back", back: true }]
+                                                                delegate: Rectangle {
+                                                                    Layout.fillWidth: true; Layout.preferredHeight: 16; radius: 4
+                                                                    property bool isActive: parent.parent.lookPickerBack === modelData.back
+                                                                    color: isActive ? "white" : "transparent"
+                                                                    border.color: "white"; border.width: 1
                                                                     Behavior on color { ColorAnimation { duration: 100 } }
-                                                                }
-                                                                MouseArea {
-                                                                    anchors.fill: parent
-                                                                    onClicked: {
-                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookYaw",   modelData.yaw)
-                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookPitch", modelData.pitch)
-                                                                        selLookYawField.text   = modelData.yaw.toFixed(1)
-                                                                        selLookPitchField.text = modelData.pitch.toFixed(1)
+                                                                    Text {
+                                                                        anchors.centerIn: parent
+                                                                        text: modelData.label; font.pixelSize: 9
+                                                                        color: parent.isActive ? "#477B78" : "white"
+                                                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                                                    }
+                                                                    MouseArea {
+                                                                        anchors.fill: parent
+                                                                        onClicked: parent.parent.parent.lookPickerBack = modelData.back
                                                                     }
                                                                 }
                                                             }
                                                         }
-                                                        Item { Layout.fillWidth: true }
+
+                                                        Item {
+                                                            Layout.preferredWidth: 68; Layout.preferredHeight: 68
+                                                            Layout.alignment: Qt.AlignHCenter
+                                                            ShaderEffect {
+                                                                anchors.fill: parent
+                                                                fragmentShader: "lookpicker.frag.qsb"
+                                                                property real yaw:   itemLookYaw   !== undefined ? itemLookYaw   : 90.0
+                                                                property real pitch: itemLookPitch || 0.0
+                                                                property real fovMM: itemLookFovMM || 24.0
+                                                                property real back:  parent.parent.lookPickerBack ? 1.0 : 0.0
+                                                            }
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                onPressed:         selLookPickerMouse(mouseX, mouseY)
+                                                                onPositionChanged: if (pressed) selLookPickerMouse(mouseX, mouseY)
+                                                                function selLookPickerMouse(mx, my) {
+                                                                    var cx = 34.0, cy = 34.0
+                                                                    var nx = (mx - cx) / cx
+                                                                    var ny = (my - cy) / cy
+                                                                    var r = Math.sqrt(nx * nx + ny * ny)
+                                                                    if (r > 1.0) { nx /= r; ny /= r; r = 1.0 }
+                                                                    var z  = Math.sqrt(Math.max(0.0, 1.0 - r * r))
+                                                                    var lx = nx, ly = -ny
+                                                                    var lz = parent.parent.lookPickerBack ? -z : z
+                                                                    var newYaw   = Math.round(Math.atan2(lx, lz) * 1800.0 / Math.PI) / 10
+                                                                    var absCosy  = Math.sqrt(ly * ly + lz * lz)
+                                                                    var sinPitch = absCosy > 0.0001 ? ly / (lz >= 0 ? absCosy : -absCosy) : 0.0
+                                                                    var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, sinPitch))) * 1800.0 / Math.PI) / 10
+                                                                    selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookYaw",   newYaw)
+                                                                    selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookPitch", newPitch)
+                                                                    selLookYawField.text   = newYaw.toFixed(1)
+                                                                    selLookPitchField.text = newPitch.toFixed(1)
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // Square preset buttons: 4 × 16px with spacing 4 = 76px total
+                                                        RowLayout {
+                                                            Layout.preferredWidth: 76; height: 16; spacing: 4
+                                                            Repeater {
+                                                                model: [
+                                                                    { icon: "left",  yaw: -90.0, pitch:   0.0 },
+                                                                    { icon: "up",    yaw:   0.0, pitch:  90.0 },
+                                                                    { icon: "down",  yaw:   0.0, pitch: -90.0 },
+                                                                    { icon: "right", yaw:  90.0, pitch:   0.0 }
+                                                                ]
+                                                                delegate: Rectangle {
+                                                                    Layout.preferredWidth: 16; Layout.preferredHeight: 16; radius: 4
+                                                                    property bool isActive: Math.abs((itemLookYaw !== undefined ? itemLookYaw : 90.0) - modelData.yaw) < 0.6 &&
+                                                                                            Math.abs((itemLookPitch !== undefined ? itemLookPitch : 0.0) - modelData.pitch) < 0.6
+                                                                    color: isActive ? "white" : "transparent"
+                                                                    border.color: "white"; border.width: 1
+                                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                                    Image {
+                                                                        id: selLookDirIcon; anchors.centerIn: parent; width: 12; height: 12
+                                                                        source: "icons/" + modelData.icon + ".svg"; fillMode: Image.PreserveAspectFit; visible: false
+                                                                    }
+                                                                    ColorOverlay {
+                                                                        anchors.fill: selLookDirIcon; source: selLookDirIcon
+                                                                        color: isActive ? "#477B78" : "white"
+                                                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                                                    }
+                                                                    MouseArea {
+                                                                        anchors.fill: parent
+                                                                        onClicked: {
+                                                                            selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookYaw",   modelData.yaw)
+                                                                            selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookPitch", modelData.pitch)
+                                                                            selLookYawField.text   = modelData.yaw.toFixed(1)
+                                                                            selLookPitchField.text = modelData.pitch.toFixed(1)
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
