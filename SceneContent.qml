@@ -192,6 +192,8 @@ Item {
                 itemTransitionSpeed: e.itemTransitionSpeed,
                 itemWipeFeather: e.itemWipeFeather, itemWipeDirection: e.itemWipeDirection,
                 itemPushDirection: e.itemPushDirection,
+                itemLookYaw: e.itemLookYaw, itemLookPitch: e.itemLookPitch,
+                itemLookFovMM: e.itemLookFovMM, itemLookOvershoot: e.itemLookOvershoot,
                 itemTargetSceneId: e.itemTargetSceneId, itemTargetSceneName: e.itemTargetSceneName,
                 itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
                 itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
@@ -216,6 +218,10 @@ Item {
                 itemWipeFeather:     e.itemWipeFeather     !== undefined ? e.itemWipeFeather     : 0.0,
                 itemWipeDirection:   e.itemWipeDirection   || "right",
                 itemPushDirection:   e.itemPushDirection   || "right",
+                itemLookYaw:         e.itemLookYaw         !== undefined ? e.itemLookYaw         : 90.0,
+                itemLookPitch:       e.itemLookPitch       !== undefined ? e.itemLookPitch       : 0.0,
+                itemLookFovMM:       e.itemLookFovMM       !== undefined ? e.itemLookFovMM       : 24.0,
+                itemLookOvershoot:   e.itemLookOvershoot   !== undefined ? e.itemLookOvershoot   : 1.70158,
                 itemTargetSceneId:   e.itemTargetSceneId   !== undefined ? e.itemTargetSceneId : -1,
                 itemTargetSceneName: e.itemTargetSceneName || "",
                 itemConditionVar:    e.itemConditionVar    || "",
@@ -320,7 +326,11 @@ Item {
                                                             ms,
                                                             it.itemWipeFeather   || 0.0,
                                                             it.itemWipeDirection || "right",
-                                                            it.itemPushDirection || "right")
+                                                            it.itemPushDirection || "right",
+                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
+                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
+                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
+                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.70158)
                                     return
                                 }
                             }

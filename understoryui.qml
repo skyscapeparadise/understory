@@ -940,6 +940,19 @@ Window {
             property string pendingSlideDirection: "right"
             property int    slideDirection:       0   // 0=right 1=left 2=down 3=up
 
+            // ── Look transition state ─────────────────────────────────────────────
+            property bool   looking:              false
+            property real   lookProgress:         0.0      // animates 0→1 during look
+            property real   pendingLookYaw:       90.0     // degrees, positive = right
+            property real   pendingLookPitch:     0.0      // degrees, positive = up
+            property real   pendingLookFovMM:     24.0     // mm focal length (full-frame equiv.)
+            property real   pendingLookOvershoot: 1.70158  // back-ease-out s param
+            // Live values fed into the ShaderEffect during a look:
+            property real   lookYaw:       90.0
+            property real   lookPitch:     0.0
+            property real   lookFovMM:     24.0
+            property real   lookOvershoot: 1.70158
+
             // Thin wrappers — viewport and sidebar code can use these bare names
             property var areasModel:     activeContent ? activeContent.areasModel     : null
             property var textBoxesModel: activeContent ? activeContent.textBoxesModel : null
@@ -1406,9 +1419,10 @@ Window {
             // transition: "cut" | "dissolve" | "wipe"   durationMs: length of animated transitions.
             // wipeFeather: 0.0–0.5   wipeDirection: "right"|"left"|"down"|"up"
             // When staging signals readyForDisplay the Connections below start the transition.
-            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection) {
+            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection,
+                                     lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal) {
                 if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId) return
-                if (dissolving || wiping || sliding) return   // don't interrupt an in-progress transition
+                if (dissolving || wiping || sliding || looking) return   // don't interrupt an in-progress transition
                 selectSettings.saveCurrentInteractivity()
                 storyManager.saveSceneElements(mainWindow.currentSceneId, activeContent.collectElements())
                 pendingJumpSceneId = targetSceneId
@@ -1418,6 +1432,10 @@ Window {
                 pendingWipeFeather     = wipeFeather   !== undefined ? wipeFeather  : 0.0
                 pendingWipeDirection   = wipeDirection  || "right"
                 pendingSlideDirection  = pushDirection  || "right"
+                pendingLookYaw        = lookYawDeg       !== undefined ? lookYawDeg       : 90.0
+                pendingLookPitch      = lookPitchDeg     !== undefined ? lookPitchDeg     : 0.0
+                pendingLookFovMM      = lookFovMMVal     !== undefined ? lookFovMMVal     : 24.0
+                pendingLookOvershoot  = lookOvershootVal !== undefined ? lookOvershootVal : 1.70158
                 var raw = storyManager.loadSceneElements(targetSceneId)
                 var elements
                 try { elements = JSON.parse(raw) } catch(e) { elements = [] }
@@ -1434,6 +1452,10 @@ Window {
                 if (sliding) {
                     sliding       = false
                     slideProgress = 0.0
+                }
+                if (looking) {
+                    looking      = false
+                    lookProgress = 0.0
                 }
                 foregroundLayer = 1 - foregroundLayer
                 nextStackOrder = activeContent.nextStackOrder
@@ -1487,6 +1509,21 @@ Window {
                 easing.type: Easing.InOutQuad
                 onStopped: {
                     if (viewport.sliding) {
+                        viewport.performSwap()
+                    }
+                }
+            }
+
+            // Look animation — sweeps lookProgress 0→1.  All easing is baked into look.frag.
+            NumberAnimation {
+                id: lookAnim
+                target: viewport
+                property: "lookProgress"
+                from: 0.0
+                to: 1.0
+                easing.type: Easing.Linear
+                onStopped: {
+                    if (viewport.looking) {
                         viewport.performSwap()
                     }
                 }
@@ -1856,15 +1893,15 @@ Window {
                 // During a dissolve or wipe, staging layer must render above foreground.
                 // During wipe both layers are captured into FBO textures by ShaderEffectSource,
                 // so both are hidden (opacity 0) and the wipeEffect ShaderEffect at z:15 is shown.
-                z: ((viewport.dissolving || viewport.wiping || viewport.sliding) && viewport.foregroundLayer !== 0) ? 11 : 10
+                z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking) && viewport.foregroundLayer !== 0) ? 11 : 10
                 viewportRef:   viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 0
                 // Foreground: fully opaque.  Staging during dissolve: fades 0→1.
-                // During wipe/slide: both layers stay at opacity 1 so FBO textures have full color,
+                // During wipe/slide/look: both layers stay at opacity 1 so FBO textures have full color,
                 // but hideSource:true on the ShaderEffectSources hides them from the scene.
                 // Staging at rest: opacity 0 (keeps video frames decoding silently).
-                opacity: (viewport.wiping || viewport.sliding) ? 1.0 :
+                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 :
                          viewport.foregroundLayer === 0 ? 1.0 :
                          viewport.dissolving ? viewport.dissolveOpacity : 0.0
 
@@ -1890,6 +1927,14 @@ Window {
                                 slideAnim.duration = viewport.pendingDuration
                                 viewport.sliding = true
                                 slideAnim.start()
+                            } else if (viewport.pendingTransition === "look") {
+                                viewport.lookYaw       = viewport.pendingLookYaw
+                                viewport.lookPitch     = viewport.pendingLookPitch
+                                viewport.lookFovMM     = viewport.pendingLookFovMM
+                                viewport.lookOvershoot = viewport.pendingLookOvershoot
+                                lookAnim.duration = viewport.pendingDuration
+                                viewport.looking = true
+                                lookAnim.start()
                             } else {
                                 viewport.performSwap()
                             }
@@ -1901,11 +1946,11 @@ Window {
             SceneContent {
                 id: sceneLayerB
                 anchors.fill: parent
-                z: ((viewport.dissolving || viewport.wiping || viewport.sliding) && viewport.foregroundLayer !== 1) ? 11 : 10
+                z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking) && viewport.foregroundLayer !== 1) ? 11 : 10
                 viewportRef:   viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 1
-                opacity: (viewport.wiping || viewport.sliding) ? 1.0 :
+                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 :
                          viewport.foregroundLayer === 1 ? 1.0 :
                          viewport.dissolving ? viewport.dissolveOpacity : 0.0
 
@@ -1931,6 +1976,14 @@ Window {
                                 slideAnim.duration = viewport.pendingDuration
                                 viewport.sliding = true
                                 slideAnim.start()
+                            } else if (viewport.pendingTransition === "look") {
+                                viewport.lookYaw       = viewport.pendingLookYaw
+                                viewport.lookPitch     = viewport.pendingLookPitch
+                                viewport.lookFovMM     = viewport.pendingLookFovMM
+                                viewport.lookOvershoot = viewport.pendingLookOvershoot
+                                lookAnim.duration = viewport.pendingDuration
+                                viewport.looking = true
+                                lookAnim.start()
                             } else {
                                 viewport.performSwap()
                             }
@@ -1945,16 +1998,16 @@ Window {
             ShaderEffectSource {
                 id: texA
                 sourceItem: sceneLayerA
-                live: viewport.wiping || viewport.sliding
-                hideSource: viewport.wiping || viewport.sliding
+                live: viewport.wiping || viewport.sliding || viewport.looking
+                hideSource: viewport.wiping || viewport.sliding || viewport.looking
                 visible: false
             }
 
             ShaderEffectSource {
                 id: texB
                 sourceItem: sceneLayerB
-                live: viewport.wiping || viewport.sliding
-                hideSource: viewport.wiping || viewport.sliding
+                live: viewport.wiping || viewport.sliding || viewport.looking
+                hideSource: viewport.wiping || viewport.sliding || viewport.looking
                 visible: false
             }
 
@@ -1989,6 +2042,24 @@ Window {
 
                 property real progress:  viewport.slideProgress
                 property int  direction: viewport.slideDirection
+            }
+
+            // Look transition overlay — sphere-projected camera whip via look.frag.qsb.
+            ShaderEffect {
+                id: lookEffect
+                anchors.fill: parent
+                z: 15
+                visible: viewport.looking
+                fragmentShader: "look.frag.qsb"
+
+                property var sourceIn:  viewport.foregroundLayer === 0 ? texB : texA
+                property var sourceOut: viewport.foregroundLayer === 0 ? texA : texB
+
+                property real progress:  viewport.lookProgress
+                property real yaw:       viewport.lookYaw
+                property real pitch:     viewport.lookPitch
+                property real fovMM:     viewport.lookFovMM
+                property real overshoot: viewport.lookOvershoot
             }
 
             // In-progress rubber-band (only visible while dragging)
@@ -3747,7 +3818,7 @@ Window {
                                                 }
                                                 if (firstVar === "") return
                                             }
-                                            areaInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
+                                            areaInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.70158, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
                                         }
                                     }
                                 }
@@ -4438,6 +4509,249 @@ Window {
                                                             onClicked: areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemWipeDirection", modelData)
                                                         }
                                                     }
+                                                }
+                                            }
+                                        }
+
+                                        // Look controls — FOV, overshoot, sphere picker, direction presets
+                                        Item {
+                                            width: parent.width
+                                            height: (itemCommand === "jump" && itemTransition === "look") ? 168 : 0
+                                            visible: itemCommand === "jump" && itemTransition === "look"
+                                            clip: true
+
+                                            Column {
+                                                anchors.fill: parent
+                                                spacing: 4
+
+                                                // FOV slider row
+                                                RowLayout {
+                                                    width: parent.width; height: 22; spacing: 6
+                                                    Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                    Slider {
+                                                        id: areaLookFovSlider
+                                                        Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                        from: 10; to: 75; stepSize: 0
+                                                        Component.onCompleted: value = itemLookFovMM || 24.0
+                                                        onMoved: {
+                                                            var v = Math.round(value * 10) / 10
+                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookFovMM", v)
+                                                            areaLookFovField.text = Math.round(v).toString()
+                                                        }
+                                                        background: Rectangle {
+                                                            x: areaLookFovSlider.leftPadding; y: areaLookFovSlider.topPadding + areaLookFovSlider.availableHeight / 2 - height / 2
+                                                            implicitWidth: 200; implicitHeight: 4; width: areaLookFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                            Rectangle { width: areaLookFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                        }
+                                                        handle: Rectangle {
+                                                            x: areaLookFovSlider.leftPadding + areaLookFovSlider.visualPosition * (areaLookFovSlider.availableWidth - width)
+                                                            y: areaLookFovSlider.topPadding + areaLookFovSlider.availableHeight / 2 - height / 2
+                                                            implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookFovSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                        TextInput {
+                                                            id: areaLookFovField
+                                                            anchors.left: parent.left; anchors.right: areaLookFovMmLabel.left
+                                                            anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                            validator: IntValidator { bottom: 10; top: 75 }
+                                                            Component.onCompleted: text = Math.round(itemLookFovMM || 24).toString()
+                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                            onEditingFinished: {
+                                                                var v = Math.min(75, Math.max(10, parseInt(text) || 24))
+                                                                text = v.toString()
+                                                                areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookFovMM", v)
+                                                                areaLookFovSlider.value = v
+                                                            }
+                                                        }
+                                                        Text { id: areaLookFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
+                                                    }
+                                                }
+
+                                                // Overshoot slider row
+                                                RowLayout {
+                                                    width: parent.width; height: 22; spacing: 6
+                                                    Text { text: "overshoot"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                    Slider {
+                                                        id: areaLookOvershootSlider
+                                                        Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                        from: 0.0; to: 3.0; stepSize: 0
+                                                        Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.70158)
+                                                        onMoved: {
+                                                            var v = Math.round(value * 100) / 100
+                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookOvershoot", v)
+                                                            areaLookOvershootField.text = v.toFixed(2)
+                                                        }
+                                                        background: Rectangle {
+                                                            x: areaLookOvershootSlider.leftPadding; y: areaLookOvershootSlider.topPadding + areaLookOvershootSlider.availableHeight / 2 - height / 2
+                                                            implicitWidth: 200; implicitHeight: 4; width: areaLookOvershootSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                            Rectangle { width: areaLookOvershootSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                        }
+                                                        handle: Rectangle {
+                                                            x: areaLookOvershootSlider.leftPadding + areaLookOvershootSlider.visualPosition * (areaLookOvershootSlider.availableWidth - width)
+                                                            y: areaLookOvershootSlider.topPadding + areaLookOvershootSlider.availableHeight / 2 - height / 2
+                                                            implicitWidth: 12; implicitHeight: 12; radius: 6; color: areaLookOvershootSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                        TextInput {
+                                                            id: areaLookOvershootField
+                                                            anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.topMargin: 0; anchors.bottomMargin: 0
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                            validator: DoubleValidator { bottom: 0.0; top: 3.0 }
+                                                            Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.70158).toFixed(2)
+                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                            onEditingFinished: {
+                                                                var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                text = v.toFixed(2)
+                                                                areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookOvershoot", v)
+                                                                areaLookOvershootSlider.value = v
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                // Sphere picker + yaw/pitch fields
+                                                Item {
+                                                    width: parent.width; height: 90
+
+                                                    Row {
+                                                        anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                                                        spacing: 8
+
+                                                        // Sphere picker widget
+                                                        Item {
+                                                            width: 90; height: 90
+                                                            ShaderEffect {
+                                                                anchors.fill: parent
+                                                                fragmentShader: "lookpicker.frag.qsb"
+                                                                property real yaw:   itemLookYaw   || 90.0
+                                                                property real pitch: itemLookPitch || 0.0
+                                                                property real fovMM: itemLookFovMM || 24.0
+                                                            }
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                onPressed:         areaLookPickerMouse(mouse.x, mouse.y)
+                                                                onPositionChanged: if (pressed) areaLookPickerMouse(mouse.x, mouse.y)
+                                                                function areaLookPickerMouse(mx, my) {
+                                                                    var cx = 45.0, cy = 45.0
+                                                                    var nx = (mx - cx) / cx
+                                                                    var ny = (my - cy) / cy
+                                                                    var r = Math.sqrt(nx * nx + ny * ny)
+                                                                    if (r > 1.0) { nx /= r; ny /= r; r = 1.0 }
+                                                                    var z = Math.sqrt(Math.max(0.0, 1.0 - r * r))
+                                                                    var worldNy = -ny
+                                                                    var newYaw   = Math.round(Math.atan2(nx, z) * 1800.0 / Math.PI) / 10
+                                                                    var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, worldNy))) * 1800.0 / Math.PI) / 10
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookYaw",   newYaw)
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookPitch", newPitch)
+                                                                    areaLookYawField.text   = newYaw.toFixed(1)
+                                                                    areaLookPitchField.text = newPitch.toFixed(1)
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // Yaw + Pitch text fields stacked
+                                                        Column {
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            spacing: 6
+
+                                                            RowLayout {
+                                                                spacing: 4
+                                                                Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; Layout.preferredWidth: 26; verticalAlignment: Text.AlignVCenter; height: 22 }
+                                                                Rectangle {
+                                                                    Layout.preferredWidth: 60; height: 22
+                                                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                    TextInput {
+                                                                        id: areaLookYawField
+                                                                        anchors.left: parent.left; anchors.right: areaLookYawDeg.left
+                                                                        anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                        validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                                        Component.onCompleted: text = (itemLookYaw !== undefined ? itemLookYaw : 90.0).toFixed(1)
+                                                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                        onEditingFinished: {
+                                                                            var v = parseFloat(text) || 0.0
+                                                                            text = v.toFixed(1)
+                                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookYaw", v)
+                                                                        }
+                                                                    }
+                                                                    Text { id: areaLookYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                                }
+                                                            }
+
+                                                            RowLayout {
+                                                                spacing: 4
+                                                                Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; Layout.preferredWidth: 26; verticalAlignment: Text.AlignVCenter; height: 22 }
+                                                                Rectangle {
+                                                                    Layout.preferredWidth: 60; height: 22
+                                                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                    TextInput {
+                                                                        id: areaLookPitchField
+                                                                        anchors.left: parent.left; anchors.right: areaLookPitchDeg.left
+                                                                        anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                        validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                                        Component.onCompleted: text = (itemLookPitch !== undefined ? itemLookPitch : 0.0).toFixed(1)
+                                                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                        onEditingFinished: {
+                                                                            var v = parseFloat(text) || 0.0
+                                                                            text = v.toFixed(1)
+                                                                            areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookPitch", v)
+                                                                        }
+                                                                    }
+                                                                    Text { id: areaLookPitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                // Direction preset buttons
+                                                RowLayout {
+                                                    width: parent.width; height: 22; spacing: 4
+                                                    Item { Layout.fillWidth: true }
+                                                    Repeater {
+                                                        model: [
+                                                            { icon: "left",  yaw: -90.0, pitch:   0.0 },
+                                                            { icon: "up",    yaw:   0.0, pitch:  90.0 },
+                                                            { icon: "down",  yaw:   0.0, pitch: -90.0 },
+                                                            { icon: "right", yaw:  90.0, pitch:   0.0 }
+                                                        ]
+                                                        delegate: Rectangle {
+                                                            Layout.preferredWidth: 22; Layout.preferredHeight: 22; radius: 4
+                                                            property bool isActive: Math.abs((itemLookYaw || 90.0) - modelData.yaw) < 0.6 &&
+                                                                                    Math.abs((itemLookPitch || 0.0) - modelData.pitch) < 0.6
+                                                            color: isActive ? "white" : "transparent"
+                                                            border.color: "white"; border.width: 1
+                                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                                            Image {
+                                                                id: areaLookDirIcon; anchors.centerIn: parent; width: 14; height: 14
+                                                                source: "icons/" + modelData.icon + ".svg"; fillMode: Image.PreserveAspectFit; visible: false
+                                                            }
+                                                            ColorOverlay {
+                                                                anchors.fill: areaLookDirIcon; source: areaLookDirIcon
+                                                                color: isActive ? "#477B78" : "white"
+                                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                            }
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                onClicked: {
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookYaw",   modelData.yaw)
+                                                                    areaInteractivityModel.setProperty(areaInteractivityDelegate.listIdx, "itemLookPitch", modelData.pitch)
+                                                                    areaLookYawField.text   = modelData.yaw.toFixed(1)
+                                                                    areaLookPitchField.text = modelData.pitch.toFixed(1)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    Item { Layout.fillWidth: true }
                                                 }
                                             }
                                         }
@@ -6512,7 +6826,7 @@ Window {
                                                     }
                                                     if (firstVar === "") return
                                                 }
-                                                selectInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
+                                                selectInteractivityModel.append({ itemTrigger: tab, itemAction: defaultAction, itemCommand: "jump", itemTransition: "cut", itemTransitionSpeed: 0.25, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.70158, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: firstVar, itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" })
                                             }
                                         }
                                     }
@@ -7203,6 +7517,247 @@ Window {
                                                                 onClicked: selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemWipeDirection", modelData)
                                                             }
                                                         }
+                                                    }
+                                                }
+                                            }
+
+                                            // Look controls — FOV, overshoot, sphere picker, direction presets
+                                            Item {
+                                                width: parent.width
+                                                height: (itemCommand === "jump" && itemTransition === "look") ? 168 : 0
+                                                visible: itemCommand === "jump" && itemTransition === "look"
+                                                clip: true
+
+                                                Column {
+                                                    anchors.fill: parent
+                                                    spacing: 4
+
+                                                    // FOV slider row
+                                                    RowLayout {
+                                                        width: parent.width; height: 22; spacing: 6
+                                                        Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                        Slider {
+                                                            id: selLookFovSlider
+                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                            from: 10; to: 75; stepSize: 0
+                                                            Component.onCompleted: value = itemLookFovMM || 24.0
+                                                            onMoved: {
+                                                                var v = Math.round(value * 10) / 10
+                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookFovMM", v)
+                                                                selLookFovField.text = Math.round(v).toString()
+                                                            }
+                                                            background: Rectangle {
+                                                                x: selLookFovSlider.leftPadding; y: selLookFovSlider.topPadding + selLookFovSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 200; implicitHeight: 4; width: selLookFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                Rectangle { width: selLookFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                            }
+                                                            handle: Rectangle {
+                                                                x: selLookFovSlider.leftPadding + selLookFovSlider.visualPosition * (selLookFovSlider.availableWidth - width)
+                                                                y: selLookFovSlider.topPadding + selLookFovSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookFovSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                            }
+                                                        }
+                                                        Rectangle {
+                                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                            TextInput {
+                                                                id: selLookFovField
+                                                                anchors.left: parent.left; anchors.right: selLookFovMmLabel.left
+                                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                validator: IntValidator { bottom: 10; top: 75 }
+                                                                Component.onCompleted: text = Math.round(itemLookFovMM || 24).toString()
+                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                onEditingFinished: {
+                                                                    var v = Math.min(75, Math.max(10, parseInt(text) || 24))
+                                                                    text = v.toString()
+                                                                    selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookFovMM", v)
+                                                                    selLookFovSlider.value = v
+                                                                }
+                                                            }
+                                                            Text { id: selLookFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
+                                                        }
+                                                    }
+
+                                                    // Overshoot slider row
+                                                    RowLayout {
+                                                        width: parent.width; height: 22; spacing: 6
+                                                        Text { text: "overshoot"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                                        Slider {
+                                                            id: selLookOvershootSlider
+                                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                                            from: 0.0; to: 3.0; stepSize: 0
+                                                            Component.onCompleted: value = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.70158)
+                                                            onMoved: {
+                                                                var v = Math.round(value * 100) / 100
+                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookOvershoot", v)
+                                                                selLookOvershootField.text = v.toFixed(2)
+                                                            }
+                                                            background: Rectangle {
+                                                                x: selLookOvershootSlider.leftPadding; y: selLookOvershootSlider.topPadding + selLookOvershootSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 200; implicitHeight: 4; width: selLookOvershootSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                                Rectangle { width: selLookOvershootSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                                            }
+                                                            handle: Rectangle {
+                                                                x: selLookOvershootSlider.leftPadding + selLookOvershootSlider.visualPosition * (selLookOvershootSlider.availableWidth - width)
+                                                                y: selLookOvershootSlider.topPadding + selLookOvershootSlider.availableHeight / 2 - height / 2
+                                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: selLookOvershootSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                            }
+                                                        }
+                                                        Rectangle {
+                                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                            TextInput {
+                                                                id: selLookOvershootField
+                                                                anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                validator: DoubleValidator { bottom: 0.0; top: 3.0 }
+                                                                Component.onCompleted: text = (itemLookOvershoot !== undefined ? itemLookOvershoot : 1.70158).toFixed(2)
+                                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                onEditingFinished: {
+                                                                    var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                                    text = v.toFixed(2)
+                                                                    selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookOvershoot", v)
+                                                                    selLookOvershootSlider.value = v
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Sphere picker + yaw/pitch fields
+                                                    Item {
+                                                        width: parent.width; height: 90
+
+                                                        Row {
+                                                            anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                                                            spacing: 8
+
+                                                            Item {
+                                                                width: 90; height: 90
+                                                                ShaderEffect {
+                                                                    anchors.fill: parent
+                                                                    fragmentShader: "lookpicker.frag.qsb"
+                                                                    property real yaw:   itemLookYaw   || 90.0
+                                                                    property real pitch: itemLookPitch || 0.0
+                                                                    property real fovMM: itemLookFovMM || 24.0
+                                                                }
+                                                                MouseArea {
+                                                                    anchors.fill: parent
+                                                                    onPressed:         selLookPickerMouse(mouse.x, mouse.y)
+                                                                    onPositionChanged: if (pressed) selLookPickerMouse(mouse.x, mouse.y)
+                                                                    function selLookPickerMouse(mx, my) {
+                                                                        var cx = 45.0, cy = 45.0
+                                                                        var nx = (mx - cx) / cx
+                                                                        var ny = (my - cy) / cy
+                                                                        var r = Math.sqrt(nx * nx + ny * ny)
+                                                                        if (r > 1.0) { nx /= r; ny /= r; r = 1.0 }
+                                                                        var z = Math.sqrt(Math.max(0.0, 1.0 - r * r))
+                                                                        var worldNy = -ny
+                                                                        var newYaw   = Math.round(Math.atan2(nx, z) * 1800.0 / Math.PI) / 10
+                                                                        var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, worldNy))) * 1800.0 / Math.PI) / 10
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookYaw",   newYaw)
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookPitch", newPitch)
+                                                                        selLookYawField.text   = newYaw.toFixed(1)
+                                                                        selLookPitchField.text = newPitch.toFixed(1)
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            Column {
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                spacing: 6
+
+                                                                RowLayout {
+                                                                    spacing: 4
+                                                                    Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; Layout.preferredWidth: 26; verticalAlignment: Text.AlignVCenter; height: 22 }
+                                                                    Rectangle {
+                                                                        Layout.preferredWidth: 60; height: 22
+                                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                        TextInput {
+                                                                            id: selLookYawField
+                                                                            anchors.left: parent.left; anchors.right: selLookYawDeg.left
+                                                                            anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                            validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                                            Component.onCompleted: text = (itemLookYaw !== undefined ? itemLookYaw : 90.0).toFixed(1)
+                                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                            onEditingFinished: {
+                                                                                var v = parseFloat(text) || 0.0
+                                                                                text = v.toFixed(1)
+                                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookYaw", v)
+                                                                            }
+                                                                        }
+                                                                        Text { id: selLookYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                                    }
+                                                                }
+
+                                                                RowLayout {
+                                                                    spacing: 4
+                                                                    Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; Layout.preferredWidth: 26; verticalAlignment: Text.AlignVCenter; height: 22 }
+                                                                    Rectangle {
+                                                                        Layout.preferredWidth: 60; height: 22
+                                                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                                                        TextInput {
+                                                                            id: selLookPitchField
+                                                                            anchors.left: parent.left; anchors.right: selLookPitchDeg.left
+                                                                            anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                                            validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                                            Component.onCompleted: text = (itemLookPitch !== undefined ? itemLookPitch : 0.0).toFixed(1)
+                                                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                                            onEditingFinished: {
+                                                                                var v = parseFloat(text) || 0.0
+                                                                                text = v.toFixed(1)
+                                                                                selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookPitch", v)
+                                                                            }
+                                                                        }
+                                                                        Text { id: selLookPitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Direction preset buttons
+                                                    RowLayout {
+                                                        width: parent.width; height: 22; spacing: 4
+                                                        Item { Layout.fillWidth: true }
+                                                        Repeater {
+                                                            model: [
+                                                                { icon: "left",  yaw: -90.0, pitch:   0.0 },
+                                                                { icon: "up",    yaw:   0.0, pitch:  90.0 },
+                                                                { icon: "down",  yaw:   0.0, pitch: -90.0 },
+                                                                { icon: "right", yaw:  90.0, pitch:   0.0 }
+                                                            ]
+                                                            delegate: Rectangle {
+                                                                Layout.preferredWidth: 22; Layout.preferredHeight: 22; radius: 4
+                                                                property bool isActive: Math.abs((itemLookYaw || 90.0) - modelData.yaw) < 0.6 &&
+                                                                                        Math.abs((itemLookPitch || 0.0) - modelData.pitch) < 0.6
+                                                                color: isActive ? "white" : "transparent"
+                                                                border.color: "white"; border.width: 1
+                                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                                Image {
+                                                                    id: selLookDirIcon; anchors.centerIn: parent; width: 14; height: 14
+                                                                    source: "icons/" + modelData.icon + ".svg"; fillMode: Image.PreserveAspectFit; visible: false
+                                                                }
+                                                                ColorOverlay {
+                                                                    anchors.fill: selLookDirIcon; source: selLookDirIcon
+                                                                    color: isActive ? "#477B78" : "white"
+                                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                                }
+                                                                MouseArea {
+                                                                    anchors.fill: parent
+                                                                    onClicked: {
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookYaw",   modelData.yaw)
+                                                                        selectInteractivityModel.setProperty(selInteractivityDelegate.listIdx, "itemLookPitch", modelData.pitch)
+                                                                        selLookYawField.text   = modelData.yaw.toFixed(1)
+                                                                        selLookPitchField.text = modelData.pitch.toFixed(1)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        Item { Layout.fillWidth: true }
                                                     }
                                                 }
                                             }
