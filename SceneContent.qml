@@ -197,6 +197,7 @@ Item {
                 itemTargetSceneId: e.itemTargetSceneId, itemTargetSceneName: e.itemTargetSceneName,
                 itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
                 itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
+                itemVideoPath: e.itemVideoPath, itemVideoTarget: e.itemVideoTarget,
                 itemUpdateVar: e.itemUpdateVar, itemUpdateOp: e.itemUpdateOp, itemUpdateVal: e.itemUpdateVal
             })
         }
@@ -229,6 +230,8 @@ Item {
                 itemConditionOp:     e.itemConditionOp     || "is",
                 itemConditionVal:    e.itemConditionVal    || "",
                 itemSoundPath:       e.itemSoundPath       || "",
+                itemVideoPath:       e.itemVideoPath       || "",
+                itemVideoTarget:     e.itemVideoTarget     || "fill",
                 itemUpdateVar:       e.itemUpdateVar       || "",
                 itemUpdateOp:        e.itemUpdateOp        || "=",
                 itemUpdateVal:       e.itemUpdateVal       || ""
