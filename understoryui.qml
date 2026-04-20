@@ -13,7 +13,12 @@ Window {
     visible: true
     width: 960
     height: 540
-    title: storyManager.isOpen ? "understory — " + storyManager.storyTitle : qsTr("understory")
+    title: {
+        if (!storyManager.isOpen) return qsTr("understory")
+        if (sceneEditor.visible && currentSceneName) return "understory — " + storyManager.storyTitle + " — " + currentSceneName
+        if (sceneMenu.visible) return "understory — " + storyManager.storyTitle
+        return qsTr("understory")
+    }
     color: "black"
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint | Qt.MSWindowsFixedSizeDialogHint
 
@@ -74,6 +79,13 @@ Window {
     property int yanimationduration: 0
     property real sceneEditorEntryX: 0
     property int currentSceneId: -1
+    property string currentSceneName: {
+        for (var i = 0; i < scenesRectModel.count; i++) {
+            var s = scenesRectModel.get(i)
+            if (s.sceneId === currentSceneId) return s.sceneName
+        }
+        return ""
+    }
 
     // flags to distinguish programmatic animations from user resize attempts
     property bool widthAnimating: false
