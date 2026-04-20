@@ -105,19 +105,22 @@ Item {
                     underline: el.underline || false,
                     textColor: el.textColor || "#FFFFFF",
                     content:   el.content   || "",
-                    name: el.name || "", stackOrder: z
+                    name: el.name || "", stackOrder: z,
+                    interactivityJson: el.interactivityJson || "[]"
                 })
             } else if (el.type === "image") {
                 imagesModelInst.append({
                     x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
                     filePath: el.filePath || "",
-                    name: el.name || "", stackOrder: z
+                    name: el.name || "", stackOrder: z,
+                    interactivityJson: el.interactivityJson || "[]"
                 })
             } else if (el.type === "video") {
                 videosModelInst.append({
                     x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
                     filePath: el.filePath || "",
-                    name: el.name || "", stackOrder: z
+                    name: el.name || "", stackOrder: z,
+                    interactivityJson: el.interactivityJson || "[]"
                 })
             } else if (el.type === "shader") {
                 shadersModelInst.append({
@@ -125,7 +128,8 @@ Item {
                     fragPath:     el.fragPath     || "",
                     vertPath:     el.vertPath     || "",
                     uniformsJson: el.uniformsJson || "[]",
-                    name: el.name || "", stackOrder: z
+                    name: el.name || "", stackOrder: z,
+                    interactivityJson: el.interactivityJson || "[]"
                 })
             }
             if (z >= nextStackOrder) nextStackOrder = z + 1
@@ -154,21 +158,24 @@ Item {
                 z_order: m.stackOrder, name: m.name || "",
                 family: m.family, tbWeight: m.tbWeight, size: m.size,
                 italic: m.italic, underline: m.underline,
-                textColor: m.textColor, content: m.content })
+                textColor: m.textColor, content: m.content,
+                interactivityJson: m.interactivityJson || "[]" })
         }
         for (i = 0; i < imagesModelInst.count; i++) {
             m = imagesModelInst.get(i)
             elements.push({ type: "image",
                 x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
-                name: m.name || "", z_order: m.stackOrder, filePath: m.filePath })
+                name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
+                interactivityJson: m.interactivityJson || "[]" })
         }
         for (i = 0; i < videosModelInst.count; i++) {
             m = videosModelInst.get(i)
             elements.push({ type: "video",
                 x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
-                name: m.name || "", z_order: m.stackOrder, filePath: m.filePath })
+                name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
+                interactivityJson: m.interactivityJson || "[]" })
         }
         for (i = 0; i < shadersModelInst.count; i++) {
             m = shadersModelInst.get(i)
@@ -177,7 +184,8 @@ Item {
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
                 name: m.name || "", z_order: m.stackOrder,
                 fragPath: m.fragPath, vertPath: m.vertPath,
-                uniformsJson: m.uniformsJson })
+                uniformsJson: m.uniformsJson,
+                interactivityJson: m.interactivityJson || "[]" })
         }
         return JSON.stringify(elements)
     }
@@ -1385,6 +1393,55 @@ Item {
                         }
                     }
 
+                    MouseArea {
+                        id: tbSimulateMouseArea
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
+                        hoverEnabled: false
+                        z: 3
+                        cursorShape: Qt.PointingHandCursor
+
+                        function fireInteractivity(trigger) {
+                            var json = textBoxesModel.get(index).interactivityJson || "[]"
+                            var items = []
+                            try { items = JSON.parse(json) } catch(e) {}
+                            for (var i = 0; i < items.length; i++) {
+                                var it = items[i]
+                                if (it.itemTrigger !== trigger) continue
+                                if (it.itemCommand !== "jump") continue
+                                if (it.itemTargetSceneId < 0) continue
+                                if (it.itemAction === "cue") {
+                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
+                                    viewportRef.jumpToScene(it.itemTargetSceneId,
+                                                            it.itemTransition    || "cut",
+                                                            ms,
+                                                            it.itemWipeFeather   || 0.0,
+                                                            it.itemWipeDirection || "right",
+                                                            it.itemPushDirection || "right",
+                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
+                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
+                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
+                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
+                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
+                                    return
+                                }
+                            }
+                        }
+
+                        onClicked: fireInteractivity("click")
+                    }
+
+                    Connections {
+                        target: viewport
+                        enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
+                        function onHoveredTbIndexChanged() {
+                            if (viewportRef.hoveredTbIndex === index)
+                                tbSimulateMouseArea.fireInteractivity("hover")
+                        }
+                    }
+
                     Component.onCompleted: {
                         if (index === viewportRef.pendingFocusTextBox) {
                             tbDelegate.editing = true;
@@ -1934,6 +1991,55 @@ Item {
                                 imagesModel.setProperty(index, "x1", Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20)));
                             }
                             onReleased: viewportRef.elementDragging = false
+                        }
+                    }
+
+                    MouseArea {
+                        id: imgSimulateMouseArea
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
+                        hoverEnabled: false
+                        z: 3
+                        cursorShape: Qt.PointingHandCursor
+
+                        function fireInteractivity(trigger) {
+                            var json = imagesModel.get(index).interactivityJson || "[]"
+                            var items = []
+                            try { items = JSON.parse(json) } catch(e) {}
+                            for (var i = 0; i < items.length; i++) {
+                                var it = items[i]
+                                if (it.itemTrigger !== trigger) continue
+                                if (it.itemCommand !== "jump") continue
+                                if (it.itemTargetSceneId < 0) continue
+                                if (it.itemAction === "cue") {
+                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
+                                    viewportRef.jumpToScene(it.itemTargetSceneId,
+                                                            it.itemTransition    || "cut",
+                                                            ms,
+                                                            it.itemWipeFeather   || 0.0,
+                                                            it.itemWipeDirection || "right",
+                                                            it.itemPushDirection || "right",
+                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
+                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
+                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
+                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
+                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
+                                    return
+                                }
+                            }
+                        }
+
+                        onClicked: fireInteractivity("click")
+                    }
+
+                    Connections {
+                        target: viewport
+                        enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
+                        function onHoveredImageIndexChanged() {
+                            if (viewportRef.hoveredImageIndex === index)
+                                imgSimulateMouseArea.fireInteractivity("hover")
                         }
                     }
                 }
@@ -2546,6 +2652,55 @@ Item {
                             onReleased: viewportRef.elementDragging = false
                         }
                     }
+
+                    MouseArea {
+                        id: vidSimulateMouseArea
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
+                        hoverEnabled: false
+                        z: 3
+                        cursorShape: Qt.PointingHandCursor
+
+                        function fireInteractivity(trigger) {
+                            var json = videosModel.get(index).interactivityJson || "[]"
+                            var items = []
+                            try { items = JSON.parse(json) } catch(e) {}
+                            for (var i = 0; i < items.length; i++) {
+                                var it = items[i]
+                                if (it.itemTrigger !== trigger) continue
+                                if (it.itemCommand !== "jump") continue
+                                if (it.itemTargetSceneId < 0) continue
+                                if (it.itemAction === "cue") {
+                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
+                                    viewportRef.jumpToScene(it.itemTargetSceneId,
+                                                            it.itemTransition    || "cut",
+                                                            ms,
+                                                            it.itemWipeFeather   || 0.0,
+                                                            it.itemWipeDirection || "right",
+                                                            it.itemPushDirection || "right",
+                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
+                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
+                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
+                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
+                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
+                                    return
+                                }
+                            }
+                        }
+
+                        onClicked: fireInteractivity("click")
+                    }
+
+                    Connections {
+                        target: viewport
+                        enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
+                        function onHoveredVideoIndexChanged() {
+                            if (viewportRef.hoveredVideoIndex === index)
+                                vidSimulateMouseArea.fireInteractivity("hover")
+                        }
+                    }
                 }
             }
 
@@ -3134,6 +3289,55 @@ Item {
                                 shadersModel.setProperty(index, "x1", Math.max(0, Math.min(shaderDelegate.origX1 + pt.x - shaderDelegate.pressVpX, model.x2 - 20)));
                             }
                             onReleased: viewportRef.elementDragging = false
+                        }
+                    }
+
+                    MouseArea {
+                        id: shaderSimulateMouseArea
+                        x: 28; y: 28
+                        width: parent.width - 56
+                        height: parent.height - 56
+                        enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
+                        hoverEnabled: false
+                        z: 3
+                        cursorShape: Qt.PointingHandCursor
+
+                        function fireInteractivity(trigger) {
+                            var json = shadersModel.get(index).interactivityJson || "[]"
+                            var items = []
+                            try { items = JSON.parse(json) } catch(e) {}
+                            for (var i = 0; i < items.length; i++) {
+                                var it = items[i]
+                                if (it.itemTrigger !== trigger) continue
+                                if (it.itemCommand !== "jump") continue
+                                if (it.itemTargetSceneId < 0) continue
+                                if (it.itemAction === "cue") {
+                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
+                                    viewportRef.jumpToScene(it.itemTargetSceneId,
+                                                            it.itemTransition    || "cut",
+                                                            ms,
+                                                            it.itemWipeFeather   || 0.0,
+                                                            it.itemWipeDirection || "right",
+                                                            it.itemPushDirection || "right",
+                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
+                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
+                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
+                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
+                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
+                                    return
+                                }
+                            }
+                        }
+
+                        onClicked: fireInteractivity("click")
+                    }
+
+                    Connections {
+                        target: viewport
+                        enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
+                        function onHoveredShaderIndexChanged() {
+                            if (viewportRef.hoveredShaderIndex === index)
+                                shaderSimulateMouseArea.fireInteractivity("hover")
                         }
                     }
                 }

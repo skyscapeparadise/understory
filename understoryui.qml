@@ -911,6 +911,10 @@ Window {
 
             property bool areaDragging: false
             property int hoveredAreaIndex: -1
+            property int hoveredTbIndex: -1
+            property int hoveredImageIndex: -1
+            property int hoveredVideoIndex: -1
+            property int hoveredShaderIndex: -1
             // ── Dual-layer architecture ─────────────────────────────────────────
             property int foregroundLayer: 0
             readonly property var activeContent:  foregroundLayer === 0 ? sceneLayerA : sceneLayerB
@@ -1296,6 +1300,46 @@ Window {
                 return -1;
             }
 
+            function findHoveredTb(px, py) {
+                if (buttonGrid.selectedTool !== "simulate") return -1;
+                if (!textBoxesModel) return -1;
+                for (var i = 0; i < textBoxesModel.count; i++) {
+                    var m = textBoxesModel.get(i);
+                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2) return i;
+                }
+                return -1;
+            }
+
+            function findHoveredImage(px, py) {
+                if (buttonGrid.selectedTool !== "simulate") return -1;
+                if (!imagesModel) return -1;
+                for (var i = 0; i < imagesModel.count; i++) {
+                    var m = imagesModel.get(i);
+                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2) return i;
+                }
+                return -1;
+            }
+
+            function findHoveredVideo(px, py) {
+                if (buttonGrid.selectedTool !== "simulate") return -1;
+                if (!videosModel) return -1;
+                for (var i = 0; i < videosModel.count; i++) {
+                    var m = videosModel.get(i);
+                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2) return i;
+                }
+                return -1;
+            }
+
+            function findHoveredShader(px, py) {
+                if (buttonGrid.selectedTool !== "simulate") return -1;
+                if (!shadersModel) return -1;
+                for (var i = 0; i < shadersModel.count; i++) {
+                    var m = shadersModel.get(i);
+                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2) return i;
+                }
+                return -1;
+            }
+
             function snapX(val) {
                 var clamped = Math.max(0, Math.min(val, width));
                 if (clamped <= 10)
@@ -1649,7 +1693,7 @@ Window {
                             y2: Math.max(viewport.areaY1, viewport.areaY2),
                             name: areaSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
-                            interactivityJson: viewport.serializeInteractivityModel(areaInteractivityModel)
+                            interactivityJson: "[]"
                         });
                         viewport.selectArea(viewport.areasModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -2958,8 +3002,20 @@ Window {
                 acceptedButtons: Qt.NoButton
                 cursorShape: viewport.textEditing ? Qt.IBeamCursor : ((sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1) ? Qt.BlankCursor : Qt.ArrowCursor)
                 z: 999
-                onPositionChanged: viewport.hoveredAreaIndex = viewport.findHoveredArea(mouseX, mouseY)
-                onExited: viewport.hoveredAreaIndex = -1
+                onPositionChanged: {
+                    viewport.hoveredAreaIndex  = viewport.findHoveredArea(mouseX, mouseY)
+                    viewport.hoveredTbIndex    = viewport.findHoveredTb(mouseX, mouseY)
+                    viewport.hoveredImageIndex = viewport.findHoveredImage(mouseX, mouseY)
+                    viewport.hoveredVideoIndex = viewport.findHoveredVideo(mouseX, mouseY)
+                    viewport.hoveredShaderIndex = viewport.findHoveredShader(mouseX, mouseY)
+                }
+                onExited: {
+                    viewport.hoveredAreaIndex  = -1
+                    viewport.hoveredTbIndex    = -1
+                    viewport.hoveredImageIndex = -1
+                    viewport.hoveredVideoIndex = -1
+                    viewport.hoveredShaderIndex = -1
+                }
             }
 
             Image {
@@ -3603,7 +3659,7 @@ Window {
                         anchors.leftMargin: 20
                     }
 
-                    ListModel { id: areaInteractivityModel }
+
 
                     ScrollView {
                         id: areaPropsScroll
@@ -3714,14 +3770,6 @@ Window {
                                 }
                             }
 
-                            Item { width: 1; height: 12 }
-
-                            InteractivityList {
-                                width: parent.width
-                                interactivityModel: areaInteractivityModel
-                                variablesModel: variablesModel
-                                scenePickerButtons: sceneEditorButtons
-                            }
                         }
                     }
                 }
@@ -4542,29 +4590,48 @@ Window {
                     readonly property bool hasActiveVideo: (viewport.selectionRevision >= 0) && viewport.selectedVideos.length === 1 && viewport.selectionCount === 1
                     readonly property bool hasActiveShader: (viewport.selectionRevision >= 0) && viewport.selectedShaders.length === 1 && viewport.selectionCount === 1
 
-                    // Tracks which areasModel index is currently loaded into selectInteractivityModel.
-                    property int syncedAreaIdx: -1
+                    // Tracks which model/index is currently loaded into selectInteractivityModel.
+                    property string syncedType: ""
+                    property int syncedIdx: -1
 
-                    // Serialize selectInteractivityModel back into areasModel for the currently synced area.
                     function saveCurrentInteractivity() {
-                        if (syncedAreaIdx >= 0 && syncedAreaIdx < viewport.areasModel.count) {
-                            viewport.areasModel.setProperty(syncedAreaIdx, "interactivityJson",
-                                viewport.serializeInteractivityModel(selectInteractivityModel))
-                        }
+                        if (syncedIdx < 0) return
+                        var json = viewport.serializeInteractivityModel(selectInteractivityModel)
+                        if      (syncedType === "area"   && syncedIdx < viewport.areasModel.count)      viewport.areasModel.setProperty(syncedIdx,      "interactivityJson", json)
+                        else if (syncedType === "tb"     && syncedIdx < viewport.textBoxesModel.count)   viewport.textBoxesModel.setProperty(syncedIdx,   "interactivityJson", json)
+                        else if (syncedType === "image"  && syncedIdx < viewport.imagesModel.count)      viewport.imagesModel.setProperty(syncedIdx,      "interactivityJson", json)
+                        else if (syncedType === "video"  && syncedIdx < viewport.videosModel.count)      viewport.videosModel.setProperty(syncedIdx,      "interactivityJson", json)
+                        else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count)     viewport.shadersModel.setProperty(syncedIdx,     "interactivityJson", json)
                     }
 
-                    // Load/save interactivity whenever the area selection changes.
+                    // Load/save interactivity whenever the selection changes.
                     Connections {
                         target: viewport
                         function onSelectionRevisionChanged() {
                             selectSettings.saveCurrentInteractivity()
+                            selectInteractivityModel.clear()
+                            selectSettings.syncedType = ""
+                            selectSettings.syncedIdx = -1
                             if (selectSettings.hasActiveArea) {
                                 var idx = viewport.selectedAreas[0]
-                                selectSettings.syncedAreaIdx = idx
+                                selectSettings.syncedType = "area"; selectSettings.syncedIdx = idx
                                 viewport.loadInteractivityModel(selectInteractivityModel, viewport.areasModel.get(idx).interactivityJson)
-                            } else {
-                                selectSettings.syncedAreaIdx = -1
-                                selectInteractivityModel.clear()
+                            } else if (selectSettings.hasActiveTb) {
+                                var idx = viewport.selectedTbs[0]
+                                selectSettings.syncedType = "tb"; selectSettings.syncedIdx = idx
+                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.textBoxesModel.get(idx).interactivityJson)
+                            } else if (selectSettings.hasActiveImage) {
+                                var idx = viewport.selectedImages[0]
+                                selectSettings.syncedType = "image"; selectSettings.syncedIdx = idx
+                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.imagesModel.get(idx).interactivityJson)
+                            } else if (selectSettings.hasActiveVideo) {
+                                var idx = viewport.selectedVideos[0]
+                                selectSettings.syncedType = "video"; selectSettings.syncedIdx = idx
+                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.videosModel.get(idx).interactivityJson)
+                            } else if (selectSettings.hasActiveShader) {
+                                var idx = viewport.selectedShaders[0]
+                                selectSettings.syncedType = "shader"; selectSettings.syncedIdx = idx
+                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.shadersModel.get(idx).interactivityJson)
                             }
                         }
                     }
@@ -5482,9 +5549,8 @@ Window {
                                 }
                             }
 
-                            // Interactivity — only for areas
                             InteractivityList {
-                                visible: selectSettings.hasActiveArea
+                                visible: selectSettings.hasActiveArea || selectSettings.hasActiveTb || selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
                                 width: parent.width
                                 interactivityModel: selectInteractivityModel
                                 variablesModel: variablesModel
@@ -6688,7 +6754,7 @@ Window {
                                         onFinished: {
                                             if (varDelegate.deleteProgress >= 1.0) {
                                                 var deletedName = variablesModel.get(varDelegate.delegateIndex).varName
-                                                var models = [areaInteractivityModel, selectInteractivityModel]
+                                                var models = [selectInteractivityModel]
                                                 for (var m = 0; m < models.length; m++) {
                                                     var mdl = models[m]
                                                     for (var i = mdl.count - 1; i >= 0; i--) {
