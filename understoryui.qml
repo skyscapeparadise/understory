@@ -971,6 +971,15 @@ Window {
             property real   lookOvershoot: 1.0
             property real   lookShutter:   0.10
 
+            // ── Cue video state ───────────────────────────────────────────────────
+            // cueVideoActive:       video is currently playing
+            // cueVideoStagingReady: staging layer fired readyForDisplay while video was active
+            // cueVideoHasJump:      a jumpToScene was queued alongside the video
+            property bool cueVideoActive:       false
+            property bool cueVideoStagingReady: false
+            property bool cueVideoHasJump:      false
+            property bool cueVideoEarlyCommit:  false
+
             // Thin wrappers — viewport and sidebar code can use these bare names
             property var areasModel:     activeContent ? activeContent.areasModel     : null
             property var textBoxesModel: activeContent ? activeContent.textBoxesModel : null
@@ -1473,6 +1482,49 @@ Window {
                 activeContent.loadInteractivityModel(mdl, json)
             }
 
+            function playCueVideo(videoPath) {
+                cueVideoActive       = true
+                cueVideoStagingReady = false
+                cueVideoHasJump      = false
+                cueVideoEarlyCommit  = false
+                cueVideoOverlay.visible = false
+                cueVideoOverlay.waitingForSceneSwap = false
+                cueVideoPlayer.source = videoPath
+                cueVideoPlayer.play()
+            }
+
+            // Execute the pending transition — called when both video has ended and staging is ready.
+            function commitCueVideoTransition() {
+                var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
+                if (pendingTransition === "dissolve") {
+                    dissolveAnim.duration = pendingDuration
+                    dissolving = true
+                    dissolveAnim.start()
+                } else if (pendingTransition === "wipe") {
+                    wipeFeather   = pendingWipeFeather
+                    wipeDirection = dirMap[pendingWipeDirection] !== undefined ? dirMap[pendingWipeDirection] : 0
+                    wipeAnim.duration = pendingDuration
+                    wiping = true
+                    wipeAnim.start()
+                } else if (pendingTransition === "push") {
+                    slideDirection = dirMap[pendingSlideDirection] !== undefined ? dirMap[pendingSlideDirection] : 0
+                    slideAnim.duration = pendingDuration
+                    sliding = true
+                    slideAnim.start()
+                } else if (pendingTransition === "look") {
+                    lookYaw       = pendingLookYaw
+                    lookPitch     = pendingLookPitch
+                    lookFovMM     = pendingLookFovMM
+                    lookOvershoot = pendingLookOvershoot
+                    lookShutter   = pendingLookShutter
+                    lookAnim.duration = pendingDuration
+                    looking = true
+                    lookAnim.start()
+                } else {
+                    performSwap()
+                }
+            }
+
             // Begin a scene jump: save current scene, load destination into staging layer.
             // transition: "cut" | "dissolve" | "wipe"   durationMs: length of animated transitions.
             // wipeFeather: 0.0–0.5   wipeDirection: "right"|"left"|"down"|"up"
@@ -1968,6 +2020,14 @@ Window {
                     target: sceneLayerA
                     function onReadyForDisplay() {
                         if (viewport.foregroundLayer !== 0) {
+                            if (viewport.cueVideoActive) {
+                                viewport.cueVideoStagingReady = true
+                                return
+                            }
+                            if (viewport.cueVideoHasJump) {
+                                viewport.commitCueVideoTransition()
+                                return
+                            }
                             var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
                             if (viewport.pendingTransition === "dissolve") {
                                 dissolveAnim.duration = viewport.pendingDuration
@@ -2018,6 +2078,14 @@ Window {
                     target: sceneLayerB
                     function onReadyForDisplay() {
                         if (viewport.foregroundLayer !== 1) {
+                            if (viewport.cueVideoActive) {
+                                viewport.cueVideoStagingReady = true
+                                return
+                            }
+                            if (viewport.cueVideoHasJump) {
+                                viewport.commitCueVideoTransition()
+                                return
+                            }
                             var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
                             if (viewport.pendingTransition === "dissolve") {
                                 dissolveAnim.duration = viewport.pendingDuration
@@ -3331,6 +3399,90 @@ Window {
                                 navigationViewportSelectionFlash.visible = false;
                         }
                     }
+                }
+            }
+
+            Item {
+                id: cueVideoOverlay
+                anchors.fill: parent
+                visible: false
+                z: 1000
+
+                // True while waiting for foregroundLayer to change (slow-scene fallback path).
+                property bool waitingForSceneSwap: false
+
+                // Polls every ~frame while both video is playing and staging is ready.
+                // Swaps Scene B into the foreground ~100ms before the video ends so that
+                // when EndOfMedia clears the VideoOutput, Scene B is already underneath.
+                Timer {
+                    id: cueEarlyCommitChecker
+                    interval: 33
+                    repeat: true
+                    running: viewport.cueVideoHasJump && viewport.cueVideoStagingReady
+
+                    onTriggered: {
+                        var remaining = cueVideoPlayer.duration - cueVideoPlayer.position
+                        if (cueVideoPlayer.duration > 0 && remaining >= 0 && remaining <= 100) {
+                            stop()
+                            viewport.cueVideoEarlyCommit = true
+                            viewport.cueVideoHasJump    = false
+                            viewport.cueVideoActive     = false
+                            viewport.performSwap()
+                            // Overlay stays visible for the final frames; EndOfMedia hides it.
+                        }
+                    }
+                }
+
+                // Fallback: if staging wasn't ready by the threshold, wait for the layer swap.
+                Connections {
+                    target: viewport
+                    enabled: cueVideoOverlay.waitingForSceneSwap
+                    function onForegroundLayerChanged() {
+                        cueVideoOverlay.waitingForSceneSwap = false
+                        cueVideoOverlay.visible = false
+                        cueVideoPlayer.source = ""
+                    }
+                }
+
+                MediaPlayer {
+                    id: cueVideoPlayer
+                    videoOutput: cueVideoOutput
+                    audioOutput: AudioOutput { volume: 1.0 }
+
+                    onMediaStatusChanged: {
+                        // Show overlay once the first frame is decoded so Scene A stays
+                        // visible right up until the video's first real pixel appears.
+                        if (mediaStatus === MediaPlayer.BufferedMedia) {
+                            cueVideoOverlay.visible = true
+                        } else if (mediaStatus === MediaPlayer.EndOfMedia) {
+                            viewport.cueVideoActive = false
+                            if (viewport.cueVideoEarlyCommit) {
+                                // Normal path: Scene B already in foreground from the early swap.
+                                // Just lift the overlay to reveal it.
+                                viewport.cueVideoEarlyCommit = false
+                                cueVideoOverlay.visible = false
+                                cueVideoPlayer.source = ""
+                            } else if (viewport.cueVideoHasJump) {
+                                // Slow-scene fallback: staging wasn't ready in time.
+                                // Keep overlay up and wait for the layer swap to complete.
+                                cueVideoOverlay.waitingForSceneSwap = true
+                                if (viewport.cueVideoStagingReady) {
+                                    viewport.cueVideoHasJump = false
+                                    viewport.commitCueVideoTransition()
+                                }
+                                // else: readyForDisplay handler calls commitCueVideoTransition
+                            } else {
+                                cueVideoOverlay.visible = false
+                                cueVideoPlayer.source = ""
+                            }
+                        }
+                    }
+                }
+
+                VideoOutput {
+                    id: cueVideoOutput
+                    anchors.fill: parent
+                    fillMode: VideoOutput.PreserveAspectFit
                 }
             }
 

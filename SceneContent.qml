@@ -331,27 +331,34 @@ Item {
                             var json = areasModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
+                            var pendingJump = null
+                            var hasCueVideo = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemCommand !== "jump") continue
-                                if (it.itemTargetSceneId < 0) continue
-                                if (it.itemAction === "cue") {
-                                    // itemTransitionSpeed is in seconds; convert to ms
-                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
-                                    viewportRef.jumpToScene(it.itemTargetSceneId,
-                                                            it.itemTransition    || "cut",
-                                                            ms,
-                                                            it.itemWipeFeather   || 0.0,
-                                                            it.itemWipeDirection || "right",
-                                                            it.itemPushDirection || "right",
-                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
-                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
-                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
-                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
-                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
-                                    return
+                                if (it.itemAction !== "cue") continue
+                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
+                                    viewportRef.playCueVideo(it.itemVideoPath)
+                                    hasCueVideo = true
+                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
+                                    if (!pendingJump) pendingJump = it
                                 }
+                            }
+                            if (pendingJump) {
+                                // itemTransitionSpeed is in seconds; convert to ms
+                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
+                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
+                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
+                                                        pendingJump.itemTransition    || "cut",
+                                                        ms,
+                                                        pendingJump.itemWipeFeather   || 0.0,
+                                                        pendingJump.itemWipeDirection || "right",
+                                                        pendingJump.itemPushDirection || "right",
+                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
+                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
+                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
+                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
+                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
                             }
                         }
 
@@ -1407,26 +1414,33 @@ Item {
                             var json = textBoxesModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
+                            var pendingJump = null
+                            var hasCueVideo = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemCommand !== "jump") continue
-                                if (it.itemTargetSceneId < 0) continue
-                                if (it.itemAction === "cue") {
-                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
-                                    viewportRef.jumpToScene(it.itemTargetSceneId,
-                                                            it.itemTransition    || "cut",
-                                                            ms,
-                                                            it.itemWipeFeather   || 0.0,
-                                                            it.itemWipeDirection || "right",
-                                                            it.itemPushDirection || "right",
-                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
-                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
-                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
-                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
-                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
-                                    return
+                                if (it.itemAction !== "cue") continue
+                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
+                                    viewportRef.playCueVideo(it.itemVideoPath)
+                                    hasCueVideo = true
+                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
+                                    if (!pendingJump) pendingJump = it
                                 }
+                            }
+                            if (pendingJump) {
+                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
+                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
+                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
+                                                        pendingJump.itemTransition    || "cut",
+                                                        ms,
+                                                        pendingJump.itemWipeFeather   || 0.0,
+                                                        pendingJump.itemWipeDirection || "right",
+                                                        pendingJump.itemPushDirection || "right",
+                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
+                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
+                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
+                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
+                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
                             }
                         }
 
@@ -2008,26 +2022,33 @@ Item {
                             var json = imagesModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
+                            var pendingJump = null
+                            var hasCueVideo = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemCommand !== "jump") continue
-                                if (it.itemTargetSceneId < 0) continue
-                                if (it.itemAction === "cue") {
-                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
-                                    viewportRef.jumpToScene(it.itemTargetSceneId,
-                                                            it.itemTransition    || "cut",
-                                                            ms,
-                                                            it.itemWipeFeather   || 0.0,
-                                                            it.itemWipeDirection || "right",
-                                                            it.itemPushDirection || "right",
-                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
-                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
-                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
-                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
-                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
-                                    return
+                                if (it.itemAction !== "cue") continue
+                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
+                                    viewportRef.playCueVideo(it.itemVideoPath)
+                                    hasCueVideo = true
+                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
+                                    if (!pendingJump) pendingJump = it
                                 }
+                            }
+                            if (pendingJump) {
+                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
+                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
+                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
+                                                        pendingJump.itemTransition    || "cut",
+                                                        ms,
+                                                        pendingJump.itemWipeFeather   || 0.0,
+                                                        pendingJump.itemWipeDirection || "right",
+                                                        pendingJump.itemPushDirection || "right",
+                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
+                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
+                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
+                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
+                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
                             }
                         }
 
@@ -2667,26 +2688,33 @@ Item {
                             var json = videosModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
+                            var pendingJump = null
+                            var hasCueVideo = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemCommand !== "jump") continue
-                                if (it.itemTargetSceneId < 0) continue
-                                if (it.itemAction === "cue") {
-                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
-                                    viewportRef.jumpToScene(it.itemTargetSceneId,
-                                                            it.itemTransition    || "cut",
-                                                            ms,
-                                                            it.itemWipeFeather   || 0.0,
-                                                            it.itemWipeDirection || "right",
-                                                            it.itemPushDirection || "right",
-                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
-                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
-                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
-                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
-                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
-                                    return
+                                if (it.itemAction !== "cue") continue
+                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
+                                    viewportRef.playCueVideo(it.itemVideoPath)
+                                    hasCueVideo = true
+                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
+                                    if (!pendingJump) pendingJump = it
                                 }
+                            }
+                            if (pendingJump) {
+                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
+                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
+                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
+                                                        pendingJump.itemTransition    || "cut",
+                                                        ms,
+                                                        pendingJump.itemWipeFeather   || 0.0,
+                                                        pendingJump.itemWipeDirection || "right",
+                                                        pendingJump.itemPushDirection || "right",
+                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
+                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
+                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
+                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
+                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
                             }
                         }
 
@@ -3306,26 +3334,33 @@ Item {
                             var json = shadersModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
+                            var pendingJump = null
+                            var hasCueVideo = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemCommand !== "jump") continue
-                                if (it.itemTargetSceneId < 0) continue
-                                if (it.itemAction === "cue") {
-                                    var ms = Math.round((it.itemTransitionSpeed || 1.0) * 1000)
-                                    viewportRef.jumpToScene(it.itemTargetSceneId,
-                                                            it.itemTransition    || "cut",
-                                                            ms,
-                                                            it.itemWipeFeather   || 0.0,
-                                                            it.itemWipeDirection || "right",
-                                                            it.itemPushDirection || "right",
-                                                            it.itemLookYaw         !== undefined ? it.itemLookYaw       : 90.0,
-                                                            it.itemLookPitch       !== undefined ? it.itemLookPitch     : 0.0,
-                                                            it.itemLookFovMM       !== undefined ? it.itemLookFovMM     : 24.0,
-                                                            it.itemLookOvershoot   !== undefined ? it.itemLookOvershoot : 1.0,
-                                                            it.itemLookShutter     !== undefined ? it.itemLookShutter   : 0.10)
-                                    return
+                                if (it.itemAction !== "cue") continue
+                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
+                                    viewportRef.playCueVideo(it.itemVideoPath)
+                                    hasCueVideo = true
+                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
+                                    if (!pendingJump) pendingJump = it
                                 }
+                            }
+                            if (pendingJump) {
+                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
+                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
+                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
+                                                        pendingJump.itemTransition    || "cut",
+                                                        ms,
+                                                        pendingJump.itemWipeFeather   || 0.0,
+                                                        pendingJump.itemWipeDirection || "right",
+                                                        pendingJump.itemPushDirection || "right",
+                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
+                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
+                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
+                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
+                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
                             }
                         }
 

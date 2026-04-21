@@ -20,7 +20,7 @@ Item {
         property int targetIdx: -1
         onAccepted: {
             if (targetIdx >= 0)
-                root.interactivityModel.setProperty(targetIdx, "itemSoundPath", selectedFile.toString())
+                root.interactivityModel.setProperty(targetIdx, "itemSoundPath", soundFileDialog.file.toString())
         }
     }
 
@@ -31,7 +31,7 @@ Item {
         property int targetIdx: -1
         onAccepted: {
             if (targetIdx >= 0)
-                root.interactivityModel.setProperty(targetIdx, "itemVideoPath", selectedFile.toString())
+                root.interactivityModel.setProperty(targetIdx, "itemVideoPath", videoFileDialog.file.toString())
         }
     }
 
