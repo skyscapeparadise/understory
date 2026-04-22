@@ -9068,6 +9068,15 @@ Window {
                     color: "transparent"
 
                     readonly property var toolDisplayNames: ({ "select": "select", "simulate": "simulate", "relayer": "stack", "destroy": "delete" })
+                    property int nodesRevision: 0
+                    Connections {
+                        target: nodeWorkspace.nodesModel
+                        function onCountChanged() { sceneNameSettings.nodesRevision++ }
+                        function onDataChanged() { sceneNameSettings.nodesRevision++ }
+                        function onRowsInserted() { sceneNameSettings.nodesRevision++ }
+                        function onRowsRemoved() { sceneNameSettings.nodesRevision++ }
+                        function onModelReset() { sceneNameSettings.nodesRevision++ }
+                    }
 
                     Text {
                         text: sceneNameSettings.toolDisplayNames[buttonGrid.selectedTool] || ""
@@ -9147,8 +9156,8 @@ Window {
                         anchors.right: parent.right
                         anchors.leftMargin: 20
                         anchors.rightMargin: 20
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 32
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: 16 // Move down slightly to keep label below center
                         height: 1
                         color: "white"
                     }
@@ -9161,6 +9170,128 @@ Window {
                         font.pixelSize: 14
                         color: "white"
                     }
+                    property var computedNodes: { nodesRevision; 
+                        var names = ["(none)"];
+                        if (nodeWorkspace.nodesModel) {
+                            for (var i = 0; i < nodeWorkspace.nodesModel.count; i++) {
+                                names.push(nodeWorkspace.nodesModel.get(i).name);
+                            }
+                        }
+                        return names;
+                    }
+
+                    ColumnLayout {
+                        anchors.top: sceneNameLine.bottom
+                        anchors.topMargin: 40
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 20
+                        spacing: 8
+
+                        Text {
+                            text: "location"
+                            font.pixelSize: 14
+                            color: "white"
+                        }
+
+                        ComboBox {
+                            id: locationCombo
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 28
+                            model: sceneNameSettings.computedNodes
+                            onModelChanged: {
+                                if (mainWindow.currentSceneId !== -1) {
+                                    var loc = storyManager.getEditorState("location_" + mainWindow.currentSceneId);
+                                    var idx = locationCombo.find(loc);
+                                    if (idx !== -1) locationCombo.currentIndex = idx;
+                                    else locationCombo.currentIndex = 0;
+                                }
+                            }
+                            
+                            contentItem: Text {
+                                leftPadding: 8
+                                rightPadding: 24
+                                text: locationCombo.displayText
+                                font.pixelSize: 13
+                                color: "white"
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+                            indicator: Text {
+                                x: locationCombo.width - width - 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "▾"
+                                font.pixelSize: 10
+                                color: "white"
+                            }
+                            background: Rectangle {
+                                radius: 4
+                                color: "transparent"
+                                border.color: "white"
+                                border.width: 1
+                            }
+                            popup: Popup {
+                                y: locationCombo.height + 2
+                                width: locationCombo.width
+                                padding: 1
+                                background: Rectangle {
+                                    color: "#162020"
+                                    border.color: "white"
+                                    border.width: 1
+                                    radius: 4
+                                }
+                                contentItem: ListView {
+                                    clip: true
+                                    implicitHeight: contentHeight
+                                    model: locationCombo.popup.visible ? locationCombo.delegateModel : null
+                                    currentIndex: locationCombo.highlightedIndex
+                                    ScrollIndicator.vertical: ScrollIndicator { }
+                                }
+                            }
+                            delegate: ItemDelegate {
+                                width: locationCombo.width
+                                contentItem: Text {
+                                    text: modelData
+                                    color: "white"
+                                    font.pixelSize: 13
+                                    elide: Text.ElideRight
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    color: highlighted ? "#2a3a3a" : "transparent"
+                                }
+                            }
+
+                            onActivated: {
+                                if (mainWindow.currentSceneId !== -1) {
+                                    storyManager.setEditorState("location_" + mainWindow.currentSceneId, currentText);
+                                }
+                            }
+
+                            Connections {
+                                target: mainWindow
+                                function onCurrentSceneIdChanged() {
+                                    if (mainWindow.currentSceneId !== -1) {
+                                        var loc = storyManager.getEditorState("location_" + mainWindow.currentSceneId);
+                                        var idx = locationCombo.find(loc);
+                                        if (idx !== -1) locationCombo.currentIndex = idx;
+                                        else locationCombo.currentIndex = 0;
+                                    }
+                                }
+                            }
+                            
+                            // Also load when component is ready or model changes
+                            Component.onCompleted: {
+                                if (mainWindow.currentSceneId !== -1) {
+                                    var loc = storyManager.getEditorState("location_" + mainWindow.currentSceneId);
+                                    var idx = locationCombo.find(loc);
+                                    if (idx !== -1) locationCombo.currentIndex = idx;
+                                }
+                            }
+                        }
+                    }
+
                 }
             }
 

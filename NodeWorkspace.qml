@@ -7,6 +7,8 @@ import Qt5Compat.GraphicalEffects
 Item {
     id: root
 
+    property alias nodesModel: nodesModel
+
     //
     // MODELS
     //
@@ -2705,6 +2707,21 @@ Item {
         property bool isEditing: false
         property bool isDeleting: false
         property string nodeColor: "#2e2e33"
+        property real deleteProgress: 0.0
+
+        Timer {
+            id: deleteTimer
+            interval: 16
+            repeat: true
+            onTriggered: {
+                deleteProgress += 16.0 / 1200.0
+                if (deleteProgress >= 1.0) {
+                    running = false
+                    node.isDeleting = true
+                    root.deleteNode(node.nodeIndex)
+                }
+            }
+        }
 
         // We do NOT keep our own stored copy of x/y.
         // We "pull" position from the model every frame.
@@ -2732,7 +2749,7 @@ Item {
 
         // Expand with padding when editing. We add extra height to fit the delete button.
         width: isEditing ? baseWidth + 40 : baseWidth
-        height: isEditing ? baseHeight + 46 : baseHeight
+        height: isEditing ? baseHeight + 20 : baseHeight
 
         Behavior on width {
             NumberAnimation {
@@ -2899,6 +2916,13 @@ Item {
                     easing.type: Easing.OutQuad
                 }
             }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: '#ff3333'
+                opacity: node.deleteProgress
+            }
         }
 
         MouseArea {
@@ -2913,6 +2937,7 @@ Item {
                     return;
                 if (mouse.button === Qt.RightButton) {
                     mouse.accepted = true;
+                    deleteTimer.start();
                     return;
                 }
 
@@ -2964,6 +2989,13 @@ Item {
             onReleased: mouse => {
                 if (node.isDeleting)
                     return;
+
+                if (mouse.button === Qt.RightButton) {
+                    deleteTimer.stop();
+                    deleteProgress = 0.0;
+                    return;
+                }
+
                 if (node.draggingNode) {
                     node.draggingNode = false;
                 } else if (node.draggingLink) {
@@ -3028,49 +3060,7 @@ Item {
                 }
             }
 
-            Rectangle {
-                id: deleteBtn
-                width: 26
-                height: 26
-                radius: 4
-                color: deleteBtnArea.containsMouse ? "white" : "transparent"
-                border.color: "white"
-                border.width: 1
-                visible: node.isEditing
-                opacity: node.isEditing ? 1.0 : 0.0
-                anchors.horizontalCenter: parent.horizontalCenter
 
-                Behavior on opacity {
-                    NumberAnimation {
-                        duration: 150
-                    }
-                }
-
-                Behavior on color {
-                    ColorAnimation { duration: 100 }
-                }
-
-                Text {
-                    anchors.centerIn: parent
-                    anchors.verticalCenterOffset: 0; anchors.horizontalCenterOffset: -0.5
-                    text: "×"
-                    font.pixelSize: 18
-                    font.bold: true
-                    color: deleteBtnArea.containsMouse ? "darkslategrey" : "white"
-                    Behavior on color { ColorAnimation { duration: 100 } }
-                }
-
-                MouseArea {
-                    id: deleteBtnArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onPressed: mouse => {
-                        mouse.accepted = true;
-                        node.isDeleting = true;
-                        root.deleteNode(node.nodeIndex);
-                    }
-                }
-            }
         }
     }
 }
