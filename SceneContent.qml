@@ -94,7 +94,8 @@ Item {
                     x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
-                    interactivityJson: el.interactivityJson || "[]"
+                    interactivityJson: el.interactivityJson || "[]",
+                    template: el.template || "none"
                 })
             } else if (el.type === "text") {
                 textBoxesModelInst.append({
@@ -108,7 +109,8 @@ Item {
                     content:   el.content   || "",
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
-                    interactivityJson: el.interactivityJson || "[]"
+                    interactivityJson: el.interactivityJson || "[]",
+                    template: el.template || "none"
                 })
             } else if (el.type === "image") {
                 imagesModelInst.append({
@@ -116,7 +118,8 @@ Item {
                     filePath: el.filePath || "",
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
-                    interactivityJson: el.interactivityJson || "[]"
+                    interactivityJson: el.interactivityJson || "[]",
+                    template: el.template || "none"
                 })
             } else if (el.type === "video") {
                 videosModelInst.append({
@@ -124,7 +127,8 @@ Item {
                     filePath: el.filePath || "",
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
-                    interactivityJson: el.interactivityJson || "[]"
+                    interactivityJson: el.interactivityJson || "[]",
+                    template: el.template || "none"
                 })
             } else if (el.type === "shader") {
                 shadersModelInst.append({
@@ -134,7 +138,8 @@ Item {
                     uniformsJson: el.uniformsJson || "[]",
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
-                    interactivityJson: el.interactivityJson || "[]"
+                    interactivityJson: el.interactivityJson || "[]",
+                    template: el.template || "none"
                 })
             }
             if (z >= nextStackOrder) nextStackOrder = z + 1
@@ -154,7 +159,8 @@ Item {
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
                 name: m.name || "", z_order: m.stackOrder,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
-                interactivityJson: m.interactivityJson || "[]" })
+                interactivityJson: m.interactivityJson || "[]",
+                template: m.template || "none" })
         }
         for (i = 0; i < textBoxesModelInst.count; i++) {
             m = textBoxesModelInst.get(i)
@@ -166,7 +172,8 @@ Item {
                 italic: m.italic, underline: m.underline,
                 textColor: m.textColor, content: m.content,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
-                interactivityJson: m.interactivityJson || "[]" })
+                interactivityJson: m.interactivityJson || "[]",
+                template: m.template || "none" })
         }
         for (i = 0; i < imagesModelInst.count; i++) {
             m = imagesModelInst.get(i)
@@ -175,7 +182,8 @@ Item {
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
                 name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
-                interactivityJson: m.interactivityJson || "[]" })
+                interactivityJson: m.interactivityJson || "[]",
+                template: m.template || "none" })
         }
         for (i = 0; i < videosModelInst.count; i++) {
             m = videosModelInst.get(i)
@@ -184,7 +192,8 @@ Item {
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
                 name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
-                interactivityJson: m.interactivityJson || "[]" })
+                interactivityJson: m.interactivityJson || "[]",
+                template: m.template || "none" })
         }
         for (i = 0; i < shadersModelInst.count; i++) {
             m = shadersModelInst.get(i)
@@ -195,7 +204,8 @@ Item {
                 fragPath: m.fragPath, vertPath: m.vertPath,
                 uniformsJson: m.uniformsJson,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
-                interactivityJson: m.interactivityJson || "[]" })
+                interactivityJson: m.interactivityJson || "[]",
+                template: m.template || "none" })
         }
         return JSON.stringify(elements)
     }

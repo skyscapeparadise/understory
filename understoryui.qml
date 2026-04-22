@@ -893,8 +893,10 @@ Window {
                 {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
                 {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
                 {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
+                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
                 {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0}
             ]
+            // index 0 = default, 1 = north, 2 = south, 3 = east, 4 = west
 
             function setTransProp(dirIdx, key, val) {
                 var arr = dirTransitions.slice()
@@ -907,13 +909,65 @@ Window {
                 if (!storyManager.isOpen) return
                 var json = storyManager.getEditorState("dir_transitions")
                 if (json !== "") {
-                    try { dirTransitions = JSON.parse(json) } catch(e) {}
+                    try {
+                        var loaded = JSON.parse(json)
+                        // migrate old 4-element saves (no default entry) by prepending one
+                        if (loaded.length === 4) {
+                            loaded.unshift({transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0})
+                        }
+                        dirTransitions = loaded
+                    } catch(e) {}
                 }
             }
 
             onDirTransitionsChanged: {
-                if (storyManager.isOpen)
+                if (storyManager.isOpen) {
                     storyManager.setEditorState("dir_transitions", JSON.stringify(dirTransitions))
+                    for (var i = 0; i < dirTransitions.length; i++)
+                        sceneSettingsView.applyTemplateTransitions(i)
+                }
+            }
+
+            function applyTemplateTransitions(dirIdx) {
+                var names = ["default", "north", "south", "east", "west"]
+                if (dirIdx < 0 || dirIdx >= names.length) return
+                var dirName = names[dirIdx]
+                var td = dirTransitions[dirIdx]
+                if (!td) return
+                var models = [viewport.areasModel, viewport.textBoxesModel,
+                              viewport.imagesModel, viewport.videosModel, viewport.shadersModel]
+                var typeNames = ["area", "tb", "image", "video", "shader"]
+                for (var mi = 0; mi < models.length; mi++) {
+                    var model = models[mi]
+                    if (!model) continue
+                    for (var i = 0; i < model.count; i++) {
+                        var elem = model.get(i)
+                        if ((elem.template || "none") !== dirName) continue
+                        var items = []
+                        try { items = JSON.parse(elem.interactivityJson || "[]") } catch(e) { continue }
+                        var changed = false
+                        for (var j = 0; j < items.length; j++) {
+                            if (items[j].itemCommand !== "jump") continue
+                            items[j].itemTransition      = td.transition   || "cut"
+                            items[j].itemTransitionSpeed = td.speed        !== undefined ? td.speed        : 1.0
+                            items[j].itemPushDirection   = td.pushDir      || "right"
+                            items[j].itemWipeFeather     = td.wipeFeather  !== undefined ? td.wipeFeather  : 0.0
+                            items[j].itemWipeDirection   = td.wipeDir      || "right"
+                            items[j].itemLookYaw         = td.lookYaw      !== undefined ? td.lookYaw      : 90.0
+                            items[j].itemLookPitch       = td.lookPitch    !== undefined ? td.lookPitch    : 0.0
+                            items[j].itemLookFovMM       = td.lookFov      !== undefined ? td.lookFov      : 24.0
+                            items[j].itemLookOvershoot   = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0
+                            items[j].itemLookShutter     = td.lookShutter  !== undefined ? td.lookShutter  : 0.10
+                            changed = true
+                        }
+                        if (changed) {
+                            var newJson = JSON.stringify(items)
+                            model.setProperty(i, "interactivityJson", newJson)
+                            if (selectSettings.syncedType === typeNames[mi] && selectSettings.syncedIdx === i)
+                                viewport.loadInteractivityModel(selectInteractivityModel, newJson)
+                        }
+                    }
+                }
             }
 
             Connections {
@@ -1463,11 +1517,12 @@ Window {
                     rowSpacing: 16
 
                     Repeater {
-                    model: ["north", "south", "east", "west"]
+                    model: ["default", "north", "south", "east", "west"]
                     delegate: ColumnLayout {
                         id: dirDelegate
                         Layout.fillWidth: true
-                        Layout.maximumWidth: Math.floor((sceneSettingsLayout.width - 16) / 2)
+                        Layout.columnSpan: index === 0 ? 2 : 1
+                        Layout.maximumWidth: index === 0 ? sceneSettingsLayout.width : Math.floor((sceneSettingsLayout.width - 16) / 2)
                         Layout.alignment: Qt.AlignTop
                         spacing: 6
                         property int dirIdx: index
@@ -2652,6 +2707,8 @@ Window {
                 try { elements = JSON.parse(raw) } catch(e) { elements = [] }
                 activeContent.loadScene(elements)
                 nextStackOrder = activeContent.nextStackOrder
+                for (var di = 0; di < sceneSettingsView.dirTransitions.length; di++)
+                    sceneSettingsView.applyTemplateTransitions(di)
             }
 
             function collectSceneElements() {
@@ -6060,6 +6117,7 @@ Window {
                     property string selName: ""
                     property string selCursor: "select"
                     property string selCursorPath: ""
+                    property string selTemplate: "none"
 
                     function syncSpatialFromModel() {
                         var m = null;
@@ -6076,6 +6134,7 @@ Window {
                             selName = m.name || "";
                             selCursor = m.cursor || "select";
                             selCursorPath = m.cursorPath || "";
+                            selTemplate = m.template || "none";
                         }
                     }
 
@@ -6111,6 +6170,19 @@ Window {
 
                     onSelCursorChanged:     writeCursorToModel()
                     onSelCursorPathChanged: writeCursorToModel()
+
+                    function writeTemplateToModel() {
+                        var idx = -1; var mod = null
+                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = viewport.areasModel }
+                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = viewport.textBoxesModel }
+                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = viewport.imagesModel }
+                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = viewport.videosModel }
+                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = viewport.shadersModel }
+                        if (mod !== null && idx >= 0)
+                            mod.setProperty(idx, "template", selTemplate)
+                    }
+
+                    onSelTemplateChanged: writeTemplateToModel()
 
                     function writeNameToModel(n) {
                         var idx = -1;
@@ -7060,6 +7132,72 @@ Window {
                                                 if (drop.hasUrls)
                                                     selectSettings.selCursorPath = drop.urls[0].toString()
                                             }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Row {
+                                width: parent.width
+                                spacing: 8
+                                visible: selectSettings.hasActiveArea || selectSettings.hasActiveTb || selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
+
+                                Text {
+                                    text: "template"
+                                    color: "#888"
+                                    font.pixelSize: 11
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 60
+                                }
+
+                                ComboBox {
+                                    id: templateCombo
+                                    width: parent.width - 68
+                                    model: ["none", "default", "north", "south", "east", "west"]
+                                    currentIndex: {
+                                        var idx = model.indexOf(selectSettings.selTemplate)
+                                        return idx >= 0 ? idx : 0
+                                    }
+                                    onActivated: selectSettings.selTemplate = model[currentIndex]
+
+                                    contentItem: Text {
+                                        leftPadding: 8
+                                        text: templateCombo.displayText
+                                        color: "#CCCCCC"
+                                        font.pixelSize: 11
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    background: Rectangle {
+                                        color: "#1e1e22"
+                                        radius: 4
+                                        border.color: "#333"
+                                        border.width: 1
+                                    }
+
+                                    popup: Popup {
+                                        y: templateCombo.height
+                                        width: templateCombo.width
+                                        padding: 0
+                                        background: Rectangle { color: "#1e1e22"; radius: 4; border.color: "#333"; border.width: 1 }
+                                        contentItem: ListView {
+                                            implicitHeight: contentHeight
+                                            model: templateCombo.delegateModel
+                                            clip: true
+                                        }
+                                    }
+
+                                    delegate: ItemDelegate {
+                                        width: templateCombo.width
+                                        contentItem: Text {
+                                            text: modelData
+                                            color: templateCombo.currentIndex === index ? "#477B78" : "#CCCCCC"
+                                            font.pixelSize: 11
+                                            verticalAlignment: Text.AlignVCenter
+                                            leftPadding: 8
+                                        }
+                                        background: Rectangle {
+                                            color: hovered ? "#2a2a2e" : "transparent"
                                         }
                                     }
                                 }
