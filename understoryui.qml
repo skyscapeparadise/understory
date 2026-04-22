@@ -230,6 +230,7 @@ Window {
             y: 28
             height: 398
             width: 900
+            contentHeight: projectgrid.y + projectgrid.implicitHeight + 20
 
             Behavior on opacity {
                 NumberAnimation {
@@ -240,8 +241,12 @@ Window {
 
             GridLayout {
                 id: projectgrid
-                anchors.fill: parent
-                anchors.margins: 20
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.leftMargin: 20
+                anchors.rightMargin: 20
+                anchors.topMargin: 20
                 columns: 3
                 rowSpacing: 20
                 columnSpacing: 25
@@ -380,6 +385,7 @@ Window {
             y: 28
             height: 398
             width: 900
+            contentHeight: storySettingsLayout.implicitHeight + topPadding + 20
             visible: storyMenuButtons.selectedButton === "settings"
             clip: true
 
@@ -388,6 +394,7 @@ Window {
             rightPadding: 20
 
             ColumnLayout {
+                id: storySettingsLayout
                 width: storySettingsView.availableWidth
                 spacing: 20
 
@@ -635,6 +642,7 @@ Window {
             y: 28
             height: 398
             width: 900
+            contentHeight: scenegrid.y + scenegrid.implicitHeight + 20
 
             Behavior on opacity {
                 NumberAnimation {
@@ -645,8 +653,12 @@ Window {
 
             GridLayout {
                 id: scenegrid
-                anchors.fill: parent
-                anchors.margins: 20
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.leftMargin: 20
+                anchors.rightMargin: 20
+                anchors.topMargin: 20
                 columns: 3
                 rowSpacing: 20
                 columnSpacing: 25
@@ -780,6 +792,7 @@ Window {
             y: 28
             height: 398
             width: 900
+            contentHeight: sceneSettingsLayout.implicitHeight + topPadding + 20
 
             visible: sceneMenuButtons.selectedButton === "settings"
             clip: true
@@ -913,6 +926,7 @@ Window {
             }
 
             ColumnLayout {
+                id: sceneSettingsLayout
                 width: sceneSettingsView.availableWidth
                 spacing: 20
 
