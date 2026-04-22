@@ -787,6 +787,102 @@ Window {
             leftPadding: 20
             rightPadding: 20
 
+            // ---- resolution preset data ----
+            property var res169: [
+                {label: "360p  · 640 × 360",   w: 640,  h: 360},
+                {label: "480p  · 854 × 480",   w: 854,  h: 480},
+                {label: "720p  · 1280 × 720",  w: 1280, h: 720},
+                {label: "1080p · 1920 × 1080", w: 1920, h: 1080},
+                {label: "1440p · 2560 × 1440", w: 2560, h: 1440},
+                {label: "4K    · 3840 × 2160", w: 3840, h: 2160},
+                {label: "8K    · 7680 × 4320", w: 7680, h: 4320},
+                {label: "Custom",              w: -1,   h: -1}
+            ]
+            property var res43: [
+                {label: "VGA   · 640 × 480",   w: 640,  h: 480},
+                {label: "SVGA  · 800 × 600",   w: 800,  h: 600},
+                {label: "XGA   · 1024 × 768",  w: 1024, h: 768},
+                {label: "SXGA- · 1280 × 960",  w: 1280, h: 960},
+                {label: "UXGA  · 1600 × 1200", w: 1600, h: 1200},
+                {label: "2048 × 1536",         w: 2048, h: 1536},
+                {label: "Custom",              w: -1,   h: -1}
+            ]
+            property bool _loading: false
+
+            // ---- cursor preset data ----
+            property string selectedCursor: "angel"
+            property var cursorLabels: ["select", "highlight", "drag", "left", "up", "down", "right"]
+            property var cursorOptions: [
+                {name: "angel",  icons: ["select.svg","select.svg","pinch.svg","handleft.svg","select.svg","select.svg","handright.svg"]},
+                {name: "arrows", icons: ["select.svg","select.svg","pinch.svg","left.svg","up.svg","down.svg","right.svg"]},
+                {name: "custom", icons: []}
+            ]
+            property var cursorCustomPaths: ["", "", "", "", "", "", ""]
+            property int _cursorSlot: 0
+
+            function loadResolution() {
+                if (!storyManager.isOpen) return
+                _loading = true
+                var res = storyManager.getResolution()
+                var w = res.width, h = res.height
+                for (var i = 0; i < res169.length - 1; i++) {
+                    if (res169[i].w === w && res169[i].h === h) {
+                        aspectCombo.currentIndex = 0
+                        resCombo169.currentIndex = i
+                        _loading = false
+                        return
+                    }
+                }
+                for (var j = 0; j < res43.length - 1; j++) {
+                    if (res43[j].w === w && res43[j].h === h) {
+                        aspectCombo.currentIndex = 1
+                        resCombo43.currentIndex = j
+                        _loading = false
+                        return
+                    }
+                }
+                var ratio = (h > 0) ? (w / h) : 0
+                if (Math.abs(ratio - 16 / 9) < 0.02) {
+                    aspectCombo.currentIndex = 0
+                    resCombo169.currentIndex = res169.length - 1
+                } else if (Math.abs(ratio - 4 / 3) < 0.02) {
+                    aspectCombo.currentIndex = 1
+                    resCombo43.currentIndex = res43.length - 1
+                } else {
+                    aspectCombo.currentIndex = 2
+                }
+                customWidthField.text = w.toString()
+                customHeightField.text = h.toString()
+                _loading = false
+            }
+
+            function loadStoryCursor() {
+                if (!storyManager.isOpen) return
+                var mode = storyManager.getEditorState("cursor_mode")
+                if (mode !== "") selectedCursor = mode
+                var pathsJson = storyManager.getEditorState("cursor_paths")
+                if (pathsJson !== "") {
+                    try { cursorCustomPaths = JSON.parse(pathsJson) } catch(e) {}
+                }
+            }
+
+            onSelectedCursorChanged: {
+                if (storyManager.isOpen)
+                    storyManager.setEditorState("cursor_mode", selectedCursor)
+            }
+            onCursorCustomPathsChanged: {
+                if (storyManager.isOpen)
+                    storyManager.setEditorState("cursor_paths", JSON.stringify(cursorCustomPaths))
+            }
+
+            Connections {
+                target: storyManager
+                function onStoryOpened() {
+                    sceneSettingsView.loadResolution()
+                    sceneSettingsView.loadStoryCursor()
+                }
+            }
+
             ColumnLayout {
                 width: sceneSettingsView.availableWidth
                 spacing: 20
@@ -798,13 +894,526 @@ Window {
                     color: "white"
                 }
 
+                // ---- resolution heading ----
                 Text {
-                    text: "this is where the body text goes"
+                    text: "resolution"
                     font.pixelSize: 16
+                    font.bold: true
                     color: "white"
-                    wrapMode: Text.WordWrap
+                    topPadding: 8
+                }
+
+                // ---- aspect ratio row ----
+                RowLayout {
+                    spacing: 10
+                    Text {
+                        text: "aspect ratio"
+                        font.pixelSize: 13
+                        color: "white"
+                        Layout.preferredWidth: 120
+                    }
+                    ComboBox {
+                        id: aspectCombo
+                        Layout.preferredWidth: 160
+                        Layout.preferredHeight: 28
+                        model: ["16:9", "4:3", "Custom"]
+                        onCurrentIndexChanged: {
+                            if (sceneSettingsView._loading) return
+                            if (currentIndex === 0) resCombo169.currentIndex = 3
+                            else if (currentIndex === 1) resCombo43.currentIndex = 2
+                        }
+                        contentItem: Text {
+                            leftPadding: 8
+                            rightPadding: 24
+                            text: aspectCombo.displayText
+                            font.pixelSize: 13
+                            color: "white"
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        indicator: Text {
+                            x: aspectCombo.width - width - 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "▾"
+                            font.pixelSize: 10
+                            color: "white"
+                        }
+                        background: Rectangle {
+                            radius: 4
+                            color: "transparent"
+                            border.color: "white"
+                            border.width: 1
+                        }
+                        popup: Popup {
+                            y: aspectCombo.height + 2
+                            width: aspectCombo.width
+                            padding: 1
+                            background: Rectangle {
+                                color: "#162020"
+                                border.color: "white"
+                                border.width: 1
+                                radius: 4
+                            }
+                            contentItem: ListView {
+                                clip: true
+                                implicitHeight: contentHeight
+                                model: aspectCombo.delegateModel
+                                currentIndex: aspectCombo.currentIndex
+                            }
+                        }
+                        delegate: ItemDelegate {
+                            width: aspectCombo.width
+                            height: 26
+                            padding: 0
+                            highlighted: aspectCombo.highlightedIndex === index
+                            contentItem: Text {
+                                text: modelData
+                                font.pixelSize: 13
+                                color: "white"
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: 8
+                            }
+                            background: Rectangle {
+                                color: aspectCombo.highlightedIndex === index ? "#477B78" : "transparent"
+                            }
+                        }
+                    }
+                }
+
+                // ---- 16:9 resolution row ----
+                RowLayout {
+                    visible: aspectCombo.currentIndex === 0
+                    spacing: 10
+                    Text {
+                        text: "resolution"
+                        font.pixelSize: 13
+                        color: "white"
+                        Layout.preferredWidth: 120
+                    }
+                    ComboBox {
+                        id: resCombo169
+                        Layout.preferredWidth: 220
+                        Layout.preferredHeight: 28
+                        model: sceneSettingsView.res169.map(function(r) { return r.label })
+                        currentIndex: 3
+                        onCurrentIndexChanged: {
+                            if (sceneSettingsView._loading) return
+                            var entry = sceneSettingsView.res169[currentIndex]
+                            if (entry && entry.w !== -1) {
+                                storyManager.setResolution(entry.w, entry.h)
+                                customWidthField.text = entry.w.toString()
+                                customHeightField.text = entry.h.toString()
+                            }
+                        }
+                        contentItem: Text {
+                            leftPadding: 8
+                            rightPadding: 24
+                            text: resCombo169.displayText
+                            font.pixelSize: 13
+                            color: "white"
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        indicator: Text {
+                            x: resCombo169.width - width - 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "▾"
+                            font.pixelSize: 10
+                            color: "white"
+                        }
+                        background: Rectangle {
+                            radius: 4
+                            color: "transparent"
+                            border.color: "white"
+                            border.width: 1
+                        }
+                        popup: Popup {
+                            y: resCombo169.height + 2
+                            width: resCombo169.width
+                            padding: 1
+                            background: Rectangle {
+                                color: "#162020"
+                                border.color: "white"
+                                border.width: 1
+                                radius: 4
+                            }
+                            contentItem: ListView {
+                                clip: true
+                                implicitHeight: contentHeight
+                                model: resCombo169.delegateModel
+                                currentIndex: resCombo169.currentIndex
+                                ScrollBar.vertical: ScrollBar {}
+                            }
+                        }
+                        delegate: ItemDelegate {
+                            width: resCombo169.width
+                            height: 26
+                            padding: 0
+                            highlighted: resCombo169.highlightedIndex === index
+                            contentItem: Text {
+                                text: modelData
+                                font.pixelSize: 13
+                                color: "white"
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: 8
+                            }
+                            background: Rectangle {
+                                color: resCombo169.highlightedIndex === index ? "#477B78" : "transparent"
+                            }
+                        }
+                    }
+                }
+
+                // ---- 4:3 resolution row ----
+                RowLayout {
+                    visible: aspectCombo.currentIndex === 1
+                    spacing: 10
+                    Text {
+                        text: "resolution"
+                        font.pixelSize: 13
+                        color: "white"
+                        Layout.preferredWidth: 120
+                    }
+                    ComboBox {
+                        id: resCombo43
+                        Layout.preferredWidth: 220
+                        Layout.preferredHeight: 28
+                        model: sceneSettingsView.res43.map(function(r) { return r.label })
+                        currentIndex: 2
+                        onCurrentIndexChanged: {
+                            if (sceneSettingsView._loading) return
+                            var entry = sceneSettingsView.res43[currentIndex]
+                            if (entry && entry.w !== -1) {
+                                storyManager.setResolution(entry.w, entry.h)
+                                customWidthField.text = entry.w.toString()
+                                customHeightField.text = entry.h.toString()
+                            }
+                        }
+                        contentItem: Text {
+                            leftPadding: 8
+                            rightPadding: 24
+                            text: resCombo43.displayText
+                            font.pixelSize: 13
+                            color: "white"
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        indicator: Text {
+                            x: resCombo43.width - width - 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "▾"
+                            font.pixelSize: 10
+                            color: "white"
+                        }
+                        background: Rectangle {
+                            radius: 4
+                            color: "transparent"
+                            border.color: "white"
+                            border.width: 1
+                        }
+                        popup: Popup {
+                            y: resCombo43.height + 2
+                            width: resCombo43.width
+                            padding: 1
+                            background: Rectangle {
+                                color: "#162020"
+                                border.color: "white"
+                                border.width: 1
+                                radius: 4
+                            }
+                            contentItem: ListView {
+                                clip: true
+                                implicitHeight: contentHeight
+                                model: resCombo43.delegateModel
+                                currentIndex: resCombo43.currentIndex
+                                ScrollBar.vertical: ScrollBar {}
+                            }
+                        }
+                        delegate: ItemDelegate {
+                            width: resCombo43.width
+                            height: 26
+                            padding: 0
+                            highlighted: resCombo43.highlightedIndex === index
+                            contentItem: Text {
+                                text: modelData
+                                font.pixelSize: 13
+                                color: "white"
+                                verticalAlignment: Text.AlignVCenter
+                                leftPadding: 8
+                            }
+                            background: Rectangle {
+                                color: resCombo43.highlightedIndex === index ? "#477B78" : "transparent"
+                            }
+                        }
+                    }
+                }
+
+                // ---- custom resolution row ----
+                RowLayout {
+                    visible: (aspectCombo.currentIndex === 0 && resCombo169.currentIndex === sceneSettingsView.res169.length - 1) ||
+                             (aspectCombo.currentIndex === 1 && resCombo43.currentIndex === sceneSettingsView.res43.length - 1) ||
+                             aspectCombo.currentIndex === 2
+                    spacing: 10
+                    Text {
+                        text: "dimensions"
+                        font.pixelSize: 13
+                        color: "white"
+                        Layout.preferredWidth: 120
+                    }
+                    Rectangle {
+                        Layout.preferredWidth: 80
+                        Layout.preferredHeight: 28
+                        color: "transparent"
+                        border.color: "white"
+                        border.width: 1
+                        radius: 4
+                        TextInput {
+                            id: customWidthField
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            color: "white"
+                            font.pixelSize: 13
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
+                            text: "1920"
+                            validator: IntValidator { bottom: 1; top: 32768 }
+                            selectByMouse: true
+                            Keys.onReturnPressed: focus = false
+                            Keys.onEscapePressed: focus = false
+                            onEditingFinished: {
+                                var w = parseInt(text) || 1920
+                                var h = parseInt(customHeightField.text) || 1080
+                                storyManager.setResolution(w, h)
+                            }
+                        }
+                    }
+                    Text {
+                        text: "×"
+                        font.pixelSize: 13
+                        color: "white"
+                    }
+                    Rectangle {
+                        Layout.preferredWidth: 80
+                        Layout.preferredHeight: 28
+                        color: "transparent"
+                        border.color: "white"
+                        border.width: 1
+                        radius: 4
+                        TextInput {
+                            id: customHeightField
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            color: "white"
+                            font.pixelSize: 13
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
+                            text: "1080"
+                            validator: IntValidator { bottom: 1; top: 32768 }
+                            selectByMouse: true
+                            Keys.onReturnPressed: focus = false
+                            Keys.onEscapePressed: focus = false
+                            onEditingFinished: {
+                                var w = parseInt(customWidthField.text) || 1920
+                                var h = parseInt(text) || 1080
+                                storyManager.setResolution(w, h)
+                            }
+                        }
+                    }
+                    Text {
+                        text: "px"
+                        font.pixelSize: 13
+                        color: "#aaaaaa"
+                    }
+                }
+
+                // ---- cursor heading ----
+                Text {
+                    text: "cursor"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: "white"
+                    topPadding: 8
                     Layout.fillWidth: true
                 }
+
+                // ---- cursor option list ----
+                Column {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Repeater {
+                        model: sceneSettingsView.cursorOptions
+
+                        delegate: Rectangle {
+                            id: cursorOptionRect
+                            width: parent.width
+                            // expands to fit drop zones when custom is selected
+                            height: (modelData.name === "custom" && isSelected) ? 168 : (modelData.icons.length > 0 ? 92 : 52)
+                            Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+                            radius: 10
+                            clip: true
+                            color: isSelected ? "white" : "transparent"
+                            border.width: 2
+                            border.color: "white"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+
+                            property bool isSelected: sceneSettingsView.selectedCursor === modelData.name
+
+                            // background click selects this option; child MouseAreas intercept first
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: sceneSettingsView.selectedCursor = modelData.name
+                            }
+
+                            Column {
+                                anchors.top: parent.top
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.topMargin: 14
+                                anchors.leftMargin: 14
+                                anchors.rightMargin: 14
+                                spacing: 12
+
+                                // top row: name label + icon strip
+                                Item {
+                                    width: parent.width
+                                    height: modelData.icons.length > 0 ? 64 : 24
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: modelData.name
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                        color: cursorOptionRect.isSelected ? "#477B78" : "white"
+                                        Behavior on color { ColorAnimation { duration: 120 } }
+                                    }
+
+                                    Row {
+                                        x: 90
+                                        visible: modelData.icons.length > 0
+                                        spacing: 10
+                                        anchors.verticalCenter: parent.verticalCenter
+
+                                        Repeater {
+                                            model: modelData.icons
+
+                                            delegate: Column {
+                                                spacing: 4
+                                                width: 50
+
+                                                Item {
+                                                    width: 50
+                                                    height: 40
+                                                    Image {
+                                                        id: cursorIcon
+                                                        anchors.centerIn: parent
+                                                        width: 36
+                                                        height: 36
+                                                        sourceSize.width: 128
+                                                        sourceSize.height: 128
+                                                        source: "icons/" + modelData
+                                                        fillMode: Image.PreserveAspectFit
+                                                        visible: false
+                                                    }
+                                                    ColorOverlay {
+                                                        anchors.fill: cursorIcon
+                                                        source: cursorIcon
+                                                        color: cursorOptionRect.isSelected ? "#477B78" : "white"
+                                                        Behavior on color { ColorAnimation { duration: 120 } }
+                                                    }
+                                                }
+
+                                                Text {
+                                                    text: sceneSettingsView.cursorLabels[index]
+                                                    font.pixelSize: 10
+                                                    color: cursorOptionRect.isSelected ? "#477B78" : "white"
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    width: 50
+                                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // drop zones — only inside the custom option
+                                Flow {
+                                    visible: modelData.name === "custom"
+                                    width: parent.width
+                                    spacing: 10
+
+                                    Repeater {
+                                        model: sceneSettingsView.cursorLabels
+
+                                        delegate: Column {
+                                            spacing: 6
+                                            width: 100
+
+                                            Text {
+                                                text: modelData
+                                                font.pixelSize: 11
+                                                color: "#477B78"
+                                                width: parent.width
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+
+                                            Rectangle {
+                                                id: cursorDropZone
+                                                width: 100
+                                                height: 80
+                                                color: "black"
+                                                radius: 4
+
+                                                property int slotIndex: index
+                                                property string filePath: sceneSettingsView.cursorCustomPaths[index]
+
+                                                Image {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 9
+                                                    sourceSize.width: 128
+                                                    sourceSize.height: 128
+                                                    source: cursorDropZone.filePath !== "" ? cursorDropZone.filePath : "icons/dropimage.svg"
+                                                    fillMode: Image.PreserveAspectFit
+                                                    opacity: cursorDropZone.filePath !== "" ? 1.0 : 0.6
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: {
+                                                        sceneSettingsView._cursorSlot = cursorDropZone.slotIndex
+                                                        cursorIconFileDialog.open()
+                                                    }
+                                                }
+
+                                                DropArea {
+                                                    anchors.fill: parent
+                                                    onDropped: drop => {
+                                                        if (drop.hasUrls) {
+                                                            var paths = sceneSettingsView.cursorCustomPaths.slice()
+                                                            paths[cursorDropZone.slotIndex] = drop.urls[0].toString()
+                                                            sceneSettingsView.cursorCustomPaths = paths
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        FileDialog {
+            id: cursorIconFileDialog
+            title: "Select cursor image"
+            nameFilters: ["Image files (*.png *.jpg *.jpeg *.svg *.webp)"]
+            onAccepted: {
+                var paths = sceneSettingsView.cursorCustomPaths.slice()
+                paths[sceneSettingsView._cursorSlot] = selectedFile.toString()
+                sceneSettingsView.cursorCustomPaths = paths
             }
         }
 
@@ -2844,6 +3453,13 @@ Window {
             }
 
             FileDialog {
+                id: selCursorFileDialog
+                title: "Select cursor image"
+                nameFilters: ["Image files (*.png *.jpg *.jpeg *.svg *.webp)"]
+                onAccepted: selectSettings.selCursorPath = selectedFile.toString()
+            }
+
+            FileDialog {
                 id: videoFileDialog
                 title: "Select video file"
                 nameFilters: ["Video files (*.mp4 *.mov *.avi *.mkv *.webm *.m4v)"]
@@ -3103,7 +3719,38 @@ Window {
                 y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.shaderDragging ? viewport.shaderY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -1 : 0)
                 width: 36
                 height: 36
-                source: viewport.elementDragging ? "icons/pinch.svg" : ((sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? "icons/select.svg" : (["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : ""))
+                source: {
+                    if (viewport.elementDragging) return "icons/pinch.svg"
+                    if (sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) return "icons/select.svg"
+                    if (viewport.effectiveTool === "simulate") {
+                        var slot = "select", cpath = ""
+                        if (viewport.hoveredAreaIndex >= 0) {
+                            var hm = viewport.areasModel.get(viewport.hoveredAreaIndex)
+                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                        } else if (viewport.hoveredTbIndex >= 0) {
+                            var hm = viewport.textBoxesModel.get(viewport.hoveredTbIndex)
+                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                        } else if (viewport.hoveredImageIndex >= 0) {
+                            var hm = viewport.imagesModel.get(viewport.hoveredImageIndex)
+                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                        } else if (viewport.hoveredVideoIndex >= 0) {
+                            var hm = viewport.videosModel.get(viewport.hoveredVideoIndex)
+                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                        } else if (viewport.hoveredShaderIndex >= 0) {
+                            var hm = viewport.shadersModel.get(viewport.hoveredShaderIndex)
+                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                        }
+                        if (slot === "custom") return cpath || ""
+                        var labels = ["select","highlight","drag","left","up","down","right"]
+                        var slotIdx = labels.indexOf(slot)
+                        if (slotIdx < 0) return ""
+                        var mode = sceneSettingsView.selectedCursor
+                        if (mode === "custom") return sceneSettingsView.cursorCustomPaths[slotIdx] || ""
+                        return "icons/" + sceneSettingsView.cursorOptions[mode === "angel" ? 0 : 1].icons[slotIdx]
+                    }
+                    var tools = ["select","relayer","destroy","newarea","newtext","newimage","newvideo","newshader"]
+                    return tools.indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : ""
+                }
                 visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1)
                 fillMode: Image.PreserveAspectFit
                 z: 1000
@@ -4833,6 +5480,8 @@ Window {
                     property real selH: 150
                     property bool selLock: false
                     property string selName: ""
+                    property string selCursor: "select"
+                    property string selCursorPath: ""
 
                     function syncSpatialFromModel() {
                         var m = null;
@@ -4847,6 +5496,8 @@ Window {
                             selW = Math.abs(m.x2 - m.x1);
                             selH = Math.abs(m.y2 - m.y1);
                             selName = m.name || "";
+                            selCursor = m.cursor || "select";
+                            selCursorPath = m.cursorPath || "";
                         }
                     }
 
@@ -4866,6 +5517,22 @@ Window {
                             viewport.layoutRevision++;
                         }
                     }
+
+                    function writeCursorToModel() {
+                        var idx = -1; var mod = null
+                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = viewport.areasModel }
+                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = viewport.textBoxesModel }
+                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = viewport.imagesModel }
+                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = viewport.videosModel }
+                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = viewport.shadersModel }
+                        if (mod !== null && idx >= 0) {
+                            mod.setProperty(idx, "cursor", selCursor)
+                            mod.setProperty(idx, "cursorPath", selCursorPath)
+                        }
+                    }
+
+                    onSelCursorChanged:     writeCursorToModel()
+                    onSelCursorPathChanged: writeCursorToModel()
 
                     function writeNameToModel(n) {
                         var idx = -1;
@@ -5707,6 +6374,113 @@ Window {
                                                     MouseArea { anchors.fill: parent; onClicked: selectSettings.selLock = modelData.val }
                                                 }
                                                 Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // cursor field — toggle buttons
+                                Row {
+                                    width: parent.width; height: 26; spacing: 6
+
+                                    Text {
+                                        text: "cursor"; width: 44; color: "white"; font.pixelSize: 11
+                                        height: parent.height; verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    RowLayout {
+                                        width: parent.width - 50
+                                        height: 26
+                                        spacing: 2
+
+                                        Repeater {
+                                            model: [
+                                                {key: "select",    lbl: "select",    icon: ""},
+                                                {key: "highlight", lbl: "highlight", icon: ""},
+                                                {key: "drag",      lbl: "drag",      icon: ""},
+                                                {key: "left",      lbl: "",          icon: "left.svg"},
+                                                {key: "up",        lbl: "",          icon: "up.svg"},
+                                                {key: "down",      lbl: "",          icon: "down.svg"},
+                                                {key: "right",     lbl: "",          icon: "right.svg"},
+                                                {key: "custom",    lbl: "custom",    icon: ""}
+                                            ]
+                                            delegate: Rectangle {
+                                                property bool isActive: selectSettings.selCursor === modelData.key
+                                                Layout.fillWidth: modelData.icon === ""
+                                                Layout.preferredWidth: modelData.icon !== "" ? 26 : -1
+                                                height: 26
+                                                radius: 4
+                                                color: isActive ? "white" : "transparent"
+                                                border.color: "white"; border.width: 1
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+
+                                                Text {
+                                                    visible: modelData.lbl !== ""
+                                                    anchors.centerIn: parent
+                                                    text: modelData.lbl
+                                                    font.pixelSize: 9
+                                                    color: parent.isActive ? "#477B78" : "white"
+                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                }
+
+                                                Item {
+                                                    visible: modelData.icon !== ""
+                                                    anchors.fill: parent
+                                                    anchors.margins: 4
+                                                    Image {
+                                                        id: cursorFieldIcon
+                                                        anchors.fill: parent
+                                                        source: modelData.icon !== "" ? "icons/" + modelData.icon : ""
+                                                        fillMode: Image.PreserveAspectFit
+                                                        visible: false
+                                                    }
+                                                    ColorOverlay {
+                                                        anchors.fill: cursorFieldIcon
+                                                        source: cursorFieldIcon
+                                                        color: parent.parent.isActive ? "#477B78" : "white"
+                                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: selectSettings.selCursor = modelData.key
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // cursor field — custom drop zone (own row, indented to align with controls)
+                                Row {
+                                    visible: selectSettings.selCursor === "custom"
+                                    width: parent.width; height: 26; spacing: 6
+
+                                    Item { width: 44; height: 26 }
+
+                                    Rectangle {
+                                        width: parent.width - 50; height: 26
+                                        color: "black"; radius: 4
+
+                                        Image {
+                                            anchors.fill: parent
+                                            anchors.margins: 3
+                                            sourceSize.width: 64
+                                            source: selectSettings.selCursorPath !== "" ? selectSettings.selCursorPath : "icons/dropimage.svg"
+                                            fillMode: Image.PreserveAspectFit
+                                            opacity: selectSettings.selCursorPath !== "" ? 1.0 : 0.7
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: selCursorFileDialog.open()
+                                        }
+
+                                        DropArea {
+                                            anchors.fill: parent
+                                            onDropped: drop => {
+                                                if (drop.hasUrls)
+                                                    selectSettings.selCursorPath = drop.urls[0].toString()
                                             }
                                         }
                                     }

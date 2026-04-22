@@ -93,6 +93,7 @@ Item {
                 areasModelInst.append({
                     x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
                     name: el.name || "", stackOrder: z,
+                    cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]"
                 })
             } else if (el.type === "text") {
@@ -106,6 +107,7 @@ Item {
                     textColor: el.textColor || "#FFFFFF",
                     content:   el.content   || "",
                     name: el.name || "", stackOrder: z,
+                    cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]"
                 })
             } else if (el.type === "image") {
@@ -113,6 +115,7 @@ Item {
                     x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
                     filePath: el.filePath || "",
                     name: el.name || "", stackOrder: z,
+                    cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]"
                 })
             } else if (el.type === "video") {
@@ -120,6 +123,7 @@ Item {
                     x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
                     filePath: el.filePath || "",
                     name: el.name || "", stackOrder: z,
+                    cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]"
                 })
             } else if (el.type === "shader") {
@@ -129,6 +133,7 @@ Item {
                     vertPath:     el.vertPath     || "",
                     uniformsJson: el.uniformsJson || "[]",
                     name: el.name || "", stackOrder: z,
+                    cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]"
                 })
             }
@@ -148,6 +153,7 @@ Item {
                 x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
                 name: m.name || "", z_order: m.stackOrder,
+                cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]" })
         }
         for (i = 0; i < textBoxesModelInst.count; i++) {
@@ -159,6 +165,7 @@ Item {
                 family: m.family, tbWeight: m.tbWeight, size: m.size,
                 italic: m.italic, underline: m.underline,
                 textColor: m.textColor, content: m.content,
+                cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]" })
         }
         for (i = 0; i < imagesModelInst.count; i++) {
@@ -167,6 +174,7 @@ Item {
                 x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
                 name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
+                cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]" })
         }
         for (i = 0; i < videosModelInst.count; i++) {
@@ -175,6 +183,7 @@ Item {
                 x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
                 name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
+                cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]" })
         }
         for (i = 0; i < shadersModelInst.count; i++) {
@@ -185,6 +194,7 @@ Item {
                 name: m.name || "", z_order: m.stackOrder,
                 fragPath: m.fragPath, vertPath: m.vertPath,
                 uniformsJson: m.uniformsJson,
+                cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]" })
         }
         return JSON.stringify(elements)

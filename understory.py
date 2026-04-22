@@ -338,6 +338,36 @@ class StoryManager(QObject):
         except Exception as e:
             print(f"StoryManager.setStoryTitle: {e}")
 
+    # ------------------------------------------------------------------ resolution slots
+
+    @Slot(result="QVariantMap")
+    def getResolution(self):
+        if not self._conn:
+            return {"width": 1920, "height": 1080}
+        try:
+            row = self._conn.execute(
+                "SELECT resolution_w, resolution_h FROM story WHERE id = 1"
+            ).fetchone()
+            if row:
+                return {"width": row[0], "height": row[1]}
+            return {"width": 1920, "height": 1080}
+        except Exception as e:
+            print(f"StoryManager.getResolution: {e}")
+            return {"width": 1920, "height": 1080}
+
+    @Slot(int, int)
+    def setResolution(self, w, h):
+        if not self._conn:
+            return
+        try:
+            self._conn.execute(
+                "UPDATE story SET resolution_w = ?, resolution_h = ? WHERE id = 1",
+                (w, h),
+            )
+            self._conn.commit()
+        except Exception as e:
+            print(f"StoryManager.setResolution: {e}")
+
     # ------------------------------------------------------------------ scene slots
 
     @Slot(result="QVariantList")
