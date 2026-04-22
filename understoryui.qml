@@ -1467,6 +1467,7 @@ Window {
                     delegate: ColumnLayout {
                         id: dirDelegate
                         Layout.fillWidth: true
+                        Layout.maximumWidth: Math.floor((sceneSettingsLayout.width - 16) / 2)
                         Layout.alignment: Qt.AlignTop
                         spacing: 6
                         property int dirIdx: index
@@ -1513,7 +1514,7 @@ Window {
                                 ]
                                 delegate: Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: Math.round((dirDelegate.width - 16) / 5)
+                                    Layout.preferredHeight: Math.round((sceneSettingsView.availableWidth - 40 - 16) / 2 / 5)
                                     radius: 4
                                     property bool isActive: dirDelegate.td.transition === modelData.key
                                     color: isActive ? "white" : "transparent"
@@ -1547,7 +1548,7 @@ Window {
                             Text { text: "speed"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
                             Slider {
                                 id: dSpeedSlider
-                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
                                 from: 0; to: 1; stepSize: 0
                                 Component.onCompleted: {
                                     var s = dirDelegate.td.speed || 1.0
@@ -1611,7 +1612,7 @@ Window {
                             Text { text: "feather"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
                             Slider {
                                 id: dFeatherSlider
-                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
                                 from: 0.0; to: 0.5; stepSize: 0
                                 Component.onCompleted: value = dirDelegate.td.wipeFeather || 0.0
                                 onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(value * 1000) / 1000)
@@ -1661,9 +1662,8 @@ Window {
                         // look controls
                         Item {
                             Layout.fillWidth: true
-                            height: dirDelegate.td.transition === "look" ? 126 : 0
+                            Layout.preferredHeight: dirDelegate.td.transition === "look" ? 126 : 0
                             clip: true
-                            Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
 
                             RowLayout {
                                 anchors.fill: parent
@@ -1726,7 +1726,7 @@ Window {
                                         Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
                                         Slider {
                                             id: dFovSlider
-                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
                                             from: 10; to: 75; stepSize: 0
                                             Component.onCompleted: value = dirDelegate.td.lookFov || 24.0
                                             onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", Math.round(value * 10) / 10)
@@ -1767,7 +1767,7 @@ Window {
                                         Text { text: "overshoot"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
                                         Slider {
                                             id: dOvershootSlider
-                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
                                             from: 0.0; to: 3.0; stepSize: 0
                                             Component.onCompleted: value = dirDelegate.td.lookOvershoot !== undefined ? dirDelegate.td.lookOvershoot : 1.0
                                             onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", Math.round(value * 100) / 100)
@@ -1806,7 +1806,7 @@ Window {
                                         Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
                                         Slider {
                                             id: dShutterSlider
-                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
                                             from: 0.0; to: 0.5; stepSize: 0
                                             Component.onCompleted: value = dirDelegate.td.lookShutter !== undefined ? dirDelegate.td.lookShutter : 0.10
                                             onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", Math.round(value * 1000) / 1000)
