@@ -1442,11 +1442,18 @@ Window {
                     topPadding: 8
                 }
 
-                Repeater {
-                    model: ["n", "s", "e", "w"]
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: 2
+                    columnSpacing: 16
+                    rowSpacing: 16
+
+                    Repeater {
+                    model: ["north", "south", "east", "west"]
                     delegate: ColumnLayout {
                         id: dirDelegate
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
                         spacing: 6
                         property int dirIdx: index
                         property var td: sceneSettingsView.dirTransitions[dirIdx]
@@ -1492,7 +1499,7 @@ Window {
                                 ]
                                 delegate: Rectangle {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: Math.round((sceneSettingsView.availableWidth - 40 - 16) / 5)
+                                    Layout.preferredHeight: Math.round((dirDelegate.width - 16) / 5)
                                     radius: 4
                                     property bool isActive: dirDelegate.td.transition === modelData.key
                                     color: isActive ? "white" : "transparent"
@@ -1954,13 +1961,10 @@ Window {
                             }
                         }
 
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 1
-                            color: "#333"
-                        }
                     }
                 }
+
+                } // GridLayout
 
                 Item { Layout.preferredHeight: 20 }
             }
