@@ -727,6 +727,7 @@ Window {
                                         sceneMenu2sceneEditorPlayer.play();
                                     }
                                 } else {
+                                    navigationSettings.saveNavLinks(mainWindow.currentSceneId);
                                     mainWindow.currentSceneId = model.sceneId;
                                     viewport.loadSceneIntoViewport(model.sceneId);
                                     sceneMenu2sceneEditor.visible = true;
@@ -949,7 +950,9 @@ Window {
                         for (var j = 0; j < items.length; j++) {
                             if (items[j].itemCommand !== "jump") continue
                             items[j].itemTransition      = td.transition   || "cut"
-                            items[j].itemTransitionSpeed = td.speed        !== undefined ? td.speed        : 1.0
+                            items[j].itemTransitionSpeed = td.transition === "look"
+                                ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4)
+                                : (td.speed     !== undefined ? td.speed     : 1.0)
                             items[j].itemPushDirection   = td.pushDir      || "right"
                             items[j].itemWipeFeather     = td.wipeFeather  !== undefined ? td.wipeFeather  : 0.0
                             items[j].itemWipeDirection   = td.wipeDir      || "right"
@@ -1517,7 +1520,7 @@ Window {
                     rowSpacing: 16
 
                     Repeater {
-                    model: ["default", "north", "south", "east", "west"]
+                    model: ["default", "north", "south", "west", "east"]
                     delegate: ColumnLayout {
                         id: dirDelegate
                         Layout.fillWidth: true
@@ -1525,7 +1528,7 @@ Window {
                         Layout.maximumWidth: index === 0 ? sceneSettingsLayout.width : Math.floor((sceneSettingsLayout.width - 16) / 2)
                         Layout.alignment: Qt.AlignTop
                         spacing: 6
-                        property int dirIdx: index
+                        property int dirIdx: [0, 1, 2, 4, 3][index]
                         property var td: sceneSettingsView.dirTransitions[dirIdx]
 
                         onTdChanged: {
@@ -2709,6 +2712,7 @@ Window {
                 nextStackOrder = activeContent.nextStackOrder
                 for (var di = 0; di < sceneSettingsView.dirTransitions.length; di++)
                     sceneSettingsView.applyTemplateTransitions(di)
+                navigationSettings.loadNavLinks(sceneId)
             }
 
             function collectSceneElements() {
@@ -2812,10 +2816,12 @@ Window {
                     looking      = false
                     lookProgress = 0.0
                 }
+                navigationSettings.saveNavLinks(mainWindow.currentSceneId)
                 foregroundLayer = 1 - foregroundLayer
                 nextStackOrder = activeContent.nextStackOrder
                 mainWindow.currentSceneId = pendingJumpSceneId
                 sceneNameInput.text = pendingJumpSceneName
+                navigationSettings.loadNavLinks(pendingJumpSceneId)
                 stagingContent.clear()
                 checkOcclusion()
             }
@@ -4592,6 +4598,7 @@ Window {
                                             var targetId = scenesRectModel.get(index).sceneId;
                                             if (targetId !== mainWindow.currentSceneId) {
                                                 if (mainWindow.currentSceneId !== -1) {
+                                                    navigationSettings.saveNavLinks(mainWindow.currentSceneId);
                                                     viewport.captureAndSaveThumbnail(mainWindow.currentSceneId, function() {
                                                         storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
                                                         storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
@@ -4605,6 +4612,7 @@ Window {
                                                     });
                                                     return;
                                                 }
+                                                navigationSettings.saveNavLinks(mainWindow.currentSceneId);
                                                 mainWindow.currentSceneId = targetId;
                                                 viewport.loadSceneIntoViewport(targetId);
                                                 sceneNameInput.text = storyManager.getSceneName(targetId);
@@ -7158,7 +7166,14 @@ Window {
                                         var idx = model.indexOf(selectSettings.selTemplate)
                                         return idx >= 0 ? idx : 0
                                     }
-                                    onActivated: selectSettings.selTemplate = model[currentIndex]
+                                    onActivated: {
+                                        var t = model[currentIndex]
+                                        selectSettings.selTemplate = t
+                                        if      (t === "north") selectSettings.selCursor = "up"
+                                        else if (t === "south") selectSettings.selCursor = "down"
+                                        else if (t === "east")  selectSettings.selCursor = "right"
+                                        else if (t === "west")  selectSettings.selCursor = "left"
+                                    }
 
                                     contentItem: Text {
                                         leftPadding: 8
@@ -7723,6 +7738,44 @@ Window {
                         deleteProgress = 0.0
                     }
 
+                    function saveNavLinks(sceneId) {
+                        if (sceneId < 0 || !storyManager.isOpen) return
+                        var data = {
+                            n: { id: nSettingsArea.linkedSceneId, name: nSettingsArea.linkedSceneName, rev: nSettingsArea.linkedThumbnailRev },
+                            s: { id: sSettingsArea.linkedSceneId, name: sSettingsArea.linkedSceneName, rev: sSettingsArea.linkedThumbnailRev },
+                            e: { id: eSettingsArea.linkedSceneId, name: eSettingsArea.linkedSceneName, rev: eSettingsArea.linkedThumbnailRev },
+                            w: { id: wSettingsArea.linkedSceneId, name: wSettingsArea.linkedSceneName, rev: wSettingsArea.linkedThumbnailRev }
+                        }
+                        storyManager.setEditorState("nav_links_" + sceneId, JSON.stringify(data))
+                    }
+
+                    function loadNavLinks(sceneId) {
+                        var clear = function() {
+                            nSettingsArea.linkedSceneId = -1; nSettingsArea.linkedSceneName = ""; nSettingsArea.linkedThumbnailRev = 0
+                            sSettingsArea.linkedSceneId = -1; sSettingsArea.linkedSceneName = ""; sSettingsArea.linkedThumbnailRev = 0
+                            eSettingsArea.linkedSceneId = -1; eSettingsArea.linkedSceneName = ""; eSettingsArea.linkedThumbnailRev = 0
+                            wSettingsArea.linkedSceneId = -1; wSettingsArea.linkedSceneName = ""; wSettingsArea.linkedThumbnailRev = 0
+                        }
+                        if (sceneId < 0 || !storyManager.isOpen) { clear(); return }
+                        var json = storyManager.getEditorState("nav_links_" + sceneId)
+                        if (json === "") { clear(); return }
+                        try {
+                            var d = JSON.parse(json)
+                            nSettingsArea.linkedSceneId = d.n.id !== undefined ? d.n.id : -1
+                            nSettingsArea.linkedSceneName = d.n.name || ""
+                            nSettingsArea.linkedThumbnailRev = d.n.rev || 0
+                            sSettingsArea.linkedSceneId = d.s.id !== undefined ? d.s.id : -1
+                            sSettingsArea.linkedSceneName = d.s.name || ""
+                            sSettingsArea.linkedThumbnailRev = d.s.rev || 0
+                            eSettingsArea.linkedSceneId = d.e.id !== undefined ? d.e.id : -1
+                            eSettingsArea.linkedSceneName = d.e.name || ""
+                            eSettingsArea.linkedThumbnailRev = d.e.rev || 0
+                            wSettingsArea.linkedSceneId = d.w.id !== undefined ? d.w.id : -1
+                            wSettingsArea.linkedSceneName = d.w.name || ""
+                            wSettingsArea.linkedThumbnailRev = d.w.rev || 0
+                        } catch(e) { clear() }
+                    }
+
                     Timer {
                         interval: 16
                         repeat: true
@@ -7854,6 +7907,98 @@ Window {
 
                             onClicked: {
                                 layoutAreasDismissTimer.start();
+                                doLayoutAreas();
+                            }
+
+                            function doLayoutAreas() {
+                                var vw = viewport.width
+                                var vh = viewport.height
+                                var hasN = nSettingsArea.linkedSceneId !== -1
+                                var hasS = sSettingsArea.linkedSceneId !== -1
+                                var hasE = eSettingsArea.linkedSceneId !== -1
+                                var hasW = wSettingsArea.linkedSceneId !== -1
+                                if (!hasN && !hasS && !hasE && !hasW) return
+
+                                var dt = sceneSettingsView.dirTransitions
+                                // dirTransitions: 0=default, 1=north, 2=south, 3=east, 4=west
+
+                                function makeInteractivity(dirIdx, sceneId, sceneName) {
+                                    var td = dt[dirIdx] || dt[0]
+                                    return JSON.stringify([{
+                                        itemTrigger: "click",
+                                        itemAction: "cue",
+                                        itemCommand: "jump",
+                                        itemTransition:      td.transition   || "cut",
+                                        itemTransitionSpeed: td.transition === "look"
+                                            ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4)
+                                            : (td.speed     !== undefined ? td.speed     : 1.0),
+                                        itemWipeFeather:     td.wipeFeather  !== undefined ? td.wipeFeather  : 0.0,
+                                        itemWipeDirection:   td.wipeDir      || "right",
+                                        itemPushDirection:   td.pushDir      || "right",
+                                        itemLookYaw:         td.lookYaw      !== undefined ? td.lookYaw      : 90.0,
+                                        itemLookPitch:       td.lookPitch    !== undefined ? td.lookPitch    : 0.0,
+                                        itemLookFovMM:       td.lookFov      !== undefined ? td.lookFov      : 24.0,
+                                        itemLookOvershoot:   td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0,
+                                        itemLookShutter:     td.lookShutter  !== undefined ? td.lookShutter  : 0.10,
+                                        itemTargetSceneId:   sceneId,
+                                        itemTargetSceneName: sceneName,
+                                        itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "",
+                                        itemSoundPath: "", itemVideoPath: "", itemVideoTarget: "fill",
+                                        itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: ""
+                                    }])
+                                }
+
+                                // E: 150px wide strip on right, full height
+                                if (hasE) {
+                                    viewport.areasModel.append({
+                                        x1: vw - 150, y1: 0, x2: vw, y2: vh,
+                                        name: "east", stackOrder: viewport.nextStackOrder++,
+                                        cursor: "right", cursorPath: "",
+                                        interactivityJson: makeInteractivity(3, eSettingsArea.linkedSceneId, eSettingsArea.linkedSceneName),
+                                        template: "east"
+                                    })
+                                }
+
+                                // W: 150px wide strip on left, full height
+                                if (hasW) {
+                                    viewport.areasModel.append({
+                                        x1: 0, y1: 0, x2: 150, y2: vh,
+                                        name: "west", stackOrder: viewport.nextStackOrder++,
+                                        cursor: "left", cursorPath: "",
+                                        interactivityJson: makeInteractivity(4, wSettingsArea.linkedSceneId, wSettingsArea.linkedSceneName),
+                                        template: "west"
+                                    })
+                                }
+
+                                // S: 80px tall strip at bottom, width depends on E/W presence
+                                if (hasS) {
+                                    var sx1, sx2
+                                    if (hasE && hasW)        { sx1 = 150;        sx2 = vw - 150 }
+                                    else if (hasE && !hasW)  { sx1 = 0;          sx2 = 810      }
+                                    else if (hasW && !hasE)  { sx1 = vw - 810;   sx2 = vw       }
+                                    else                     { sx1 = 0;          sx2 = vw       }
+                                    viewport.areasModel.append({
+                                        x1: sx1, y1: vh - 80, x2: sx2, y2: vh,
+                                        name: "south", stackOrder: viewport.nextStackOrder++,
+                                        cursor: "down", cursorPath: "",
+                                        interactivityJson: makeInteractivity(2, sSettingsArea.linkedSceneId, sSettingsArea.linkedSceneName),
+                                        template: "south"
+                                    })
+                                }
+
+                                // N: fills remaining space above S, between W and E
+                                if (hasN) {
+                                    var nx1 = hasW ? 150 : 0
+                                    var nx2 = hasE ? vw - 150 : vw
+                                    var ny2 = hasS ? vh - 80 : vh
+                                    viewport.areasModel.append({
+                                        x1: nx1, y1: 0, x2: nx2, y2: ny2,
+                                        name: "north", stackOrder: viewport.nextStackOrder++,
+                                        cursor: "up", cursorPath: "",
+                                        interactivityJson: makeInteractivity(1, nSettingsArea.linkedSceneId, nSettingsArea.linkedSceneName),
+                                        template: "north"
+                                    })
+                                }
                             }
                         }
                     }
