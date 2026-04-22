@@ -926,6 +926,54 @@ Window {
                     storyManager.setEditorState("dir_transitions", JSON.stringify(dirTransitions))
                     for (var i = 0; i < dirTransitions.length; i++)
                         sceneSettingsView.applyTemplateTransitions(i)
+                    sceneSettingsView.applyAllTemplateTransitionsToDb()
+                }
+            }
+
+            function applyAllTemplateTransitionsToDb() {
+                if (!storyManager.isOpen) return
+                var names = ["default", "north", "south", "east", "west"]
+                for (var si = 0; si < scenesRectModel.count; si++) {
+                    var sceneId = scenesRectModel.get(si).sceneId
+                    if (sceneId === mainWindow.currentSceneId) continue
+                    var raw = storyManager.loadSceneElements(sceneId)
+                    var elements
+                    try { elements = JSON.parse(raw) } catch(e) { continue }
+                    var sceneChanged = false
+                    for (var ei = 0; ei < elements.length; ei++) {
+                        var el = elements[ei]
+                        var tmpl = el.template || "none"
+                        if (tmpl === "none") continue
+                        var dirIdx = names.indexOf(tmpl)
+                        if (dirIdx < 0) continue
+                        var td = dirTransitions[dirIdx]
+                        if (!td) continue
+                        var items
+                        try { items = JSON.parse(el.interactivityJson || "[]") } catch(e) { continue }
+                        var itemChanged = false
+                        for (var j = 0; j < items.length; j++) {
+                            if (items[j].itemCommand !== "jump") continue
+                            items[j].itemTransition      = td.transition   || "cut"
+                            items[j].itemTransitionSpeed = td.transition === "look"
+                                ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4)
+                                : (td.speed     !== undefined ? td.speed     : 1.0)
+                            items[j].itemPushDirection   = td.pushDir      || "right"
+                            items[j].itemWipeFeather     = td.wipeFeather  !== undefined ? td.wipeFeather  : 0.0
+                            items[j].itemWipeDirection   = td.wipeDir      || "right"
+                            items[j].itemLookYaw         = td.lookYaw      !== undefined ? td.lookYaw      : 90.0
+                            items[j].itemLookPitch       = td.lookPitch    !== undefined ? td.lookPitch    : 0.0
+                            items[j].itemLookFovMM       = td.lookFov      !== undefined ? td.lookFov      : 24.0
+                            items[j].itemLookOvershoot   = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0
+                            items[j].itemLookShutter     = td.lookShutter  !== undefined ? td.lookShutter  : 0.10
+                            itemChanged = true
+                        }
+                        if (itemChanged) {
+                            el.interactivityJson = JSON.stringify(items)
+                            sceneChanged = true
+                        }
+                    }
+                    if (sceneChanged)
+                        storyManager.saveSceneElements(sceneId, JSON.stringify(elements))
                 }
             }
 
