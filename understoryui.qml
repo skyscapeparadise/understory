@@ -875,11 +875,40 @@ Window {
                     storyManager.setEditorState("cursor_paths", JSON.stringify(cursorCustomPaths))
             }
 
+            // ---- transitions data ----
+            property var dirTransitions: [
+                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
+                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
+                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
+                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0}
+            ]
+
+            function setTransProp(dirIdx, key, val) {
+                var arr = dirTransitions.slice()
+                arr[dirIdx] = Object.assign({}, arr[dirIdx])
+                arr[dirIdx][key] = val
+                dirTransitions = arr
+            }
+
+            function loadTransitions() {
+                if (!storyManager.isOpen) return
+                var json = storyManager.getEditorState("dir_transitions")
+                if (json !== "") {
+                    try { dirTransitions = JSON.parse(json) } catch(e) {}
+                }
+            }
+
+            onDirTransitionsChanged: {
+                if (storyManager.isOpen)
+                    storyManager.setEditorState("dir_transitions", JSON.stringify(dirTransitions))
+            }
+
             Connections {
                 target: storyManager
                 function onStoryOpened() {
                     sceneSettingsView.loadResolution()
                     sceneSettingsView.loadStoryCursor()
+                    sceneSettingsView.loadTransitions()
                 }
             }
 
@@ -1403,6 +1432,537 @@ Window {
                         }
                     }
                 }
+
+                // ---- transitions heading ----
+                Text {
+                    text: "transitions"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: "white"
+                    topPadding: 8
+                }
+
+                Repeater {
+                    model: ["n", "s", "e", "w"]
+                    delegate: ColumnLayout {
+                        id: dirDelegate
+                        Layout.fillWidth: true
+                        spacing: 6
+                        property int dirIdx: index
+                        property var td: sceneSettingsView.dirTransitions[dirIdx]
+
+                        onTdChanged: {
+                            var s = td.speed || 1.0
+                            dSpeedSlider.value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                            dSpeedField.text = s.toFixed(1)
+                            dFeatherSlider.value = td.wipeFeather || 0.0
+                            dFeatherField.text = Math.round((td.wipeFeather || 0.0) * 200).toString()
+                            var ls = td.lookSpeed || 0.4
+                            dLookSpeedSlider.value = ls <= 2.0 ? ls / 4.0 : 0.5 + (ls - 2.0) / 16.0
+                            dLookSpeedField.text = ls.toFixed(1)
+                            dFovSlider.value = td.lookFov || 24.0
+                            dFovField.text = Math.round(td.lookFov || 24).toString()
+                            dOvershootSlider.value = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0
+                            dOvershootField.text = (td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0).toFixed(2)
+                            dShutterSlider.value = td.lookShutter !== undefined ? td.lookShutter : 0.10
+                            dShutterField.text = (td.lookShutter !== undefined ? td.lookShutter : 0.10).toFixed(2)
+                            dYawField.text = (td.lookYaw !== undefined ? td.lookYaw : 90.0).toFixed(1)
+                            dPitchField.text = (td.lookPitch !== undefined ? td.lookPitch : 0.0).toFixed(1)
+                        }
+
+                        // direction label
+                        Text {
+                            text: modelData
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: "#aaa"
+                        }
+
+                        // transition type buttons
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Repeater {
+                                model: [
+                                    { icon: "cut",      key: "cut"      },
+                                    { icon: "dissolve", key: "dissolve" },
+                                    { icon: "wipe",     key: "wipe"     },
+                                    { icon: "push",     key: "push"     },
+                                    { icon: "look",     key: "look"     }
+                                ]
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: Math.round((sceneSettingsView.availableWidth - 40 - 16) / 5)
+                                    radius: 4
+                                    property bool isActive: dirDelegate.td.transition === modelData.key
+                                    color: isActive ? "white" : "transparent"
+                                    border.color: "white"; border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                    Image {
+                                        id: dtTransIcon
+                                        anchors.centerIn: parent
+                                        width: Math.round(parent.height * 0.72); height: width
+                                        source: "icons/" + modelData.icon + ".svg"
+                                        fillMode: Image.PreserveAspectFit; visible: false
+                                    }
+                                    ColorOverlay {
+                                        anchors.fill: dtTransIcon; source: dtTransIcon
+                                        color: isActive ? "#477B78" : "white"
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "transition", modelData.key)
+                                    }
+                                }
+                            }
+                        }
+
+                        // speed row (dissolve / wipe / push)
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            visible: dirDelegate.td.transition !== "cut" && dirDelegate.td.transition !== "look"
+                            Text { text: "speed"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                            Slider {
+                                id: dSpeedSlider
+                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                from: 0; to: 1; stepSize: 0
+                                Component.onCompleted: {
+                                    var s = dirDelegate.td.speed || 1.0
+                                    value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                                }
+                                onMoved: {
+                                    var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
+                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "speed", Math.round(speed * 100) / 100)
+                                }
+                                background: Rectangle {
+                                    x: dSpeedSlider.leftPadding; y: dSpeedSlider.topPadding + dSpeedSlider.availableHeight / 2 - height / 2
+                                    implicitWidth: 200; implicitHeight: 4; width: dSpeedSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                    Rectangle { width: dSpeedSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                }
+                                handle: Rectangle {
+                                    x: dSpeedSlider.leftPadding + dSpeedSlider.visualPosition * (dSpeedSlider.availableWidth - width)
+                                    y: dSpeedSlider.topPadding + dSpeedSlider.availableHeight / 2 - height / 2
+                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: dSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                }
+                            }
+                            Rectangle {
+                                Layout.preferredWidth: 52; Layout.preferredHeight: 22
+                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                TextInput {
+                                    id: dSpeedField
+                                    anchors.left: parent.left; anchors.right: dSpeedSec.left
+                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                    validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                    Component.onCompleted: text = (dirDelegate.td.speed || 1.0).toFixed(1)
+                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                    onEditingFinished: {
+                                        var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                        text = speed.toFixed(1)
+                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "speed", speed)
+                                    }
+                                }
+                                Text { id: dSpeedSec; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "sec"; font.pixelSize: 10; color: "#aaa" }
+                            }
+                            Repeater {
+                                model: ["left", "up", "down", "right"]
+                                delegate: Rectangle {
+                                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                                    visible: dirDelegate.td.transition === "push"
+                                    radius: 4
+                                    property bool isActive: dirDelegate.td.pushDir === modelData
+                                    color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                    Image { id: dtPushDirIcon; anchors.centerIn: parent; width: 14; height: 14; source: "icons/" + modelData + ".svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                    ColorOverlay { anchors.fill: dtPushDirIcon; source: dtPushDirIcon; color: isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
+                                    MouseArea { anchors.fill: parent; onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "pushDir", modelData) }
+                                }
+                            }
+                        }
+
+                        // wipe feather row
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            visible: dirDelegate.td.transition === "wipe"
+                            Text { text: "feather"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                            Slider {
+                                id: dFeatherSlider
+                                Layout.fillWidth: true; Layout.preferredHeight: 22
+                                from: 0.0; to: 0.5; stepSize: 0
+                                Component.onCompleted: value = dirDelegate.td.wipeFeather || 0.0
+                                onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(value * 1000) / 1000)
+                                background: Rectangle {
+                                    x: dFeatherSlider.leftPadding; y: dFeatherSlider.topPadding + dFeatherSlider.availableHeight / 2 - height / 2
+                                    implicitWidth: 200; implicitHeight: 4; width: dFeatherSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                    Rectangle { width: dFeatherSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                }
+                                handle: Rectangle {
+                                    x: dFeatherSlider.leftPadding + dFeatherSlider.visualPosition * (dFeatherSlider.availableWidth - width)
+                                    y: dFeatherSlider.topPadding + dFeatherSlider.availableHeight / 2 - height / 2
+                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: dFeatherSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                }
+                            }
+                            Rectangle {
+                                Layout.preferredWidth: 42; Layout.preferredHeight: 22
+                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                TextInput {
+                                    id: dFeatherField
+                                    anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter
+                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                    validator: IntValidator { bottom: 0; top: 100 }
+                                    Component.onCompleted: text = Math.round((dirDelegate.td.wipeFeather || 0.0) * 200).toString()
+                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                    onEditingFinished: {
+                                        var pct = Math.min(100, Math.max(0, parseInt(text) || 0))
+                                        text = pct.toString()
+                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(pct / 200 * 1000) / 1000)
+                                    }
+                                }
+                            }
+                            Repeater {
+                                model: ["left", "up", "down", "right"]
+                                delegate: Rectangle {
+                                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                                    radius: 4
+                                    property bool isActive: dirDelegate.td.wipeDir === modelData
+                                    color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                    Image { id: dtWipeDirIcon; anchors.centerIn: parent; width: 14; height: 14; source: "icons/" + modelData + ".svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                    ColorOverlay { anchors.fill: dtWipeDirIcon; source: dtWipeDirIcon; color: isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
+                                    MouseArea { anchors.fill: parent; onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeDir", modelData) }
+                                }
+                            }
+                        }
+
+                        // look controls
+                        Item {
+                            Layout.fillWidth: true
+                            height: dirDelegate.td.transition === "look" ? 126 : 0
+                            clip: true
+                            Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 8
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.alignment: Qt.AlignTop
+                                    spacing: 4
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                        Text { text: "speed"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                        Slider {
+                                            id: dLookSpeedSlider
+                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            from: 0; to: 1; stepSize: 0
+                                            Component.onCompleted: {
+                                                var s = dirDelegate.td.lookSpeed || 0.4
+                                                value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                                            }
+                                            onMoved: {
+                                                var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
+                                                sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", Math.round(speed * 100) / 100)
+                                            }
+                                            background: Rectangle {
+                                                x: dLookSpeedSlider.leftPadding; y: dLookSpeedSlider.topPadding + dLookSpeedSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200; implicitHeight: 4; width: dLookSpeedSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                Rectangle { width: dLookSpeedSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                            }
+                                            handle: Rectangle {
+                                                x: dLookSpeedSlider.leftPadding + dLookSpeedSlider.visualPosition * (dLookSpeedSlider.availableWidth - width)
+                                                y: dLookSpeedSlider.topPadding + dLookSpeedSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: dLookSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                            }
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 52; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: dLookSpeedField
+                                                anchors.left: parent.left; anchors.right: dLookSpeedSec.left
+                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                                Component.onCompleted: text = (dirDelegate.td.lookSpeed || 0.4).toFixed(1)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                    text = speed.toFixed(1)
+                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", speed)
+                                                }
+                                            }
+                                            Text { id: dLookSpeedSec; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "sec"; font.pixelSize: 10; color: "#aaa" }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                        Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                        Slider {
+                                            id: dFovSlider
+                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            from: 10; to: 75; stepSize: 0
+                                            Component.onCompleted: value = dirDelegate.td.lookFov || 24.0
+                                            onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", Math.round(value * 10) / 10)
+                                            background: Rectangle {
+                                                x: dFovSlider.leftPadding; y: dFovSlider.topPadding + dFovSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200; implicitHeight: 4; width: dFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                Rectangle { width: dFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                            }
+                                            handle: Rectangle {
+                                                x: dFovSlider.leftPadding + dFovSlider.visualPosition * (dFovSlider.availableWidth - width)
+                                                y: dFovSlider.topPadding + dFovSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: dFovSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                            }
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: dFovField
+                                                anchors.left: parent.left; anchors.right: dFovMmLabel.left
+                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: IntValidator { bottom: 10; top: 75 }
+                                                Component.onCompleted: text = Math.round(dirDelegate.td.lookFov || 24).toString()
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = Math.min(75, Math.max(10, parseInt(text) || 24))
+                                                    text = v.toString()
+                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", v)
+                                                }
+                                            }
+                                            Text { id: dFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                        Text { text: "overshoot"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                        Slider {
+                                            id: dOvershootSlider
+                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            from: 0.0; to: 3.0; stepSize: 0
+                                            Component.onCompleted: value = dirDelegate.td.lookOvershoot !== undefined ? dirDelegate.td.lookOvershoot : 1.0
+                                            onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", Math.round(value * 100) / 100)
+                                            background: Rectangle {
+                                                x: dOvershootSlider.leftPadding; y: dOvershootSlider.topPadding + dOvershootSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200; implicitHeight: 4; width: dOvershootSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                Rectangle { width: dOvershootSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                            }
+                                            handle: Rectangle {
+                                                x: dOvershootSlider.leftPadding + dOvershootSlider.visualPosition * (dOvershootSlider.availableWidth - width)
+                                                y: dOvershootSlider.topPadding + dOvershootSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: dOvershootSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                            }
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: dOvershootField
+                                                anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: 0.0; top: 3.0 }
+                                                Component.onCompleted: text = (dirDelegate.td.lookOvershoot !== undefined ? dirDelegate.td.lookOvershoot : 1.0).toFixed(2)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                    text = v.toFixed(2)
+                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", v)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                        Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                        Slider {
+                                            id: dShutterSlider
+                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            from: 0.0; to: 0.5; stepSize: 0
+                                            Component.onCompleted: value = dirDelegate.td.lookShutter !== undefined ? dirDelegate.td.lookShutter : 0.10
+                                            onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", Math.round(value * 1000) / 1000)
+                                            background: Rectangle {
+                                                x: dShutterSlider.leftPadding; y: dShutterSlider.topPadding + dShutterSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200; implicitHeight: 4; width: dShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                Rectangle { width: dShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                            }
+                                            handle: Rectangle {
+                                                x: dShutterSlider.leftPadding + dShutterSlider.visualPosition * (dShutterSlider.availableWidth - width)
+                                                y: dShutterSlider.topPadding + dShutterSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: dShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                            }
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: dShutterField
+                                                anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: 0.0; top: 0.5 }
+                                                Component.onCompleted: text = (dirDelegate.td.lookShutter !== undefined ? dirDelegate.td.lookShutter : 0.10).toFixed(2)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0))
+                                                    text = v.toFixed(2)
+                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", v)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 4
+                                        Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
+                                        Rectangle {
+                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: dYawField
+                                                anchors.left: parent.left; anchors.right: dYawDeg.left
+                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                Component.onCompleted: text = (dirDelegate.td.lookYaw !== undefined ? dirDelegate.td.lookYaw : 90.0).toFixed(1)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = parseFloat(text) || 0.0
+                                                    text = v.toFixed(1)
+                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", v)
+                                                }
+                                            }
+                                            Text { id: dYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                        }
+                                        Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
+                                        Rectangle {
+                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: dPitchField
+                                                anchors.left: parent.left; anchors.right: dPitchDeg.left
+                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                Component.onCompleted: text = (dirDelegate.td.lookPitch !== undefined ? dirDelegate.td.lookPitch : 0.0).toFixed(1)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = parseFloat(text) || 0.0
+                                                    text = v.toFixed(1)
+                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", v)
+                                                }
+                                            }
+                                            Text { id: dPitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                        }
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    id: lookPickerCol
+                                    Layout.preferredWidth: 76
+                                    Layout.alignment: Qt.AlignTop
+                                    spacing: 4
+                                    property bool lookPickerBack: false
+
+                                    RowLayout {
+                                        Layout.preferredWidth: 76; height: 16; spacing: 4
+                                        Repeater {
+                                            model: [{ label: "front", back: false }, { label: "back", back: true }]
+                                            delegate: Rectangle {
+                                                Layout.fillWidth: true; Layout.preferredHeight: 16; radius: 4
+                                                property bool isActive: lookPickerCol.lookPickerBack === modelData.back
+                                                color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 9; color: parent.isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
+                                                MouseArea { anchors.fill: parent; onClicked: lookPickerCol.lookPickerBack = modelData.back }
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        Layout.preferredWidth: 68; Layout.preferredHeight: 68
+                                        Layout.alignment: Qt.AlignHCenter
+                                        ShaderEffect {
+                                            anchors.fill: parent
+                                            fragmentShader: "lookpicker.frag.qsb"
+                                            property real yaw:   dirDelegate.td.lookYaw   !== undefined ? dirDelegate.td.lookYaw   : 90.0
+                                            property real pitch: dirDelegate.td.lookPitch !== undefined ? dirDelegate.td.lookPitch : 0.0
+                                            property real fovMM: dirDelegate.td.lookFov   !== undefined ? dirDelegate.td.lookFov   : 24.0
+                                            property real back:  lookPickerCol.lookPickerBack ? 1.0 : 0.0
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onPressed: dLookPickerMouse(mouseX, mouseY)
+                                            onPositionChanged: if (pressed) dLookPickerMouse(mouseX, mouseY)
+                                            function dLookPickerMouse(mx, my) {
+                                                var cx = 34.0, cy = 34.0
+                                                var nx = (mx - cx) / cx, ny = (my - cy) / cy
+                                                var r = Math.sqrt(nx * nx + ny * ny)
+                                                if (r > 1.0) { nx /= r; ny /= r; r = 1.0 }
+                                                var z = Math.sqrt(Math.max(0.0, 1.0 - r * r))
+                                                var lx = nx, ly = -ny
+                                                var lz = lookPickerCol.lookPickerBack ? -z : z
+                                                var newYaw   = Math.round(Math.atan2(lx, lz) * 1800.0 / Math.PI) / 10
+                                                var absCosy  = Math.sqrt(ly * ly + lz * lz)
+                                                var sinPitch = absCosy > 0.0001 ? ly / (lz >= 0 ? absCosy : -absCosy) : 0.0
+                                                var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, sinPitch))) * 1800.0 / Math.PI) / 10
+                                                sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw",   newYaw)
+                                                sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", newPitch)
+                                                dYawField.text   = newYaw.toFixed(1)
+                                                dPitchField.text = newPitch.toFixed(1)
+                                            }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.preferredWidth: 76; height: 16; spacing: 4
+                                        Repeater {
+                                            model: [
+                                                { icon: "left",  yaw: -90.0, pitch:   0.0 },
+                                                { icon: "up",    yaw:   0.0, pitch:  90.0 },
+                                                { icon: "down",  yaw:   0.0, pitch: -90.0 },
+                                                { icon: "right", yaw:  90.0, pitch:   0.0 }
+                                            ]
+                                            delegate: Rectangle {
+                                                Layout.preferredWidth: 16; Layout.preferredHeight: 16; radius: 4
+                                                property bool isActive: Math.abs((dirDelegate.td.lookYaw !== undefined ? dirDelegate.td.lookYaw : 90.0) - modelData.yaw) < 0.6 &&
+                                                                        Math.abs((dirDelegate.td.lookPitch !== undefined ? dirDelegate.td.lookPitch : 0.0) - modelData.pitch) < 0.6
+                                                color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                Image { id: dtLookDirIcon; anchors.centerIn: parent; width: 12; height: 12; source: "icons/" + modelData.icon + ".svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                                ColorOverlay { anchors.fill: dtLookDirIcon; source: dtLookDirIcon; color: isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: {
+                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw",   modelData.yaw)
+                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", modelData.pitch)
+                                                        dYawField.text   = modelData.yaw.toFixed(1)
+                                                        dPitchField.text = modelData.pitch.toFixed(1)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 1
+                            color: "#333"
+                        }
+                    }
+                }
+
+                Item { Layout.preferredHeight: 20 }
             }
         }
 
