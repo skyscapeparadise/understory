@@ -1027,6 +1027,18 @@ Item {
                                     anchors.fill: dropCharImg
                                     source: dropCharImg
                                     color: "#666"
+                                    opacity: model.charImagePath ? 0.2 : 1.0
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: model.charImagePath ? model.charImagePath.replace(/.*\//, "") : ""
+                                    color: "white"
+                                    font.pixelSize: 9
+                                    elide: Text.ElideRight
+                                    width: parent.width - 8
+                                    horizontalAlignment: Text.AlignHCenter
+                                    visible: !!model.charImagePath
                                 }
 
                                 MouseArea {
@@ -1415,6 +1427,18 @@ Item {
                                     anchors.fill: dropSoundImg
                                     source: dropSoundImg
                                     color: "#666"
+                                    opacity: model.filePath ? 0.2 : 1.0
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: model.filePath ? model.filePath.replace(/.*\//, "") : ""
+                                    color: "white"
+                                    font.pixelSize: 9
+                                    elide: Text.ElideRight
+                                    width: parent.width - 8
+                                    horizontalAlignment: Text.AlignHCenter
+                                    visible: !!model.filePath
                                 }
 
                                 MouseArea {
