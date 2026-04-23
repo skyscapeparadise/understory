@@ -9078,6 +9078,97 @@ Window {
                         function onModelReset() { sceneNameSettings.nodesRevision++ }
                     }
 
+                    property int networksRevision: 0
+                    Connections {
+                        target: nodeWorkspace.networksModel
+                        function onCountChanged() { sceneNameSettings.networksRevision++ }
+                        function onDataChanged() { sceneNameSettings.networksRevision++ }
+                        function onRowsInserted() { sceneNameSettings.networksRevision++ }
+                        function onRowsRemoved() { sceneNameSettings.networksRevision++ }
+                        function onModelReset() { sceneNameSettings.networksRevision++ }
+                    }
+
+                    property var networkModel: { networksRevision;
+                        var list = [];
+                        if (nodeWorkspace.networksModel) {
+                            for (var i = 0; i < nodeWorkspace.networksModel.count; i++) {
+                                var net = nodeWorkspace.networksModel.get(i);
+                                list.push({ "id": net.netId, "name": net.netName, "color": net.netColor });
+                            }
+                        }
+                        return list;
+                    }
+                    
+                    property var networkNames: {
+                        var names = [];
+                        for (var i = 0; i < networkModel.length; i++) {
+                            names.push(networkModel[i].name);
+                        }
+                        return names;
+                    }
+                    
+                    property int selectedNetworkId: -1
+                    
+                    property var computedNodesForNetwork: { networksRevision; nodesRevision; selectedNetworkId;
+                        if (selectedNetworkId === -1) return ["(none)"];
+                        var names = ["(none)"];
+                        var nodeNames = storyManager.getNetworkNodeNames(selectedNetworkId);
+                        for (var i = 0; i < nodeNames.length; i++) {
+                            names.push(nodeNames[i]);
+                        }
+                        return names;
+                    }
+
+                    function loadLocation() {
+                        if (mainWindow.currentSceneId === -1) return;
+                        
+                        var netIdStr = storyManager.getEditorState("location_net_" + mainWindow.currentSceneId);
+                        var nodeName = storyManager.getEditorState("location_node_" + mainWindow.currentSceneId);
+                        
+                        // Backward compatibility
+                        if (netIdStr === "" && nodeName === "") {
+                            nodeName = storyManager.getEditorState("location_" + mainWindow.currentSceneId);
+                            if (nodeName !== "") {
+                                // Try to find which network this node belongs to
+                                for (var i = 0; i < networkModel.length; i++) {
+                                    var netId = networkModel[i].id;
+                                    var nodes = storyManager.getNetworkNodeNames(netId);
+                                    if (nodes.indexOf(nodeName) !== -1) {
+                                        netIdStr = netId.toString();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (netIdStr !== "") {
+                            var netId = parseInt(netIdStr);
+                            var foundNet = false;
+                            for (var i = 0; i < networkModel.length; i++) {
+                                if (networkModel[i].id === netId) {
+                                    networkCombo.currentIndex = i;
+                                    sceneNameSettings.selectedNetworkId = netId;
+                                    foundNet = true;
+                                    break;
+                                }
+                            }
+                            if (!foundNet) {
+                                networkCombo.currentIndex = 0;
+                                if (networkModel.length > 0)
+                                    sceneNameSettings.selectedNetworkId = networkModel[0].id;
+                            }
+                        } else {
+                            networkCombo.currentIndex = 0;
+                            if (networkModel.length > 0)
+                                sceneNameSettings.selectedNetworkId = networkModel[0].id;
+                        }
+                        
+                        // After setting network, the nodeCombo model will update.
+                        var nodeIdx = nodeCombo.find(nodeName);
+                        if (nodeIdx !== -1) nodeCombo.currentIndex = nodeIdx;
+                        else nodeCombo.currentIndex = 0;
+                    }
+
                     Text {
                         text: sceneNameSettings.toolDisplayNames[buttonGrid.selectedTool] || ""
                         font.pixelSize: 24
@@ -9170,15 +9261,6 @@ Window {
                         font.pixelSize: 14
                         color: "white"
                     }
-                    property var computedNodes: { nodesRevision; 
-                        var names = ["(none)"];
-                        if (nodeWorkspace.nodesModel) {
-                            for (var i = 0; i < nodeWorkspace.nodesModel.count; i++) {
-                                names.push(nodeWorkspace.nodesModel.get(i).name);
-                            }
-                        }
-                        return names;
-                    }
 
                     ColumnLayout {
                         anchors.top: sceneNameLine.bottom
@@ -9195,100 +9277,237 @@ Window {
                             color: "white"
                         }
 
-                        ComboBox {
-                            id: locationCombo
+                        RowLayout {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 28
-                            model: sceneNameSettings.computedNodes
-                            onModelChanged: {
-                                if (mainWindow.currentSceneId !== -1) {
-                                    var loc = storyManager.getEditorState("location_" + mainWindow.currentSceneId);
-                                    var idx = locationCombo.find(loc);
-                                    if (idx !== -1) locationCombo.currentIndex = idx;
-                                    else locationCombo.currentIndex = 0;
+                            spacing: 8
+
+                            ComboBox {
+                                id: networkCombo
+                                Layout.preferredHeight: 28
+                                model: sceneNameSettings.networkModel
+                                textRole: "name"
+
+                                property real calculatedWidth: {
+                                    if (currentIndex < 0 || currentIndex >= sceneNameSettings.networkModel.length) return 44;
+                                    var net = sceneNameSettings.networkModel[currentIndex];
+                                    if (!net || !net.name) return 44;
+                                    return 60 + (net.name.length * 7);
                                 }
-                            }
-                            
-                            contentItem: Text {
-                                leftPadding: 8
-                                rightPadding: 24
-                                text: locationCombo.displayText
-                                font.pixelSize: 13
-                                color: "white"
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
-                            indicator: Text {
-                                x: locationCombo.width - width - 8
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: "▾"
-                                font.pixelSize: 10
-                                color: "white"
-                            }
-                            background: Rectangle {
-                                radius: 4
-                                color: "transparent"
-                                border.color: "white"
-                                border.width: 1
-                            }
-                            popup: Popup {
-                                y: locationCombo.height + 2
-                                width: locationCombo.width
-                                padding: 1
+                                Layout.preferredWidth: Math.min(250, Math.max(44, calculatedWidth))
+
+                                onCurrentIndexChanged: {
+                                    if (currentIndex >= 0 && currentIndex < sceneNameSettings.networkModel.length) {
+                                        sceneNameSettings.selectedNetworkId = sceneNameSettings.networkModel[currentIndex].id;
+                                        if (mainWindow.currentSceneId !== -1) {
+                                            storyManager.setEditorState("location_net_" + mainWindow.currentSceneId, sceneNameSettings.selectedNetworkId.toString());
+                                        }
+                                    }
+                                }
+
+                                contentItem: Item {
+                                    anchors.fill: parent
+                                    Item {
+                                        id: netIconContainer
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 8
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 18; height: 18
+                                        Image {
+                                            id: netIconImg
+                                            anchors.fill: parent
+                                            source: "icons/nodenetwork.svg"
+                                            fillMode: Image.PreserveAspectFit
+                                            visible: false
+                                        }
+                                        ColorOverlay {
+                                            anchors.fill: parent
+                                            source: netIconImg
+                                            color: {
+                                                if (networkCombo.currentIndex < 0 || networkCombo.currentIndex >= sceneNameSettings.networkModel.length) return "white";
+                                                var net = sceneNameSettings.networkModel[networkCombo.currentIndex];
+                                                return (net && net.color && net.color !== "#2e2e33") ? net.color : "white";
+                                            }
+                                        }
+                                    }
+                                    Text {
+                                        anchors.left: netIconContainer.right
+                                        anchors.leftMargin: 8
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 24
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: {
+                                            if (networkCombo.currentIndex < 0 || networkCombo.currentIndex >= sceneNameSettings.networkModel.length) return "";
+                                            var net = sceneNameSettings.networkModel[networkCombo.currentIndex];
+                                            return (net && net.name) ? net.name : "";
+                                        }
+                                        font.pixelSize: 13
+                                        color: "white"
+                                        verticalAlignment: Text.AlignVCenter
+                                        elide: Text.ElideRight
+                                        visible: text !== ""
+                                    }
+                                }
+
+                                indicator: Text {
+                                    x: networkCombo.width - width - 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"
+                                    font.pixelSize: 10
+                                    color: "white"
+                                }
                                 background: Rectangle {
-                                    color: "#162020"
+                                    radius: 4
+                                    color: networkCombo.hovered ? "#3a4a4a" : "transparent"
                                     border.color: "white"
                                     border.width: 1
-                                    radius: 4
+                                    Behavior on color { ColorAnimation { duration: 100 } }
                                 }
-                                contentItem: ListView {
-                                    clip: true
-                                    implicitHeight: contentHeight
-                                    model: locationCombo.popup.visible ? locationCombo.delegateModel : null
-                                    currentIndex: locationCombo.highlightedIndex
-                                    ScrollIndicator.vertical: ScrollIndicator { }
+                                popup: Popup {
+                                    y: networkCombo.height + 2
+                                    width: Math.max(networkCombo.width, 180)
+                                    padding: 1
+                                    background: Rectangle {
+                                        color: "#162020"
+                                        border.color: "white"
+                                        border.width: 1
+                                        radius: 4
+                                    }
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: Math.min(contentHeight, 300)
+                                        model: networkCombo.popup.visible ? networkCombo.delegateModel : null
+                                        currentIndex: networkCombo.highlightedIndex
+                                        ScrollIndicator.vertical: ScrollIndicator { }
+                                    }
                                 }
-                            }
-                            delegate: ItemDelegate {
-                                width: locationCombo.width
-                                contentItem: Text {
-                                    text: modelData
-                                    color: "white"
-                                    font.pixelSize: 13
-                                    elide: Text.ElideRight
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                background: Rectangle {
-                                    color: highlighted ? "#2a3a3a" : "transparent"
-                                }
-                            }
+                                delegate: ItemDelegate {
+                                    id: netDelegate
+                                    width: parent.width
+                                    height: 30
 
-                            onActivated: {
-                                if (mainWindow.currentSceneId !== -1) {
-                                    storyManager.setEditorState("location_" + mainWindow.currentSceneId, currentText);
-                                }
-                            }
-
-                            Connections {
-                                target: mainWindow
-                                function onCurrentSceneIdChanged() {
-                                    if (mainWindow.currentSceneId !== -1) {
-                                        var loc = storyManager.getEditorState("location_" + mainWindow.currentSceneId);
-                                        var idx = locationCombo.find(loc);
-                                        if (idx !== -1) locationCombo.currentIndex = idx;
-                                        else locationCombo.currentIndex = 0;
+                                    contentItem: Item {
+                                        anchors.fill: parent
+                                        Item {
+                                            id: delIconContainer
+                                            anchors.left: parent.left
+                                            anchors.leftMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 18; height: 18
+                                            Image {
+                                                id: delegateIconImg
+                                                anchors.fill: parent
+                                                source: "icons/nodenetwork.svg"
+                                                fillMode: Image.PreserveAspectFit
+                                                visible: false
+                                            }
+                                            ColorOverlay {
+                                                anchors.fill: parent
+                                                source: delegateIconImg
+                                                color: {
+                                                    var c = modelData ? modelData.color : "";
+                                                    return (c && c !== "#2e2e33") ? c : "white";
+                                                }
+                                            }
+                                        }
+                                        Text {
+                                            anchors.left: delIconContainer.right
+                                            anchors.leftMargin: 8
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: (modelData && modelData.name) ? modelData.name : ""
+                                            color: "white"
+                                            font.pixelSize: 13
+                                            elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                    background: Rectangle {
+                                        anchors.fill: parent
+                                        color: (netDelegate.highlighted || netDelegate.hovered) ? "#2a3a3a" : "transparent"
                                     }
                                 }
                             }
-                            
-                            // Also load when component is ready or model changes
-                            Component.onCompleted: {
-                                if (mainWindow.currentSceneId !== -1) {
-                                    var loc = storyManager.getEditorState("location_" + mainWindow.currentSceneId);
-                                    var idx = locationCombo.find(loc);
-                                    if (idx !== -1) locationCombo.currentIndex = idx;
+
+                            ComboBox {
+                                id: nodeCombo
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 28
+                                model: sceneNameSettings.computedNodesForNetwork
+                                
+                                onActivated: {
+                                    if (mainWindow.currentSceneId !== -1) {
+                                        storyManager.setEditorState("location_node_" + mainWindow.currentSceneId, currentText);
+                                    }
+                                }
+                                
+                                contentItem: Text {
+                                    leftPadding: 8
+                                    rightPadding: 24
+                                    text: nodeCombo.displayText
+                                    font.pixelSize: 13
+                                    color: "white"
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                                indicator: Text {
+                                    x: nodeCombo.width - width - 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"
+                                    font.pixelSize: 10
+                                    color: "white"
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                }
+                                popup: Popup {
+                                    y: nodeCombo.height + 2
+                                    width: nodeCombo.width
+                                    padding: 1
+                                    background: Rectangle {
+                                        color: "#162020"
+                                        border.color: "white"
+                                        border.width: 1
+                                        radius: 4
+                                    }
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: Math.min(contentHeight, 300)
+                                        model: nodeCombo.popup.visible ? nodeCombo.delegateModel : null
+                                        currentIndex: nodeCombo.highlightedIndex
+                                        ScrollIndicator.vertical: ScrollIndicator { }
+                                    }
+                                }
+                                delegate: ItemDelegate {
+                                    width: nodeCombo.width
+                                    contentItem: Text {
+                                        text: modelData
+                                        color: "white"
+                                        font.pixelSize: 13
+                                        elide: Text.ElideRight
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    background: Rectangle {
+                                        color: highlighted ? "#2a3a3a" : "transparent"
+                                    }
                                 }
                             }
+                        }
+
+                        Connections {
+                            target: mainWindow
+                            function onCurrentSceneIdChanged() {
+                                sceneNameSettings.loadLocation();
+                            }
+                        }
+                        
+                        // Also load when component is ready or model changes
+                        Component.onCompleted: {
+                            sceneNameSettings.loadLocation();
                         }
                     }
 

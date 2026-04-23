@@ -8,6 +8,7 @@ Item {
     id: root
 
     property alias nodesModel: nodesModel
+    property alias networksModel: networksModel
 
     //
     // MODELS

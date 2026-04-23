@@ -600,6 +600,17 @@ class StoryManager(QObject):
             print(f"StoryManager.loadNetworkData: {e}")
             return "{}"
 
+    @Slot(int, result="QVariantList")
+    def getNetworkNodeNames(self, network_id):
+        """Returns a list of node names for a specific network."""
+        raw = self.loadNetworkData(network_id)
+        try:
+            data = json.loads(raw)
+            nodes = data.get("nodes", [])
+            return [n.get("name", "") for n in nodes]
+        except Exception:
+            return []
+
     @Slot(int, str)
     def saveNetworkData(self, network_id, json_str):
         """Writes and commits the JSON state blob for a network."""
