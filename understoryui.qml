@@ -10,6 +10,8 @@ import Qt.labs.platform as Platform
 
 Window {
     id: mainWindow
+    property var activeLoopingSounds: []
+    property string currentLocationNodeName: ""
     visible: true
     width: 960
     height: 540
@@ -9919,82 +9921,74 @@ Window {
             anchors.fill: parent
         }
     }
-
     // Global Looping Sound Manager
-    MediaPlayer {
-        id: globalLoopingPlayer
-        loops: MediaPlayer.Infinite
-        audioOutput: AudioOutput { volume: 1.0 }
-    }
-
     function updateGlobalLoopingSound() {
         if (!storyManager.isOpen || mainWindow.currentSceneId === -1) {
-            globalLoopingPlayer.stop();
-            globalLoopingPlayer.source = "";
+            mainWindow.currentLocationNodeName = "";
             return;
         }
-
         var sceneId = mainWindow.currentSceneId;
-        var netIdStr = storyManager.getEditorState("location_net_" + sceneId);
         var nodeName = storyManager.getEditorState("location_node_" + sceneId);
+        if (nodeName === "") nodeName = storyManager.getEditorState("location_" + sceneId);
+        mainWindow.currentLocationNodeName = nodeName;
+    }
 
-        // Backward compatibility for location key
-        if (netIdStr === "" && nodeName === "") {
-            nodeName = storyManager.getEditorState("location_" + sceneId);
-        }
+    Item {
+        id: loopingSoundPool
+        Repeater {
+            model: nodeWorkspace.soundsModel
+            delegate: MediaPlayer {
+                id: loopPlayer
+                source: (model.enabled && (model.soundType || "loop") === "loop") ? model.filePath : ""
+                loops: MediaPlayer.Infinite
+                audioOutput: AudioOutput { volume: 1.0 }
 
-        if (nodeName === "") {
-            globalLoopingPlayer.stop();
-            globalLoopingPlayer.source = "";
-            return;
-        }
+                readonly property int orbitingNodeId: {
+                    var sIdx = index
+                    var orbits = nodeWorkspace.orbitsModel
+                    for (var i = 0; i < orbits.count; i++) {
+                        var o = orbits.get(i)
+                        if (o.circleType === "sound" && o.itemIdx === sIdx) return o.nodeId
+                    }
+                    return -1
+                }
 
-        // 1. Find the node ID from the name
-        var targetNodeId = -1;
-        var nodes = nodeWorkspace.nodesModel;
-        for (var i = 0; i < nodes.count; i++) {
-            var n = nodes.get(i);
-            if (n.name === nodeName) {
-                targetNodeId = n.id;
-                break;
-            }
-        }
+                readonly property bool shouldBePlaying: {
+                    if (orbitingNodeId === -1 || !model.enabled || (model.soundType || "loop") !== "loop" || !storyManager.isOpen || mainWindow.currentSceneId === -1) return false
+                    if (mainWindow.currentLocationNodeName === "") return false
 
-        if (targetNodeId === -1) {
-            globalLoopingPlayer.stop();
-            globalLoopingPlayer.source = "";
-            return;
-        }
+                    var nodes = nodeWorkspace.nodesModel
+                    for (var i = 0; i < nodes.count; i++) {
+                        var n = nodes.get(i)
+                        if (n.id === orbitingNodeId && n.name === mainWindow.currentLocationNodeName) return true
+                    }
+                    return false
+                }
 
-        // 2. Find any sound that orbits this node and is set to "loop"
-        var soundPath = "";
-        var orbits = nodeWorkspace.orbitsModel;
-        var sounds = nodeWorkspace.soundsModel;
+                onShouldBePlayingChanged: {
+                    if (shouldBePlaying) {
+                        if (playbackState !== MediaPlayer.PlayingState) {
+                            if (duration > 0) {
+                                var elapsed = Date.now() % duration;
+                                position = elapsed;
+                            }
+                            play();
+                        }
+                    } else {
+                        stop();
+                    }
+                }
 
-        for (var j = 0; j < orbits.count; j++) {
-            var orb = orbits.get(j);
-            if (orb.nodeId === targetNodeId && orb.circleType === "sound") {
-                var sIdx = orb.itemIdx;
-                if (sIdx >= 0 && sIdx < sounds.count) {
-                    var s = sounds.get(sIdx);
-                    if ((s.soundType || "loop") === "loop" && s.enabled && s.filePath) {
-                        soundPath = s.filePath;
-                        break;
+                onMediaStatusChanged: {
+                    if (mediaStatus === MediaPlayer.LoadedMedia && shouldBePlaying) {
+                        if (duration > 0) {
+                            var elapsed = Date.now() % duration;
+                            position = elapsed;
+                        }
+                        play();
                     }
                 }
             }
-        }
-
-        if (soundPath !== "") {
-            var newSource = soundPath;
-            if (globalLoopingPlayer.source.toString() !== newSource) {
-                globalLoopingPlayer.stop();
-                globalLoopingPlayer.source = newSource;
-                globalLoopingPlayer.play();
-            }
-        } else {
-            globalLoopingPlayer.stop();
-            globalLoopingPlayer.source = "";
         }
     }
 
@@ -10010,12 +10004,11 @@ Window {
 
     Connections {
         target: nodeWorkspace.soundsModel
-        // Trigger if a sound property (like enabled or soundType) changes
         function onDataChanged() { mainWindow.updateGlobalLoopingSound(); }
     }
 
     Connections {
         target: storyManager
-        function onStoryOpened() { globalLoopingPlayer.stop(); globalLoopingPlayer.source = ""; }
+        function onStoryOpened() { mainWindow.updateGlobalLoopingSound(); }
     }
 }
