@@ -611,6 +611,17 @@ class StoryManager(QObject):
         except Exception:
             return []
 
+    @Slot(int, result="QVariantList")
+    def getNetworkCharacterNames(self, network_id):
+        """Returns a list of character names for a specific network."""
+        raw = self.loadNetworkData(network_id)
+        try:
+            data = json.loads(raw)
+            chars = data.get("characters", [])
+            return [c.get("charName", "") for c in chars if c.get("charName", "") != ""]
+        except Exception:
+            return []
+
     @Slot(int, str)
     def saveNetworkData(self, network_id, json_str):
         """Writes and commits the JSON state blob for a network."""

@@ -7276,6 +7276,7 @@ Window {
                                 interactivityModel: selectInteractivityModel
                                 variablesModel: variablesModel
                                 scenePickerButtons: sceneEditorButtons
+                                networksModel: nodeWorkspace.networksModel
                             }
 
                             Item { width: 1; height: 16 }

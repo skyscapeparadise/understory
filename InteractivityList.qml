@@ -10,6 +10,28 @@ Item {
     property var interactivityModel
     property var variablesModel
     property var scenePickerButtons
+    property var networksModel
+
+    property int networksRevision: 0
+    Connections {
+        target: root.networksModel
+        function onCountChanged()    { root.networksRevision++ }
+        function onDataChanged()     { root.networksRevision++ }
+        function onRowsInserted()    { root.networksRevision++ }
+        function onRowsRemoved()     { root.networksRevision++ }
+        function onModelReset()      { root.networksRevision++ }
+    }
+    property var networksArray: {
+        networksRevision
+        var list = []
+        if (root.networksModel) {
+            for (var i = 0; i < root.networksModel.count; i++) {
+                var net = root.networksModel.get(i)
+                list.push({ id: net.netId, name: net.netName, color: net.netColor })
+            }
+        }
+        return list
+    }
 
     implicitHeight: listCol.height
 
@@ -117,7 +139,7 @@ Item {
                                 defaultCommand = "sound"; insertIdx = i; break
                             }
                         }
-                        var newItem = { itemTrigger: tab, itemAction: "cue", itemCommand: defaultCommand, itemTransition: "cut", itemTransitionSpeed: 0.4, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.0, itemLookShutter: 0.10, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemVideoPath: "", itemVideoTarget: "fill", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "" }
+                        var newItem = { itemTrigger: tab, itemAction: "cue", itemCommand: defaultCommand, itemTransition: "cut", itemTransitionSpeed: 0.4, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.0, itemLookShutter: 0.10, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemVideoPath: "", itemVideoTarget: "fill", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "", itemWhereNetworkId: -1, itemWhereCharName: "", itemWhereOp: "is at", itemWhereNodeName: "" }
                         if (insertIdx >= 0) root.interactivityModel.insert(insertIdx, newItem)
                         else root.interactivityModel.append(newItem)
                     }
@@ -222,14 +244,19 @@ Item {
                                     for (var i = 0; i < root.variablesModel.count; i++) {
                                         if (root.variablesModel.get(i).varName !== "") { hasVars = true; break }
                                     }
-                                    if (!hasVars) return ["cue"]
-                                    var opts = ["cue", "if"]
+                                    var hasNetworks = root.networksModel && root.networksModel.count > 0
+                                    if (!hasVars && !hasNetworks) return ["cue"]
+                                    var opts = ["cue"]
+                                    if (hasVars) opts.push("if")
+                                    if (hasNetworks) opts.push("where")
                                     var thisIdx = interactivityDelegate.listIdx
                                     var thisTrigger = itemTrigger
-                                    for (var i = 0; i < root.interactivityModel.count; i++) {
-                                        var e = root.interactivityModel.get(i)
-                                        if (i !== thisIdx && e.itemTrigger === thisTrigger && e.itemAction === "if") {
-                                            opts.push("else"); break
+                                    if (hasVars) {
+                                        for (var i = 0; i < root.interactivityModel.count; i++) {
+                                            var e = root.interactivityModel.get(i)
+                                            if (i !== thisIdx && e.itemTrigger === thisTrigger && e.itemAction === "if") {
+                                                opts.push("else"); break
+                                            }
                                         }
                                     }
                                     return opts
@@ -457,6 +484,253 @@ Item {
                             }
 
                             ComboBox {
+                                id: whereNetworkCombo
+                                visible: itemAction === "where"
+                                Layout.preferredWidth: 44
+                                Layout.preferredHeight: 26
+                                model: root.networksArray
+                                currentIndex: {
+                                    var arr = root.networksArray
+                                    var id = itemWhereNetworkId
+                                    for (var i = 0; i < arr.length; i++) {
+                                        if (arr[i].id === id) return i
+                                    }
+                                    return 0
+                                }
+                                onActivated: function(idx) {
+                                    var arr = root.networksArray
+                                    if (idx < 0 || idx >= arr.length) return
+                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhereNetworkId", arr[idx].id)
+                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhereCharName", "")
+                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhereNodeName", "")
+                                }
+                                contentItem: Item {
+                                    anchors.fill: parent
+                                    Item {
+                                        id: whereNetIconBox
+                                        anchors.left: parent.left; anchors.leftMargin: 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 14; height: 14
+                                        Image {
+                                            id: whereNetIconImg
+                                            anchors.fill: parent
+                                            source: "icons/nodenetwork.svg"
+                                            fillMode: Image.PreserveAspectFit
+                                            visible: false
+                                        }
+                                        ColorOverlay {
+                                            anchors.fill: parent; source: whereNetIconImg
+                                            color: {
+                                                var arr = root.networksArray
+                                                var idx = whereNetworkCombo.currentIndex
+                                                if (idx < 0 || idx >= arr.length) return "white"
+                                                var c = arr[idx].color
+                                                return (c && c !== "#2e2e33") ? c : "white"
+                                            }
+                                        }
+                                    }
+                                    Text {
+                                        anchors.left: whereNetIconBox.right; anchors.leftMargin: 5
+                                        anchors.right: parent.right; anchors.rightMargin: 16
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: {
+                                            var arr = root.networksArray
+                                            var idx = whereNetworkCombo.currentIndex
+                                            if (idx < 0 || idx >= arr.length) return ""
+                                            return arr[idx].name || ""
+                                        }
+                                        font.pixelSize: 10; color: "white"
+                                        verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                        visible: text !== ""
+                                    }
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                delegate: ItemDelegate {
+                                    id: whereNetDelegate
+                                    width: whereNetworkCombo.popup.width; height: 26; padding: 0
+                                    contentItem: Item {
+                                        anchors.fill: parent
+                                        Item {
+                                            id: whereNetDelIconBox
+                                            anchors.left: parent.left; anchors.leftMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 14; height: 14
+                                            Image {
+                                                id: whereNetDelIconImg
+                                                anchors.fill: parent
+                                                source: "icons/nodenetwork.svg"
+                                                fillMode: Image.PreserveAspectFit
+                                                visible: false
+                                            }
+                                            ColorOverlay {
+                                                anchors.fill: parent; source: whereNetDelIconImg
+                                                color: {
+                                                    var c = modelData ? modelData.color : ""
+                                                    return (c && c !== "#2e2e33") ? c : "white"
+                                                }
+                                            }
+                                        }
+                                        Text {
+                                            anchors.left: whereNetDelIconBox.right; anchors.leftMargin: 6
+                                            anchors.right: parent.right; anchors.rightMargin: 6
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: (modelData && modelData.name) ? modelData.name : ""
+                                            font.pixelSize: 10; color: "white"
+                                            verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                        }
+                                    }
+                                    background: Rectangle { color: whereNetDelegate.highlighted ? "#477B78" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2
+                                    width: Math.max(whereNetworkCombo.width, 120)
+                                    height: Math.min(root.networksArray.length * 26 + 2, 132); padding: 1
+                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: whereNetworkCombo.delegateModel; currentIndex: whereNetworkCombo.currentIndex }
+                                }
+                            }
+
+                            ComboBox {
+                                id: whereCharCombo
+                                visible: itemAction === "where"
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 0
+                                Layout.minimumWidth: 0
+                                Layout.preferredHeight: 26
+                                property var charNames: {
+                                    root.networksRevision
+                                    var arr = root.networksArray
+                                    var netId = itemWhereNetworkId
+                                    if (netId === -1 && arr.length > 0) netId = arr[0].id
+                                    if (netId === -1) return []
+                                    return storyManager.getNetworkCharacterNames(netId)
+                                }
+                                model: charNames
+                                currentIndex: {
+                                    var n = itemWhereCharName
+                                    var names = charNames
+                                    for (var i = 0; i < names.length; i++) {
+                                        if (names[i] === n) return i
+                                    }
+                                    return 0
+                                }
+                                onActivated: function(idx) {
+                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhereCharName", whereCharCombo.model[idx] || "")
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 14
+                                    text: parent.displayText
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 60; height: 20; padding: 0
+                                    contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: Math.max(parent.width, 80)
+                                    height: Math.min(whereCharCombo.model.length * 20 + 2, 102); padding: 1
+                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: whereCharCombo.delegateModel; currentIndex: whereCharCombo.currentIndex }
+                                }
+                            }
+
+                            ComboBox {
+                                id: whereOpCombo
+                                visible: itemAction === "where"
+                                Layout.preferredWidth: 50
+                                Layout.preferredHeight: 26
+                                model: ["is at", "not at"]
+                                currentIndex: itemWhereOp === "not at" ? 1 : 0
+                                onActivated: function(idx) {
+                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhereOp", model[idx])
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 14
+                                    text: parent.displayText
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 50; height: 20; padding: 0
+                                    contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: Math.max(parent.width, 50)
+                                    height: 42; padding: 1
+                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: whereOpCombo.delegateModel; currentIndex: whereOpCombo.currentIndex }
+                                }
+                            }
+
+                            ComboBox {
+                                id: whereNodeCombo
+                                visible: itemAction === "where"
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 0
+                                Layout.minimumWidth: 0
+                                Layout.preferredHeight: 26
+                                property var nodeNames: {
+                                    root.networksRevision
+                                    var arr = root.networksArray
+                                    var netId = itemWhereNetworkId
+                                    if (netId === -1 && arr.length > 0) netId = arr[0].id
+                                    if (netId === -1) return []
+                                    return storyManager.getNetworkNodeNames(netId)
+                                }
+                                model: nodeNames
+                                currentIndex: {
+                                    var n = itemWhereNodeName
+                                    var names = nodeNames
+                                    for (var i = 0; i < names.length; i++) {
+                                        if (names[i] === n) return i
+                                    }
+                                    return 0
+                                }
+                                onActivated: function(idx) {
+                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhereNodeName", whereNodeCombo.model[idx] || "")
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 14
+                                    text: parent.displayText
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 60; height: 20; padding: 0
+                                    contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: Math.max(parent.width, 80)
+                                    height: Math.min(whereNodeCombo.model.length * 20 + 2, 102); padding: 1
+                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: whereNodeCombo.delegateModel; currentIndex: whereNodeCombo.currentIndex }
+                                }
+                            }
+
+                            ComboBox {
                                 id: commandCombo
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 0
@@ -518,9 +792,9 @@ Item {
 
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: itemAction === "if" ? 26 : 0
-                                Layout.minimumWidth: itemAction === "if" ? 26 : 0
-                                Layout.maximumWidth: itemAction === "if" ? 26 : 10000
+                                Layout.preferredWidth: (itemAction === "if" || itemAction === "where") ? 26 : 0
+                                Layout.minimumWidth: (itemAction === "if" || itemAction === "where") ? 26 : 0
+                                Layout.maximumWidth: (itemAction === "if" || itemAction === "where") ? 26 : 10000
                                 Layout.preferredHeight: 26
                                 visible: itemCommand === "jump"
                                 radius: 4

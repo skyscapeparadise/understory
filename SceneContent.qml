@@ -226,7 +226,9 @@ Item {
                 itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
                 itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
                 itemVideoPath: e.itemVideoPath, itemVideoTarget: e.itemVideoTarget,
-                itemUpdateVar: e.itemUpdateVar, itemUpdateOp: e.itemUpdateOp, itemUpdateVal: e.itemUpdateVal
+                itemUpdateVar: e.itemUpdateVar, itemUpdateOp: e.itemUpdateOp, itemUpdateVal: e.itemUpdateVal,
+                itemWhereNetworkId: e.itemWhereNetworkId, itemWhereCharName: e.itemWhereCharName,
+                itemWhereOp: e.itemWhereOp, itemWhereNodeName: e.itemWhereNodeName
             })
         }
         return JSON.stringify(items)
@@ -262,7 +264,11 @@ Item {
                 itemVideoTarget:     e.itemVideoTarget     || "fill",
                 itemUpdateVar:       e.itemUpdateVar       || "",
                 itemUpdateOp:        e.itemUpdateOp        || "=",
-                itemUpdateVal:       e.itemUpdateVal       || ""
+                itemUpdateVal:       e.itemUpdateVal       || "",
+                itemWhereNetworkId:  e.itemWhereNetworkId  !== undefined ? e.itemWhereNetworkId : -1,
+                itemWhereCharName:   e.itemWhereCharName   || "",
+                itemWhereOp:         e.itemWhereOp         || "is at",
+                itemWhereNodeName:   e.itemWhereNodeName   || ""
             })
         }
     }
