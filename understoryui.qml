@@ -2113,7 +2113,7 @@ Window {
             property color activeIconColor: "#477B78"
 
             Repeater {
-                model: ["publish", "delete", "settings", "exit story"]
+                model: ["publish", "run story", "settings", "exit story"]
                 delegate: Item {
                     id: sceneBtn
                     width: 138
