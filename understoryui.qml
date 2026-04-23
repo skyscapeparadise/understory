@@ -5789,9 +5789,10 @@ Window {
                                 }
                                 background: Rectangle {
                                     radius: 4
-                                    color: "transparent"
+                                    color: nodeCombo.hovered ? "#3a4a4a" : "transparent"
                                     border.color: "white"
                                     border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
                                 }
                                 popup: Popup {
                                     y: weightCombo.height + 2
@@ -6439,9 +6440,10 @@ Window {
                                 }
                                 background: Rectangle {
                                     radius: 4
-                                    color: "transparent"
+                                    color: nodeCombo.hovered ? "#3a4a4a" : "transparent"
                                     border.color: "white"
                                     border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
                                 }
                                 popup: Popup {
                                     y: selWeightCombo.height + 2
@@ -9099,6 +9101,18 @@ Window {
                         return list;
                     }
                     
+                    property real maxNetworkNameWidth: { networksRevision;
+                        var maxW = 44;
+                        for (var i = 0; i < networkModel.length; i++) {
+                            var name = networkModel[i].name;
+                            if (name) {
+                                var w = 60 + (name.length * 7);
+                                if (w > maxW) maxW = w;
+                            }
+                        }
+                        return Math.min(300, maxW);
+                    }
+
                     property var networkNames: {
                         var names = [];
                         for (var i = 0; i < networkModel.length; i++) {
@@ -9110,11 +9124,13 @@ Window {
                     property int selectedNetworkId: -1
                     
                     property var computedNodesForNetwork: { networksRevision; nodesRevision; selectedNetworkId;
-                        if (selectedNetworkId === -1) return ["(none)"];
+                        if (selectedNetworkId === -1 || !storyManager) return ["(none)"];
                         var names = ["(none)"];
                         var nodeNames = storyManager.getNetworkNodeNames(selectedNetworkId);
-                        for (var i = 0; i < nodeNames.length; i++) {
-                            names.push(nodeNames[i]);
+                        if (nodeNames) {
+                            for (var i = 0; i < nodeNames.length; i++) {
+                                names.push(nodeNames[i]);
+                            }
                         }
                         return names;
                     }
@@ -9365,7 +9381,7 @@ Window {
                                 }
                                 popup: Popup {
                                     y: networkCombo.height + 2
-                                    width: Math.max(networkCombo.width, 180)
+                                    width: Math.max(networkCombo.width, sceneNameSettings.maxNetworkNameWidth)
                                     padding: 1
                                     background: Rectangle {
                                         color: "#162020"
@@ -9383,7 +9399,7 @@ Window {
                                 }
                                 delegate: ItemDelegate {
                                     id: netDelegate
-                                    width: parent.width
+                                    width: networkCombo.popup.width
                                     height: 30
 
                                     contentItem: Item {
@@ -9442,14 +9458,20 @@ Window {
                                     }
                                 }
                                 
-                                contentItem: Text {
-                                    leftPadding: 8
-                                    rightPadding: 24
-                                    text: nodeCombo.displayText
-                                    font.pixelSize: 13
-                                    color: "white"
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
+                                contentItem: Item {
+                                    anchors.fill: parent
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 8
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 24
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: nodeCombo.displayText
+                                        font.pixelSize: 13
+                                        color: "white"
+                                        verticalAlignment: Text.AlignVCenter
+                                        elide: Text.ElideRight
+                                    }
                                 }
                                 indicator: Text {
                                     x: nodeCombo.width - width - 8
@@ -9460,9 +9482,10 @@ Window {
                                 }
                                 background: Rectangle {
                                     radius: 4
-                                    color: "transparent"
+                                    color: nodeCombo.hovered ? "#3a4a4a" : "transparent"
                                     border.color: "white"
                                     border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
                                 }
                                 popup: Popup {
                                     y: nodeCombo.height + 2
@@ -9483,16 +9506,27 @@ Window {
                                     }
                                 }
                                 delegate: ItemDelegate {
+                                    id: nodeDelegate
                                     width: nodeCombo.width
-                                    contentItem: Text {
-                                        text: modelData
-                                        color: "white"
-                                        font.pixelSize: 13
-                                        elide: Text.ElideRight
-                                        verticalAlignment: Text.AlignVCenter
+                                    height: 28
+                                    contentItem: Item {
+                                        anchors.fill: parent
+                                        Text {
+                                            anchors.left: parent.left
+                                            anchors.leftMargin: 8
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: modelData
+                                            color: "white"
+                                            font.pixelSize: 13
+                                            elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                     }
                                     background: Rectangle {
-                                        color: highlighted ? "#2a3a3a" : "transparent"
+                                        anchors.fill: parent
+                                        color: (nodeDelegate.highlighted || nodeDelegate.hovered) ? "#2a3a3a" : "transparent"
                                     }
                                 }
                             }

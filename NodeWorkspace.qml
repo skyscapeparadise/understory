@@ -944,81 +944,62 @@ Item {
 
                             // Role radio buttons
                             Item {
-                                Layout.preferredWidth: 110
+                                Layout.preferredWidth: roleRow.childrenRect.width
                                 Layout.preferredHeight: 26
 
                                 Row {
+                                    id: roleRow
                                     anchors.left: parent.left
                                     anchors.verticalCenter: parent.verticalCenter
-                                    spacing: 8
+                                    spacing: 2
 
-                                    Item {
-                                        width: performCircle.width + 4 + performLabel.implicitWidth
+                                    Rectangle {
+                                        id: performButton
+                                        property bool isActive: model.charRole === "perform"
+                                        width: performLabel.implicitWidth + 12
                                         height: 26
+                                        radius: 4
+                                        color: isActive ? (charDelegate.on ? "white" : "#666") : "transparent"
+                                        border.color: charDelegate.on ? "white" : "#3a3a3a"
+                                        border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
 
-                                        Rectangle {
-                                            id: performCircle
-                                            width: 10; height: 10; radius: 5
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            color: "transparent"
-                                            border.color: charDelegate.on ? "white" : "#666"
-                                            border.width: 1
-                                            Behavior on border.color { ColorAnimation { duration: 100 } }
-                                            Rectangle {
-                                                anchors.centerIn: parent
-                                                width: 6; height: 6; radius: 3
-                                                color: charDelegate.on ? "white" : "#666"
-                                                visible: model.charRole === "perform"
-                                                Behavior on color { ColorAnimation { duration: 100 } }
-                                            }
-                                        }
                                         Text {
                                             id: performLabel
+                                            anchors.centerIn: parent
                                             text: "perform"
-                                            x: 14
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            color: charDelegate.on ? "white" : "#666"
-                                            font.pixelSize: 11
+                                            font.pixelSize: 9
+                                            color: performButton.isActive ? (charDelegate.on ? "#477B78" : "#151518") : (charDelegate.on ? "white" : "#666")
                                             Behavior on color { ColorAnimation { duration: 100 } }
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onClicked: charactersModel.setProperty(charDelegate.idx, "charRole", "perform")
+                                            onClicked: if (charDelegate.on) charactersModel.setProperty(charDelegate.idx, "charRole", "perform")
                                         }
                                     }
 
-                                    Item {
-                                        width: wildCircle.width + 4 + wildLabel.implicitWidth
+                                    Rectangle {
+                                        id: wildButton
+                                        property bool isActive: model.charRole === "wild"
+                                        width: wildLabel.implicitWidth + 12
                                         height: 26
+                                        radius: 4
+                                        color: isActive ? (charDelegate.on ? "white" : "#666") : "transparent"
+                                        border.color: charDelegate.on ? "white" : "#3a3a3a"
+                                        border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
 
-                                        Rectangle {
-                                            id: wildCircle
-                                            width: 10; height: 10; radius: 5
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            color: "transparent"
-                                            border.color: charDelegate.on ? "white" : "#666"
-                                            border.width: 1
-                                            Behavior on border.color { ColorAnimation { duration: 100 } }
-                                            Rectangle {
-                                                anchors.centerIn: parent
-                                                width: 6; height: 6; radius: 3
-                                                color: charDelegate.on ? "white" : "#666"
-                                                visible: model.charRole === "wild"
-                                                Behavior on color { ColorAnimation { duration: 100 } }
-                                            }
-                                        }
                                         Text {
                                             id: wildLabel
+                                            anchors.centerIn: parent
                                             text: "wild"
-                                            x: 14
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            color: charDelegate.on ? "white" : "#666"
-                                            font.pixelSize: 11
+                                            font.pixelSize: 9
+                                            color: wildButton.isActive ? (charDelegate.on ? "#477B78" : "#151518") : (charDelegate.on ? "white" : "#666")
                                             Behavior on color { ColorAnimation { duration: 100 } }
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onClicked: charactersModel.setProperty(charDelegate.idx, "charRole", "wild")
+                                            onClicked: if (charDelegate.on) charactersModel.setProperty(charDelegate.idx, "charRole", "wild")
                                         }
                                     }
                                 }
