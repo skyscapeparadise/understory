@@ -9306,6 +9306,7 @@ Window {
                                 Layout.preferredHeight: 28
                                 model: sceneNameSettings.networkModel
                                 textRole: "name"
+                                HoverHandler { id: networkHover }
 
                                 property real calculatedWidth: {
                                     if (currentIndex < 0 || currentIndex >= sceneNameSettings.networkModel.length) return 44;
@@ -9378,10 +9379,10 @@ Window {
                                 }
                                 background: Rectangle {
                                     radius: 4
-                                    color: networkCombo.hovered ? "#3a4a4a" : "transparent"
-                                    border.color: "white"
+                                    color: "transparent"
+                                    border.color: networkHover.hovered ? "#80cfff" : "white"
                                     border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
                                 }
                                 popup: Popup {
                                     y: networkCombo.height + 2
@@ -9455,6 +9456,7 @@ Window {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 28
                                 model: sceneNameSettings.computedNodesForNetwork
+                                HoverHandler { id: nodeHover }
                                 
                                 onActivated: {
                                     if (mainWindow.currentSceneId !== -1) {
@@ -9487,10 +9489,10 @@ Window {
                                 }
                                 background: Rectangle {
                                     radius: 4
-                                    color: nodeCombo.hovered ? "#3a4a4a" : "transparent"
-                                    border.color: "white"
+                                    color: "transparent"
+                                    border.color: nodeHover.hovered ? "#80cfff" : "white"
                                     border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
                                 }
                                 popup: Popup {
                                     y: nodeCombo.height + 2

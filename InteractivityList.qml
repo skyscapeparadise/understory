@@ -302,13 +302,15 @@ Item {
                                     x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter
                                     text: "▾"; font.pixelSize: 10; color: "white"
                                 }
+                                HoverHandler { id: actionComboHover }
                                 background: Rectangle {
-                                    radius: 4; color: "transparent"; border.color: "white"; border.width: 1
+                                    radius: 4; color: "transparent"; border.color: actionComboHover.hovered ? "#80cfff" : "white"; border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
                                 }
                                 delegate: ItemDelegate {
                                     width: parent ? parent.width : 62; height: 22; padding: 0
                                     contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
-                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                 }
                                 popup: Popup {
                                     y: parent.height + 2; width: parent.width
@@ -361,11 +363,12 @@ Item {
                                     x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
                                     text: "▾"; font.pixelSize: 9; color: "white"
                                 }
-                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                HoverHandler { id: condVarComboHover }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: condVarComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                 delegate: ItemDelegate {
                                     width: parent ? parent.width : 60; height: 20; padding: 0
                                     contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
-                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                 }
                                 popup: Popup {
                                     y: parent.height + 2
@@ -396,11 +399,12 @@ Item {
                                     x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
                                     text: "▾"; font.pixelSize: 9; color: "white"
                                 }
-                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                HoverHandler { id: condOpComboHover }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: condOpComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                 delegate: ItemDelegate {
                                     width: parent ? parent.width : 44; height: 20; padding: 0
                                     contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
-                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                 }
                                 popup: Popup {
                                     y: parent.height + 2; width: parent.width
@@ -464,11 +468,12 @@ Item {
                                         x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
                                         text: "▾"; font.pixelSize: 9; color: "white"
                                     }
-                                    background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                    HoverHandler { id: boolValComboHover }
+                                    background: Rectangle { radius: 4; color: "transparent"; border.color: boolValComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                     delegate: ItemDelegate {
                                         width: parent ? parent.width : 50; height: 20; padding: 0
                                         contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
-                                        background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                        background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                     }
                                     popup: Popup {
                                         y: parent.height + 2; width: parent.width; height: 42; padding: 1
@@ -548,7 +553,8 @@ Item {
                                     x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
                                     text: "▾"; font.pixelSize: 9; color: "white"
                                 }
-                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                HoverHandler { id: whereNetworkComboHover }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: whereNetworkComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                 delegate: ItemDelegate {
                                     id: whereNetDelegate
                                     width: whereNetworkCombo.popup.width; height: 26; padding: 0
@@ -631,11 +637,12 @@ Item {
                                     x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
                                     text: "▾"; font.pixelSize: 9; color: "white"
                                 }
-                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                HoverHandler { id: whereCharComboHover }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: whereCharComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                 delegate: ItemDelegate {
                                     width: parent ? parent.width : 60; height: 20; padding: 0
                                     contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
-                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                 }
                                 popup: Popup {
                                     y: parent.height + 2; width: Math.max(parent.width, 80)
@@ -665,11 +672,12 @@ Item {
                                     x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
                                     text: "▾"; font.pixelSize: 9; color: "white"
                                 }
-                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                HoverHandler { id: whereOpComboHover }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: whereOpComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                 delegate: ItemDelegate {
                                     width: parent ? parent.width : 50; height: 20; padding: 0
                                     contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
-                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                 }
                                 popup: Popup {
                                     y: parent.height + 2; width: Math.max(parent.width, 50)
@@ -716,11 +724,12 @@ Item {
                                     x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
                                     text: "▾"; font.pixelSize: 9; color: "white"
                                 }
-                                background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                HoverHandler { id: whereNodeComboHover }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: whereNodeComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                 delegate: ItemDelegate {
                                     width: parent ? parent.width : 60; height: 20; padding: 0
                                     contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
-                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                 }
                                 popup: Popup {
                                     y: parent.height + 2; width: Math.max(parent.width, 80)
@@ -775,13 +784,15 @@ Item {
                                     x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter
                                     text: "▾"; font.pixelSize: 10; color: "white"
                                 }
+                                HoverHandler { id: commandComboHover }
                                 background: Rectangle {
-                                    radius: 4; color: "transparent"; border.color: "white"; border.width: 1
+                                    radius: 4; color: "transparent"; border.color: commandComboHover.hovered ? "#80cfff" : "white"; border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
                                 }
                                 delegate: ItemDelegate {
                                     width: parent ? parent.width : 80; height: 22; padding: 0
                                     contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
-                                    background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                 }
                                 popup: Popup {
                                     y: parent.height + 2; width: parent.width; height: 112; padding: 1
@@ -1621,11 +1632,12 @@ Item {
                                         x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter
                                         text: "▾"; font.pixelSize: 10; color: "white"
                                     }
-                                    background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                    HoverHandler { id: updateVarComboHover }
+                                    background: Rectangle { radius: 4; color: "transparent"; border.color: updateVarComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                     delegate: ItemDelegate {
                                         width: parent ? parent.width : 80; height: 22; padding: 0
                                         contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
-                                        background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                        background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                     }
                                     popup: Popup {
                                         y: parent.height + 2; width: parent.width
@@ -1654,11 +1666,12 @@ Item {
                                         x: parent.width - width - 3; anchors.verticalCenter: parent.verticalCenter
                                         text: "▾"; font.pixelSize: 9; color: "white"
                                     }
-                                    background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                    HoverHandler { id: updateOpComboHover }
+                                    background: Rectangle { radius: 4; color: "transparent"; border.color: updateOpComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                     delegate: ItemDelegate {
                                         width: parent ? parent.width : 36; height: 22; padding: 0
                                         contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
-                                        background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                        background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                     }
                                     popup: Popup {
                                         y: parent.height + 2; width: parent.width
@@ -1721,11 +1734,12 @@ Item {
                                             x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
                                             text: "▾"; font.pixelSize: 9; color: "white"
                                         }
-                                        background: Rectangle { radius: 4; color: "transparent"; border.color: "white"; border.width: 1 }
+                                        HoverHandler { id: updateBoolComboHover }
+                                        background: Rectangle { radius: 4; color: "transparent"; border.color: updateBoolComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                         delegate: ItemDelegate {
                                             width: parent ? parent.width : 50; height: 20; padding: 0
                                             contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
-                                            background: Rectangle { color: highlighted ? "#477B78" : "transparent" }
+                                            background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
                                         }
                                         popup: Popup {
                                             y: parent.height + 2; width: parent.width; height: 42; padding: 1
