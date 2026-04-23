@@ -9,6 +9,9 @@ Item {
 
     property alias nodesModel: nodesModel
     property alias networksModel: networksModel
+    property alias orbitsModel: orbitsModel
+    property alias soundsModel: soundsModel
+    property alias charactersModel: charactersModel
 
     //
     // MODELS
@@ -288,7 +291,7 @@ Item {
         var sounds = []
         for (var i = 0; i < soundsModel.count; i++) {
             var s = soundsModel.get(i)
-            sounds.push({ enabled: s.enabled, soundName: s.soundName, filePath: s.filePath })
+            sounds.push({ enabled: s.enabled, soundName: s.soundName, filePath: s.filePath, soundType: s.soundType || "loop" })
         }
         var orbits = []
         for (var i = 0; i < orbitsModel.count; i++) {
@@ -1330,6 +1333,69 @@ Item {
                                 }
                             }
 
+
+                            // Sound type toggle buttons
+                            Item {
+                                Layout.preferredWidth: soundTypeRow.childrenRect.width
+                                Layout.preferredHeight: 26
+
+                                Row {
+                                    id: soundTypeRow
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 2
+
+                                    Rectangle {
+                                        id: loopButton
+                                        property bool isActive: (model.soundType || "loop") === "loop"
+                                        width: loopLabel.implicitWidth + 12
+                                        height: 26
+                                        radius: 4
+                                        color: isActive ? (soundDelegate.on ? "white" : "#666") : "transparent"
+                                        border.color: soundDelegate.on ? "white" : "#3a3a3a"
+                                        border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+
+                                        Text {
+                                            id: loopLabel
+                                            anchors.centerIn: parent
+                                            text: "loop"
+                                            font.pixelSize: 9
+                                            color: loopButton.isActive ? (soundDelegate.on ? "#477B78" : "#151518") : (soundDelegate.on ? "white" : "#666")
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: if (soundDelegate.on) soundsModel.setProperty(soundDelegate.idx, "soundType", "loop")
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        id: syncButton
+                                        property bool isActive: model.soundType === "sync"
+                                        width: syncLabel.implicitWidth + 12
+                                        height: 26
+                                        radius: 4
+                                        color: isActive ? (soundDelegate.on ? "white" : "#666") : "transparent"
+                                        border.color: soundDelegate.on ? "white" : "#3a3a3a"
+                                        border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+
+                                        Text {
+                                            id: syncLabel
+                                            anchors.centerIn: parent
+                                            text: "sync"
+                                            font.pixelSize: 9
+                                            color: syncButton.isActive ? (soundDelegate.on ? "#477B78" : "#151518") : (soundDelegate.on ? "white" : "#666")
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: if (soundDelegate.on) soundsModel.setProperty(soundDelegate.idx, "soundType", "sync")
+                                        }
+                                    }
+                                }
+                            }
                             // File drop zone
                             Rectangle {
                                 Layout.fillWidth: true
@@ -1484,7 +1550,7 @@ Item {
                         hoverEnabled: true
                         onEntered: parent.hovered = true
                         onExited: parent.hovered = false
-                        onClicked: soundsModel.append({ enabled: true, soundName: "", filePath: "" })
+                        onClicked: soundsModel.append({ enabled: true, soundName: "", filePath: "", soundType: "loop" })
                     }
                 }
             }

@@ -9317,6 +9317,7 @@ Window {
                                         sceneNameSettings.selectedNetworkId = sceneNameSettings.networkModel[currentIndex].id;
                                         if (mainWindow.currentSceneId !== -1) {
                                             storyManager.setEditorState("location_net_" + mainWindow.currentSceneId, sceneNameSettings.selectedNetworkId.toString());
+                                            mainWindow.updateGlobalLoopingSound();
                                         }
                                     }
                                 }
@@ -9455,6 +9456,7 @@ Window {
                                 onActivated: {
                                     if (mainWindow.currentSceneId !== -1) {
                                         storyManager.setEditorState("location_node_" + mainWindow.currentSceneId, currentText);
+                                        mainWindow.updateGlobalLoopingSound();
                                     }
                                 }
                                 
@@ -9916,5 +9918,104 @@ Window {
             id: sceneEditor2sceneMenuVideoOutput
             anchors.fill: parent
         }
+    }
+
+    // Global Looping Sound Manager
+    MediaPlayer {
+        id: globalLoopingPlayer
+        loops: MediaPlayer.Infinite
+        audioOutput: AudioOutput { volume: 1.0 }
+    }
+
+    function updateGlobalLoopingSound() {
+        if (!storyManager.isOpen || mainWindow.currentSceneId === -1) {
+            globalLoopingPlayer.stop();
+            globalLoopingPlayer.source = "";
+            return;
+        }
+
+        var sceneId = mainWindow.currentSceneId;
+        var netIdStr = storyManager.getEditorState("location_net_" + sceneId);
+        var nodeName = storyManager.getEditorState("location_node_" + sceneId);
+
+        // Backward compatibility for location key
+        if (netIdStr === "" && nodeName === "") {
+            nodeName = storyManager.getEditorState("location_" + sceneId);
+        }
+
+        if (nodeName === "") {
+            globalLoopingPlayer.stop();
+            globalLoopingPlayer.source = "";
+            return;
+        }
+
+        // 1. Find the node ID from the name
+        var targetNodeId = -1;
+        var nodes = nodeWorkspace.nodesModel;
+        for (var i = 0; i < nodes.count; i++) {
+            var n = nodes.get(i);
+            if (n.name === nodeName) {
+                targetNodeId = n.id;
+                break;
+            }
+        }
+
+        if (targetNodeId === -1) {
+            globalLoopingPlayer.stop();
+            globalLoopingPlayer.source = "";
+            return;
+        }
+
+        // 2. Find any sound that orbits this node and is set to "loop"
+        var soundPath = "";
+        var orbits = nodeWorkspace.orbitsModel;
+        var sounds = nodeWorkspace.soundsModel;
+
+        for (var j = 0; j < orbits.count; j++) {
+            var orb = orbits.get(j);
+            if (orb.nodeId === targetNodeId && orb.circleType === "sound") {
+                var sIdx = orb.itemIdx;
+                if (sIdx >= 0 && sIdx < sounds.count) {
+                    var s = sounds.get(sIdx);
+                    if ((s.soundType || "loop") === "loop" && s.enabled && s.filePath) {
+                        soundPath = s.filePath;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (soundPath !== "") {
+            var newSource = soundPath;
+            if (globalLoopingPlayer.source.toString() !== newSource) {
+                globalLoopingPlayer.stop();
+                globalLoopingPlayer.source = newSource;
+                globalLoopingPlayer.play();
+            }
+        } else {
+            globalLoopingPlayer.stop();
+            globalLoopingPlayer.source = "";
+        }
+    }
+
+    Connections {
+        target: mainWindow
+        function onCurrentSceneIdChanged() { mainWindow.updateGlobalLoopingSound(); }
+    }
+
+    Connections {
+        target: nodeWorkspace.orbitsModel
+        function onCountChanged() { mainWindow.updateGlobalLoopingSound(); }
+    }
+
+    Connections {
+        target: nodeWorkspace.soundsModel
+        // Trigger if a sound property (like enabled or soundType) changes
+        function onDataChanged() { mainWindow.updateGlobalLoopingSound(); }
+    }
+
+    Connections {
+        target: storyManager
+        function onStoryOpened() { globalLoopingPlayer.stop(); globalLoopingPlayer.source = ""; }
     }
 }
