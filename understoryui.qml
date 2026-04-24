@@ -5199,76 +5199,113 @@ Window {
                                 bottomPadding: 6
                             }
 
+                            // Row 1: name | lock
                             Row {
                                 width: areaSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    width: parent.width - 50; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: areaSpatialProps.propName
-                                        Keys.onReturnPressed: focus = false
-                                        Keys.onEscapePressed: focus = false
-                                        onEditingFinished: areaSpatialProps.propName = text
-                                    }
-                                }
-                            }
-
-                            Repeater {
-                                model: [
-                                    { lbl: "x",      key: "propX" },
-                                    { lbl: "y",      key: "propY" },
-                                    { lbl: "width",  key: "propW" },
-                                    { lbl: "height", key: "propH" }
-                                ]
-                                delegate: Row {
-                                    width: areaSpatialProps.width
-                                    height: 26
-                                    spacing: 6
-                                    Text {
-                                        text: modelData.lbl
-                                        width: 44; color: "white"; font.pixelSize: 11
-                                        height: parent.height; verticalAlignment: Text.AlignVCenter
-                                    }
+                                RowLayout {
+                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                    Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
                                     Rectangle {
-                                        width: parent.width - 50; height: 26
-                                        color: "transparent"; border.color: "white"
-                                        border.width: 1; radius: 4
+                                        Layout.fillWidth: true; height: 26
+                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
                                         TextInput {
                                             anchors.fill: parent; anchors.margins: 3
-                                            color: "white"; font.pixelSize: 11
-                                            clip: true; selectByMouse: true
-                                            text: areaSpatialProps[modelData.key].toFixed(0)
+                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                            text: areaSpatialProps.propName
                                             Keys.onReturnPressed: focus = false
                                             Keys.onEscapePressed: focus = false
-                                            onEditingFinished: areaSpatialProps[modelData.key] = parseFloat(text) || 0
+                                            onEditingFinished: areaSpatialProps.propName = text
+                                        }
+                                    }
+                                }
+                                Row {
+                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                    Text { text: "lock"; font.pixelSize: 11; color: "white"; width: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                    Row {
+                                        spacing: 6; anchors.verticalCenter: parent.verticalCenter
+                                        Repeater {
+                                            model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                            delegate: Row {
+                                                spacing: 3; anchors.verticalCenter: parent.verticalCenter
+                                                Rectangle {
+                                                    width: 12; height: 12; radius: 6
+                                                    border.color: "white"; border.width: 1; color: "transparent"
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: "white"; visible: areaSpatialProps.propLock === modelData.val }
+                                                    MouseArea { anchors.fill: parent; onClicked: areaSpatialProps.propLock = modelData.val }
+                                                }
+                                                Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                            }
                                         }
                                     }
                                 }
                             }
 
+                            // Row 2: x | y
                             Row {
                                 width: areaSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                Row {
-                                    spacing: 12; anchors.verticalCenter: parent.verticalCenter
-                                    Repeater {
-                                        model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                        delegate: Row {
-                                            spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                                            Rectangle {
-                                                width: 12; height: 12; radius: 6
-                                                border.color: "white"; border.width: 1; color: "transparent"
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Rectangle {
-                                                    anchors.centerIn: parent; width: 6; height: 6; radius: 3
-                                                    color: "white"; visible: areaSpatialProps.propLock === modelData.val
-                                                }
-                                                MouseArea { anchors.fill: parent; onClicked: areaSpatialProps.propLock = modelData.val }
-                                            }
-                                            Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                RowLayout {
+                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                    Text { text: "x"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                    Rectangle {
+                                        Layout.fillWidth: true; height: 26
+                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                        TextInput {
+                                            anchors.fill: parent; anchors.margins: 3
+                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                            text: areaSpatialProps.propX.toFixed(0)
+                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                            onEditingFinished: areaSpatialProps.propX = parseFloat(text) || 0
+                                        }
+                                    }
+                                }
+                                RowLayout {
+                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                    Text { text: "width"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                    Rectangle {
+                                        Layout.fillWidth: true; height: 26
+                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                        TextInput {
+                                            anchors.fill: parent; anchors.margins: 3
+                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                            text: areaSpatialProps.propW.toFixed(0)
+                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                            onEditingFinished: areaSpatialProps.propW = parseFloat(text) || 0
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Row 3: y | height
+                            Row {
+                                width: areaSpatialProps.width; height: 26; spacing: 6
+                                RowLayout {
+                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                    Text { text: "y"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                    Rectangle {
+                                        Layout.fillWidth: true; height: 26
+                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                        TextInput {
+                                            anchors.fill: parent; anchors.margins: 3
+                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                            text: areaSpatialProps.propY.toFixed(0)
+                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                            onEditingFinished: areaSpatialProps.propY = parseFloat(text) || 0
+                                        }
+                                    }
+                                }
+                                RowLayout {
+                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                    Text { text: "height"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                    Rectangle {
+                                        Layout.fillWidth: true; height: 26
+                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                        TextInput {
+                                            anchors.fill: parent; anchors.margins: 3
+                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                            text: areaSpatialProps.propH.toFixed(0)
+                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                            onEditingFinished: areaSpatialProps.propH = parseFloat(text) || 0
                                         }
                                     }
                                 }
@@ -6006,63 +6043,113 @@ Window {
                         property bool propLock: false
                         property string propName: ""
 
+                        // Row 1: name | lock
                         Row {
                             width: textSpatialProps.width; height: 26; spacing: 6
-                            Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                            Rectangle {
-                                width: parent.width - 50; height: 26
-                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                TextInput {
-                                    anchors.fill: parent; anchors.margins: 3
-                                    color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                    text: textSpatialProps.propName
-                                    Keys.onReturnPressed: focus = false
-                                    Keys.onEscapePressed: focus = false
-                                    onEditingFinished: textSpatialProps.propName = text
-                                }
-                            }
-                        }
-
-                        Repeater {
-                            model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
-                            delegate: Row {
-                                width: textSpatialProps.width; height: 26; spacing: 6
-                                Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                            RowLayout {
+                                width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
                                 Rectangle {
-                                    width: parent.width - 50; height: 26
+                                    Layout.fillWidth: true; height: 26
                                     color: "transparent"; border.color: "white"; border.width: 1; radius: 4
                                     TextInput {
                                         anchors.fill: parent; anchors.margins: 3
                                         color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: textSpatialProps[modelData.key].toFixed(0)
+                                        text: textSpatialProps.propName
                                         Keys.onReturnPressed: focus = false
                                         Keys.onEscapePressed: focus = false
-                                        onEditingFinished: textSpatialProps[modelData.key] = parseFloat(text) || 0
+                                        onEditingFinished: textSpatialProps.propName = text
+                                    }
+                                }
+                            }
+                            Row {
+                                width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                Text { text: "lock"; font.pixelSize: 11; color: "white"; width: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                Row {
+                                    spacing: 6; anchors.verticalCenter: parent.verticalCenter
+                                    Repeater {
+                                        model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                        delegate: Row {
+                                            spacing: 3; anchors.verticalCenter: parent.verticalCenter
+                                            Rectangle {
+                                                width: 12; height: 12; radius: 6
+                                                border.color: "white"; border.width: 1; color: "transparent"
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: "white"; visible: textSpatialProps.propLock === modelData.val }
+                                                MouseArea { anchors.fill: parent; onClicked: textSpatialProps.propLock = modelData.val }
+                                            }
+                                            Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                        }
                                     }
                                 }
                             }
                         }
 
+                        // Row 2: x | y
                         Row {
                             width: textSpatialProps.width; height: 26; spacing: 6
-                            Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                            Row {
-                                spacing: 12; anchors.verticalCenter: parent.verticalCenter
-                                Repeater {
-                                    model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                    delegate: Row {
-                                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                                        Rectangle {
-                                            width: 12; height: 12; radius: 6
-                                            border.color: "white"; border.width: 1; color: "transparent"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            Rectangle {
-                                                anchors.centerIn: parent; width: 6; height: 6; radius: 3
-                                                color: "white"; visible: textSpatialProps.propLock === modelData.val
-                                            }
-                                            MouseArea { anchors.fill: parent; onClicked: textSpatialProps.propLock = modelData.val }
-                                        }
-                                        Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                            RowLayout {
+                                width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                Text { text: "x"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                Rectangle {
+                                    Layout.fillWidth: true; height: 26
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: textSpatialProps.propX.toFixed(0)
+                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                        onEditingFinished: textSpatialProps.propX = parseFloat(text) || 0
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                Text { text: "width"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                Rectangle {
+                                    Layout.fillWidth: true; height: 26
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: textSpatialProps.propW.toFixed(0)
+                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                        onEditingFinished: textSpatialProps.propW = parseFloat(text) || 0
+                                    }
+                                }
+                            }
+                        }
+
+                        // Row 3: y | height
+                        Row {
+                            width: textSpatialProps.width; height: 26; spacing: 6
+                            RowLayout {
+                                width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                Text { text: "y"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                Rectangle {
+                                    Layout.fillWidth: true; height: 26
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: textSpatialProps.propY.toFixed(0)
+                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                        onEditingFinished: textSpatialProps.propY = parseFloat(text) || 0
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                Text { text: "height"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                Rectangle {
+                                    Layout.fillWidth: true; height: 26
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: textSpatialProps.propH.toFixed(0)
+                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                        onEditingFinished: textSpatialProps.propH = parseFloat(text) || 0
                                     }
                                 }
                             }
@@ -7021,73 +7108,210 @@ Window {
                                     bottomPadding: 6
                                 }
 
+                                // Row 1: name | lock
                                 Row {
                                     width: parent.width; height: 26; spacing: 6
-                                    Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                    Rectangle {
-                                        width: parent.width - 50; height: 26
-                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                        TextInput {
-                                            anchors.fill: parent; anchors.margins: 3
-                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                            text: selectSettings.selName
-                                            Keys.onReturnPressed: focus = false
-                                            Keys.onEscapePressed: focus = false
-                                            onEditingFinished: {
-                                                selectSettings.selName = text;
-                                                selectSettings.writeNameToModel(text);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Repeater {
-                                    model: [{ lbl:"x", prop:"selX" }, { lbl:"y", prop:"selY" }, { lbl:"width", prop:"selW" }, { lbl:"height", prop:"selH" }]
-                                    delegate: Row {
-                                        width: parent.width; height: 26; spacing: 6
-                                        Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
+                                    RowLayout {
+                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                        Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
                                         Rectangle {
-                                            width: parent.width - 50; height: 26
+                                            Layout.fillWidth: true; height: 26
                                             color: "transparent"; border.color: "white"; border.width: 1; radius: 4
                                             TextInput {
                                                 anchors.fill: parent; anchors.margins: 3
                                                 color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                                text: selectSettings[modelData.prop].toFixed(0)
+                                                text: selectSettings.selName
                                                 Keys.onReturnPressed: focus = false
                                                 Keys.onEscapePressed: focus = false
                                                 onEditingFinished: {
-                                                    selectSettings[modelData.prop] = parseFloat(text) || 0;
-                                                    selectSettings.writeSpatialToModel();
+                                                    selectSettings.selName = text;
+                                                    selectSettings.writeNameToModel(text);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Row {
+                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                        Text { text: "lock"; font.pixelSize: 11; color: "white"; width: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        Row {
+                                            spacing: 6; anchors.verticalCenter: parent.verticalCenter
+                                            Repeater {
+                                                model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
+                                                delegate: Row {
+                                                    spacing: 3; anchors.verticalCenter: parent.verticalCenter
+                                                    Rectangle {
+                                                        width: 12; height: 12; radius: 6
+                                                        border.color: "white"; border.width: 1; color: "transparent"
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: "white"; visible: selectSettings.selLock === modelData.val }
+                                                        MouseArea { anchors.fill: parent; onClicked: selectSettings.selLock = modelData.val }
+                                                    }
+                                                    Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
                                                 }
                                             }
                                         }
                                     }
                                 }
 
+                                // Row 2: x | y
                                 Row {
                                     width: parent.width; height: 26; spacing: 6
-                                    Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                    Row {
-                                        spacing: 12; anchors.verticalCenter: parent.verticalCenter
-                                        Repeater {
-                                            model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                            delegate: Row {
-                                                spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                                                Rectangle {
-                                                    width: 12; height: 12; radius: 6
-                                                    border.color: "white"; border.width: 1; color: "transparent"
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    Rectangle {
-                                                        anchors.centerIn: parent; width: 6; height: 6; radius: 3
-                                                        color: "white"; visible: selectSettings.selLock === modelData.val
-                                                    }
-                                                    MouseArea { anchors.fill: parent; onClicked: selectSettings.selLock = modelData.val }
-                                                }
-                                                Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                    RowLayout {
+                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                        Text { text: "x"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        Rectangle {
+                                            Layout.fillWidth: true; height: 26
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                anchors.fill: parent; anchors.margins: 3
+                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                text: selectSettings.selX.toFixed(0)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: { selectSettings.selX = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
+                                            }
+                                        }
+                                    }
+                                    RowLayout {
+                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                        Text { text: "width"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        Rectangle {
+                                            Layout.fillWidth: true; height: 26
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                anchors.fill: parent; anchors.margins: 3
+                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                text: selectSettings.selW.toFixed(0)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: { selectSettings.selW = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
                                             }
                                         }
                                     }
                                 }
+
+                                // Row 3: y | height
+                                Row {
+                                    width: parent.width; height: 26; spacing: 6
+                                    RowLayout {
+                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                        Text { text: "y"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        Rectangle {
+                                            Layout.fillWidth: true; height: 26
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                anchors.fill: parent; anchors.margins: 3
+                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                text: selectSettings.selY.toFixed(0)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: { selectSettings.selY = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
+                                            }
+                                        }
+                                    }
+                                    RowLayout {
+                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
+                                        Text { text: "height"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        Rectangle {
+                                            Layout.fillWidth: true; height: 26
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                anchors.fill: parent; anchors.margins: 3
+                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                text: selectSettings.selH.toFixed(0)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: { selectSettings.selH = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // template field
+                                Row {
+                                    width: parent.width; height: 26; spacing: 8
+
+                                    Text {
+                                        text: "template"; width: 44; color: "white"; font.pixelSize: 11
+                                        height: parent.height; verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    ComboBox {
+                                        id: templateCombo
+                                        width: parent.width - 52
+                                        height: 26
+                                        model: ["none", "default", "north", "south", "east", "west"]
+                                        currentIndex: {
+                                            var idx = model.indexOf(selectSettings.selTemplate)
+                                            return idx >= 0 ? idx : 0
+                                        }
+                                        onActivated: {
+                                            var t = model[currentIndex]
+                                            selectSettings.selTemplate = t
+                                            if      (t === "north") selectSettings.selCursor = "up"
+                                            else if (t === "south") selectSettings.selCursor = "down"
+                                            else if (t === "east")  selectSettings.selCursor = "right"
+                                            else if (t === "west")  selectSettings.selCursor = "left"
+                                        }
+
+                                        HoverHandler { id: templateHover }
+
+                                        contentItem: Text {
+                                            leftPadding: 6
+                                            text: templateCombo.displayText
+                                            color: "white"
+                                            font.pixelSize: 11
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+
+                                        indicator: Text {
+                                            x: templateCombo.width - width - 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "▾"
+                                            font.pixelSize: 10
+                                            color: "white"
+                                        }
+
+                                        background: Rectangle {
+                                            radius: 4
+                                            color: "transparent"
+                                            border.color: templateHover.hovered ? "#80cfff" : "white"
+                                            border.width: 1
+                                            Behavior on border.color { ColorAnimation { duration: 100 } }
+                                        }
+
+                                        popup: Popup {
+                                            y: templateCombo.height + 2
+                                            width: templateCombo.width
+                                            padding: 1
+                                            background: Rectangle { color: "#162020"; radius: 4; border.color: "#333"; border.width: 1 }
+                                            contentItem: ListView {
+                                                clip: true
+                                                implicitHeight: Math.min(contentHeight, 300)
+                                                model: templateCombo.popup.visible ? templateCombo.delegateModel : null
+                                                currentIndex: templateCombo.highlightedIndex
+                                                ScrollIndicator.vertical: ScrollIndicator { }
+                                            }
+                                        }
+
+                                        delegate: ItemDelegate {
+                                            width: templateCombo.width
+                                            height: 26
+                                            contentItem: Text {
+                                                leftPadding: 6
+                                                text: modelData
+                                                color: templateCombo.currentIndex === index ? "#80cfff" : "white"
+                                                font.pixelSize: 11
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            background: Rectangle {
+                                                color: (highlighted || hovered) ? "#477B78" : "transparent"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Column {
+                                visible: selectSettings.hasActiveArea || selectSettings.hasActiveTb || selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
+                                width: parent.width
+                                spacing: 4
 
                                 // cursor field — toggle buttons
                                 Row {
@@ -7192,79 +7416,6 @@ Window {
                                                 if (drop.hasUrls)
                                                     selectSettings.selCursorPath = drop.urls[0].toString()
                                             }
-                                        }
-                                    }
-                                }
-                            }
-
-                            Row {
-                                width: parent.width
-                                spacing: 8
-                                visible: selectSettings.hasActiveArea || selectSettings.hasActiveTb || selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
-
-                                Text {
-                                    text: "template"
-                                    color: "#888"
-                                    font.pixelSize: 11
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 60
-                                }
-
-                                ComboBox {
-                                    id: templateCombo
-                                    width: parent.width - 68
-                                    model: ["none", "default", "north", "south", "east", "west"]
-                                    currentIndex: {
-                                        var idx = model.indexOf(selectSettings.selTemplate)
-                                        return idx >= 0 ? idx : 0
-                                    }
-                                    onActivated: {
-                                        var t = model[currentIndex]
-                                        selectSettings.selTemplate = t
-                                        if      (t === "north") selectSettings.selCursor = "up"
-                                        else if (t === "south") selectSettings.selCursor = "down"
-                                        else if (t === "east")  selectSettings.selCursor = "right"
-                                        else if (t === "west")  selectSettings.selCursor = "left"
-                                    }
-
-                                    contentItem: Text {
-                                        leftPadding: 8
-                                        text: templateCombo.displayText
-                                        color: "#CCCCCC"
-                                        font.pixelSize: 11
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-
-                                    background: Rectangle {
-                                        color: "#1e1e22"
-                                        radius: 4
-                                        border.color: "#333"
-                                        border.width: 1
-                                    }
-
-                                    popup: Popup {
-                                        y: templateCombo.height
-                                        width: templateCombo.width
-                                        padding: 0
-                                        background: Rectangle { color: "#1e1e22"; radius: 4; border.color: "#333"; border.width: 1 }
-                                        contentItem: ListView {
-                                            implicitHeight: contentHeight
-                                            model: templateCombo.delegateModel
-                                            clip: true
-                                        }
-                                    }
-
-                                    delegate: ItemDelegate {
-                                        width: templateCombo.width
-                                        contentItem: Text {
-                                            text: modelData
-                                            color: templateCombo.currentIndex === index ? "#477B78" : "#CCCCCC"
-                                            font.pixelSize: 11
-                                            verticalAlignment: Text.AlignVCenter
-                                            leftPadding: 8
-                                        }
-                                        background: Rectangle {
-                                            color: hovered ? "#2a2a2e" : "transparent"
                                         }
                                     }
                                 }
