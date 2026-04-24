@@ -9893,6 +9893,7 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
+                    viewport.activeContent.clear();
                     storyMenu.visible = true;
                     scene2storyMenu.visible = false;
                     sceneMenu.visible = false;
@@ -10045,6 +10046,7 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
+                    viewport.activeContent.clear();
                     sceneEditor.visible = false;
                     viewportBlackOverlay.opacity = 1;
                     sceneEditor2sceneMenu.visible = false;
