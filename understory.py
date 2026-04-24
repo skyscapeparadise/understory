@@ -35,7 +35,7 @@ from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication, QImage
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickImageProvider
 
-versionnumber = "0.3"
+versionnumber = "0.4"
 
 
 class ThumbnailProvider(QQuickImageProvider):
