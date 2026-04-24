@@ -5033,7 +5033,7 @@ Window {
                 onNavigationOpenChanged: { if (!navigationOpen) navOverlayOpen = false }
 
                 Repeater {
-                    model: ["conditions", "variables", "timeline", "close scene"]
+                    model: ["conditions", "variables", "story map", "close scene"]
 
                     delegate: Item {
                         id: editorBtn
@@ -5042,7 +5042,7 @@ Window {
 
                         property bool hovered: false
                         property bool togglable: modelData === "conditions" || modelData === "variables"
-                        property bool toggled: modelData === "timeline" ? sceneEditorButtons.timelineOpen : (modelData === "conditions" ? sceneEditorButtons.conditionsOpen : (modelData === "variables" ? sceneEditorButtons.variablesOpen : false))
+                        property bool toggled: modelData === "story map" ? sceneEditorButtons.timelineOpen : (modelData === "conditions" ? sceneEditorButtons.conditionsOpen : (modelData === "variables" ? sceneEditorButtons.variablesOpen : false))
                         property bool pressed: false
 
                         Rectangle {
@@ -5084,7 +5084,7 @@ Window {
                                         sceneEditorButtons.conditionsOpen = !sceneEditorButtons.conditionsOpen;
                                     else if (modelData === "variables")
                                         sceneEditorButtons.variablesOpen = !sceneEditorButtons.variablesOpen;
-                                } else if (modelData === "timeline") {
+                                } else if (modelData === "story map") {
                                     var opening = !sceneEditorButtons.timelineOpen;
                                     sceneEditorButtons.timelineOpen = opening;
                                     yanimationduration = 1000;

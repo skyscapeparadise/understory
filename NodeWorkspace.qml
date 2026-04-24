@@ -438,7 +438,7 @@ Item {
     // MODEL HELPERS
     //
     function addNode(x, y) {
-        var defaultName = "Node " + nextNodeId;
+        var defaultName = nextNodeId === 0 ? "place" : "place " + nextNodeId;
         nodesModel.append({
             id: nextNodeId,
             x: x,
