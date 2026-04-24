@@ -75,6 +75,15 @@ Window {
                 }
             }
         }
+        Platform.Menu {
+            title: "Edit"
+            Platform.MenuItem {
+                text: "Deselect"
+                shortcut: "Ctrl+D"
+                enabled: viewport.selectionCount > 0
+                onTriggered: viewport.clearSelection()
+            }
+        }
     }
 
     property int xanimationduration: 0
@@ -5005,6 +5014,8 @@ Window {
                                         buttonGrid.selectedTool = modelData;
                                     else if (nonCreation.indexOf(modelData) === -1)
                                         buttonGrid.selectedTool = "select";
+                                    else if (modelData === "select")
+                                        viewport.clearSelection();
                                     if (nonCreation.indexOf(modelData) === -1) {
                                         sceneEditorButtons.variablesOpen = false;
                                         sceneEditorButtons.conditionsOpen = false;
@@ -5443,43 +5454,6 @@ Window {
                             property bool propLock: false
                             property string propName: ""
 
-                            Row {
-                                width: imageSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    width: parent.width - 50; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: imageSpatialProps.propName
-                                        Keys.onReturnPressed: focus = false
-                                        Keys.onEscapePressed: focus = false
-                                        onEditingFinished: imageSpatialProps.propName = text
-                                    }
-                                }
-                            }
-
-                            Repeater {
-                                model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
-                                delegate: Row {
-                                    width: imageSpatialProps.width; height: 26; spacing: 6
-                                    Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                    Rectangle {
-                                        width: parent.width - 50; height: 26
-                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                        TextInput {
-                                            anchors.fill: parent; anchors.margins: 3
-                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                            text: imageSpatialProps[modelData.key].toFixed(0)
-                                            Keys.onReturnPressed: focus = false
-                                            Keys.onEscapePressed: focus = false
-                                            onEditingFinished: imageSpatialProps[modelData.key] = parseFloat(text) || 0
-                                        }
-                                    }
-                                }
-                            }
-
                         }
                     }
                 }
@@ -5602,43 +5576,6 @@ Window {
                             property real propH: 150
                             property bool propLock: false
                             property string propName: ""
-
-                            Row {
-                                width: videoSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    width: parent.width - 50; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: videoSpatialProps.propName
-                                        Keys.onReturnPressed: focus = false
-                                        Keys.onEscapePressed: focus = false
-                                        onEditingFinished: videoSpatialProps.propName = text
-                                    }
-                                }
-                            }
-
-                            Repeater {
-                                model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
-                                delegate: Row {
-                                    width: videoSpatialProps.width; height: 26; spacing: 6
-                                    Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                    Rectangle {
-                                        width: parent.width - 50; height: 26
-                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                        TextInput {
-                                            anchors.fill: parent; anchors.margins: 3
-                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                            text: videoSpatialProps[modelData.key].toFixed(0)
-                                            Keys.onReturnPressed: focus = false
-                                            Keys.onEscapePressed: focus = false
-                                            onEditingFinished: videoSpatialProps[modelData.key] = parseFloat(text) || 0
-                                        }
-                                    }
-                                }
-                            }
 
                         }
                     }
@@ -6743,7 +6680,7 @@ Window {
                             Rectangle {
                                 visible: selectSettings.hasActiveImage
                                 width: parent.width
-                                height: 80
+                                height: 26
                                 color: "black"
                                 radius: 4
                                 enabled: !selectSettings.selLock
@@ -6751,23 +6688,29 @@ Window {
                                 Behavior on opacity { NumberAnimation { duration: 150 } }
 
                             Image {
-                                anchors.fill: parent
-                                anchors.margins: 9
-                                sourceSize.width: 256
-                                sourceSize.height: 256
+                                id: selImageDropIcon
+                                anchors.centerIn: parent
+                                width: 20; height: 20
                                 source: "icons/dropimage.svg"
                                 fillMode: Image.PreserveAspectFit
-                                opacity: 0.3
+                                visible: false
+                            }
+                            ColorOverlay {
+                                anchors.fill: selImageDropIcon
+                                source: selImageDropIcon
+                                color: "#666"
+                                opacity: selectSettings.hasActiveImage && viewport.imagesModel.get(viewport.selectedImages[0]).filePath !== "" ? 0.3 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 100 } }
                             }
 
                             Text {
-                                anchors.centerIn: parent
+                                anchors.fill: parent; anchors.margins: 4
+                                visible: selectSettings.hasActiveImage
                                 text: selectSettings.hasActiveImage ? viewport.imagesModel.get(viewport.selectedImages[0]).filePath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 14
-                                wrapMode: Text.Wrap
-                                elide: Text.ElideNone
-                                width: parent.width - 16
+                                font.pixelSize: 10
+                                elide: Text.ElideMiddle
+                                verticalAlignment: Text.AlignVCenter
                                 horizontalAlignment: Text.AlignHCenter
                             }
 
@@ -6789,7 +6732,7 @@ Window {
                             Rectangle {
                                 visible: selectSettings.hasActiveVideo
                                 width: parent.width
-                                height: 80
+                                height: 26
                                 color: "black"
                                 radius: 4
                                 enabled: !selectSettings.selLock
@@ -6797,23 +6740,29 @@ Window {
                                 Behavior on opacity { NumberAnimation { duration: 150 } }
 
                             Image {
-                                anchors.fill: parent
-                                anchors.margins: 9
-                                sourceSize.width: 256
-                                sourceSize.height: 256
+                                id: selVideoDropIcon
+                                anchors.centerIn: parent
+                                width: 20; height: 20
                                 source: "icons/dropvideo.svg"
                                 fillMode: Image.PreserveAspectFit
-                                opacity: 0.3
+                                visible: false
+                            }
+                            ColorOverlay {
+                                anchors.fill: selVideoDropIcon
+                                source: selVideoDropIcon
+                                color: "#666"
+                                opacity: selectSettings.hasActiveVideo && viewport.videosModel.get(viewport.selectedVideos[0]).filePath !== "" ? 0.3 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 100 } }
                             }
 
                             Text {
-                                anchors.centerIn: parent
+                                anchors.fill: parent; anchors.margins: 4
+                                visible: selectSettings.hasActiveVideo
                                 text: selectSettings.hasActiveVideo ? viewport.videosModel.get(viewport.selectedVideos[0]).filePath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 14
-                                wrapMode: Text.Wrap
-                                elide: Text.ElideNone
-                                width: parent.width - 16
+                                font.pixelSize: 10
+                                elide: Text.ElideMiddle
+                                verticalAlignment: Text.AlignVCenter
                                 horizontalAlignment: Text.AlignHCenter
                             }
 
@@ -6843,32 +6792,38 @@ Window {
                                 Item {
                                     id: shaderSwapItem
                                     width: parent.width
-                                    height: 80
+                                    height: 26
 
                         Rectangle {
                             width: (parent.width - 8) / 2
-                            height: 80
+                            height: 26
                             color: "black"
                             radius: 4
 
                             Image {
-                                anchors.fill: parent
-                                anchors.margins: 9
-                                sourceSize.width: 256
-                                sourceSize.height: 256
+                                id: selFragDropIcon
+                                anchors.centerIn: parent
+                                width: 20; height: 20
                                 source: "icons/dropfrag.svg"
                                 fillMode: Image.PreserveAspectFit
-                                opacity: 0.3
+                                visible: false
+                            }
+                            ColorOverlay {
+                                anchors.fill: selFragDropIcon
+                                source: selFragDropIcon
+                                color: "#666"
+                                opacity: selectSettings.hasActiveShader && viewport.shadersModel.get(viewport.selectedShaders[0]).fragPath !== "" ? 0.3 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 100 } }
                             }
 
                             Text {
-                                anchors.centerIn: parent
+                                anchors.fill: parent; anchors.margins: 4
+                                visible: selectSettings.hasActiveShader
                                 text: selectSettings.hasActiveShader ? viewport.shadersModel.get(viewport.selectedShaders[0]).fragPath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 14
-                                wrapMode: Text.Wrap
-                                elide: Text.ElideNone
-                                width: parent.width - 16
+                                font.pixelSize: 10
+                                elide: Text.ElideMiddle
+                                verticalAlignment: Text.AlignVCenter
                                 horizontalAlignment: Text.AlignHCenter
                             }
 
@@ -6896,28 +6851,34 @@ Window {
                         Rectangle {
                             x: (parent.width - 8) / 2 + 8
                             width: (parent.width - 8) / 2
-                            height: 80
+                            height: 26
                             color: "black"
                             radius: 4
 
                             Image {
-                                anchors.fill: parent
-                                anchors.margins: 9
-                                sourceSize.width: 256
-                                sourceSize.height: 256
+                                id: selVertDropIcon
+                                anchors.centerIn: parent
+                                width: 20; height: 20
                                 source: "icons/dropvert.svg"
                                 fillMode: Image.PreserveAspectFit
-                                opacity: 0.3
+                                visible: false
+                            }
+                            ColorOverlay {
+                                anchors.fill: selVertDropIcon
+                                source: selVertDropIcon
+                                color: "#666"
+                                opacity: selectSettings.hasActiveShader && viewport.shadersModel.get(viewport.selectedShaders[0]).vertPath !== "" ? 0.3 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 100 } }
                             }
 
                             Text {
-                                anchors.centerIn: parent
+                                anchors.fill: parent; anchors.margins: 4
+                                visible: selectSettings.hasActiveShader
                                 text: selectSettings.hasActiveShader ? viewport.shadersModel.get(viewport.selectedShaders[0]).vertPath.replace(/.*\//, "") : ""
                                 color: "white"
-                                font.pixelSize: 14
-                                wrapMode: Text.Wrap
-                                elide: Text.ElideNone
-                                width: parent.width - 16
+                                font.pixelSize: 10
+                                elide: Text.ElideMiddle
+                                verticalAlignment: Text.AlignVCenter
                                 horizontalAlignment: Text.AlignHCenter
                             }
 
@@ -7801,47 +7762,6 @@ Window {
                                 }
                             }
                         }
-                        Item { width: 1; height: 8 }
-
-                        // Name + spatial props (always shown, below uniforms)
-                        Row {
-                            width: parent.width; height: 26; spacing: 6
-                            Text { text: "name"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                            Rectangle {
-                                width: parent.width - 50; height: 26
-                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                TextInput {
-                                    anchors.fill: parent; anchors.margins: 3
-                                    color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                    text: newshaderSettings.propName
-                                    Keys.onReturnPressed: focus = false
-                                    Keys.onEscapePressed: focus = false
-                                    onEditingFinished: newshaderSettings.propName = text
-                                }
-                            }
-                        }
-
-                        Repeater {
-                            model: [{ lbl:"x",key:"propX" },{ lbl:"y",key:"propY" },{ lbl:"width",key:"propW" },{ lbl:"height",key:"propH" }]
-                            delegate: Row {
-                                width: parent.width; height: 26; spacing: 6
-                                Text { text: modelData.lbl; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    width: parent.width - 50; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: newshaderSettings[modelData.key].toFixed(0)
-                                        Keys.onReturnPressed: focus = false
-                                        Keys.onEscapePressed: focus = false
-                                        onEditingFinished: newshaderSettings[modelData.key] = parseFloat(text) || 0
-                                    }
-                                }
-                            }
-                        }
-
-
                         Item { width: 1; height: 16 }
                         }  // Column
                     }  // ScrollView
