@@ -4006,7 +4006,8 @@ Window {
                             filePath: imageSettings.selectedFilePath,
                             name: imageSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
-                            locked: false
+                            locked: false,
+                            sourcesJson: "[]"
                         });
                         viewport.selectImage(viewport.imagesModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -4080,7 +4081,8 @@ Window {
                             filePath: videoSettings.selectedFilePath,
                             name: videoSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
-                            locked: false
+                            locked: false,
+                            sourcesJson: "[]"
                         });
                         viewport.selectVideo(viewport.videosModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -4144,7 +4146,8 @@ Window {
                                 name: newshaderSettings.propName,
                                 stackOrder: viewport.nextStackOrder++,
                                 uniformsJson: newshaderSettings.buildCurrentUniformsList(),
-                                locked: false
+                                locked: false,
+                                sourcesJson: "[]"
                             });
                             viewport.selectShader(viewport.shadersModel.count - 1);
                             buttonGrid.selectedTool = "select";
@@ -5103,7 +5106,8 @@ Window {
                             name: newshaderSettings.propName,
                             stackOrder: viewport.nextStackOrder++,
                             uniformsJson: newshaderSettings.buildCurrentUniformsList(),
-                            locked: false
+                            locked: false,
+                            sourcesJson: "[]"
                         });
                         viewport.selectShader(viewport.shadersModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -5119,35 +5123,57 @@ Window {
                 id: selectImageSwapDialog
                 title: "Select image file"
                 nameFilters: ["Image files (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.svg)"]
+                property int targetSourceIdx: -1
                 onAccepted: {
-                    if (selectSettings.hasActiveImage)
-                        viewport.imagesModel.setProperty(viewport.selectedImages[0], "filePath", selectedFile.toString());
+                    var path = selectedFile.toString();
+                    if (targetSourceIdx >= 0) {
+                        selectSourcesModel.setProperty(targetSourceIdx, "srcFilePath", path);
+                        selectSettings.saveCurrentSources();
+                        targetSourceIdx = -1;
+                    } else if (selectSettings.hasActiveImage) {
+                        viewport.imagesModel.setProperty(viewport.selectedImages[0], "filePath", path);
+                    }
                 }
+                onRejected: { targetSourceIdx = -1 }
             }
 
             FileDialog {
                 id: selectVideoSwapDialog
                 title: "Select video file"
                 nameFilters: ["Video files (*.mp4 *.mov *.avi *.mkv *.webm *.m4v)"]
+                property int targetSourceIdx: -1
                 onAccepted: {
-                    if (selectSettings.hasActiveVideo)
-                        viewport.videosModel.setProperty(viewport.selectedVideos[0], "filePath", selectedFile.toString());
+                    var path = selectedFile.toString();
+                    if (targetSourceIdx >= 0) {
+                        selectSourcesModel.setProperty(targetSourceIdx, "srcFilePath", path);
+                        selectSettings.saveCurrentSources();
+                        targetSourceIdx = -1;
+                    } else if (selectSettings.hasActiveVideo) {
+                        viewport.videosModel.setProperty(viewport.selectedVideos[0], "filePath", path);
+                    }
                 }
+                onRejected: { targetSourceIdx = -1 }
             }
 
             FileDialog {
                 id: selectFragSwapDialog
                 title: "Select compiled fragment shader"
                 nameFilters: ["Compiled fragment shaders (*.frag.qsb)"]
+                property int targetSourceIdx: -1
                 onAccepted: {
-                    if (selectSettings.hasActiveShader) {
-                        var path = selectedFile.toString();
+                    var path = selectedFile.toString();
+                    if (targetSourceIdx >= 0) {
+                        selectSourcesModel.setProperty(targetSourceIdx, "srcFragPath", path);
+                        selectSettings.saveCurrentSources();
+                        targetSourceIdx = -1;
+                    } else if (selectSettings.hasActiveShader) {
                         var idx = viewport.selectedShaders[0];
                         viewport.shadersModel.setProperty(idx, "fragPath", path);
                         viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(viewport.buildUniformsList(shaderInspector.inspectShader(path))));
                         selectSettings.refreshShaderUniforms();
                     }
                 }
+                onRejected: { targetSourceIdx = -1 }
             }
 
             FileDialog {
@@ -5185,7 +5211,8 @@ Window {
                             y2: y1 + defaultH,
                             filePath: viewport.dropPendingImagePath,
                             stackOrder: viewport.nextStackOrder++,
-                            locked: false
+                            locked: false,
+                            sourcesJson: "[]"
                         });
                         viewport.selectImage(viewport.imagesModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -5219,7 +5246,8 @@ Window {
                             y2: y1 + defaultH,
                             filePath: viewport.dropPendingVideoPath,
                             stackOrder: viewport.nextStackOrder++,
-                            locked: false
+                            locked: false,
+                            sourcesJson: "[]"
                         });
                         viewport.selectVideo(viewport.videosModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -6801,12 +6829,95 @@ Window {
                             viewport.shadersModel.setProperty(syncedIdx, "interactivityJson", json);
                     }
 
+                    function saveCurrentSources() {
+                        if (syncedIdx < 0 || selectSourcesModel.count === 0)
+                            return;
+                        var arr = [];
+                        for (var i = 0; i < selectSourcesModel.count; i++) {
+                            var item = selectSourcesModel.get(i);
+                            arr.push({
+                                srcCondition: item.srcCondition,
+                                srcCondVar: item.srcCondVar,
+                                srcCondOp: item.srcCondOp,
+                                srcCondVal: item.srcCondVal,
+                                srcWhereNetId: item.srcWhereNetId,
+                                srcWhereCharName: item.srcWhereCharName,
+                                srcWhereOp: item.srcWhereOp,
+                                srcWhereNodeName: item.srcWhereNodeName,
+                                srcFilePath: item.srcFilePath,
+                                srcFragPath: item.srcFragPath,
+                                srcVertPath: item.srcVertPath
+                            });
+                        }
+                        var json = JSON.stringify(arr);
+                        if (syncedType === "image" && syncedIdx < viewport.imagesModel.count)
+                            viewport.imagesModel.setProperty(syncedIdx, "sourcesJson", json);
+                        else if (syncedType === "video" && syncedIdx < viewport.videosModel.count)
+                            viewport.videosModel.setProperty(syncedIdx, "sourcesJson", json);
+                        else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count)
+                            viewport.shadersModel.setProperty(syncedIdx, "sourcesJson", json);
+                    }
+
+                    function loadCurrentSources(json) {
+                        selectSourcesModel.clear();
+                        if (!json || json === "[]") return;
+                        var arr;
+                        try { arr = JSON.parse(json); } catch(e) { return; }
+                        for (var i = 0; i < arr.length; i++) {
+                            var s = arr[i];
+                            selectSourcesModel.append({
+                                srcCondition: s.srcCondition || "else",
+                                srcCondVar: s.srcCondVar || "",
+                                srcCondOp: s.srcCondOp || "is",
+                                srcCondVal: s.srcCondVal || "",
+                                srcWhereNetId: s.srcWhereNetId !== undefined ? s.srcWhereNetId : -1,
+                                srcWhereCharName: s.srcWhereCharName || "",
+                                srcWhereOp: s.srcWhereOp || "is at",
+                                srcWhereNodeName: s.srcWhereNodeName || "",
+                                srcFilePath: s.srcFilePath || "",
+                                srcFragPath: s.srcFragPath || "",
+                                srcVertPath: s.srcVertPath || ""
+                            });
+                        }
+                    }
+
+                    function initSourcesModel() {
+                        if (syncedIdx < 0) return;
+                        var curFilePath = "";
+                        var curFragPath = "";
+                        var curVertPath = "";
+                        if (syncedType === "image")
+                            curFilePath = viewport.imagesModel.get(syncedIdx).filePath;
+                        else if (syncedType === "video")
+                            curFilePath = viewport.videosModel.get(syncedIdx).filePath;
+                        else if (syncedType === "shader") {
+                            curFragPath = viewport.shadersModel.get(syncedIdx).fragPath;
+                            curVertPath = viewport.shadersModel.get(syncedIdx).vertPath;
+                        }
+                        selectSourcesModel.clear();
+                        selectSourcesModel.append({
+                            srcCondition: "if",
+                            srcCondVar: "", srcCondOp: "is", srcCondVal: "",
+                            srcWhereNetId: -1, srcWhereCharName: "", srcWhereOp: "is at", srcWhereNodeName: "",
+                            srcFilePath: "", srcFragPath: "", srcVertPath: ""
+                        });
+                        selectSourcesModel.append({
+                            srcCondition: "else",
+                            srcCondVar: "", srcCondOp: "is", srcCondVal: "",
+                            srcWhereNetId: -1, srcWhereCharName: "", srcWhereOp: "is at", srcWhereNodeName: "",
+                            srcFilePath: curFilePath, srcFragPath: curFragPath, srcVertPath: curVertPath
+                        });
+                        saveCurrentSources();
+                    }
+
                     // Load/save interactivity whenever the selection changes.
                     Connections {
                         target: viewport
                         function onSelectionRevisionChanged() {
                             selectSettings.saveCurrentInteractivity();
+                            selectSettings.saveCurrentSources();
                             selectInteractivityModel.clear();
+                            selectSourcesModel.clear();
                             selectSettings.syncedType = "";
                             selectSettings.syncedIdx = -1;
                             if (selectSettings.hasActiveArea) {
@@ -6824,16 +6935,19 @@ Window {
                                 selectSettings.syncedType = "image";
                                 selectSettings.syncedIdx = idx;
                                 viewport.loadInteractivityModel(selectInteractivityModel, viewport.imagesModel.get(idx).interactivityJson);
+                                selectSettings.loadCurrentSources(viewport.imagesModel.get(idx).sourcesJson);
                             } else if (selectSettings.hasActiveVideo) {
                                 var idx = viewport.selectedVideos[0];
                                 selectSettings.syncedType = "video";
                                 selectSettings.syncedIdx = idx;
                                 viewport.loadInteractivityModel(selectInteractivityModel, viewport.videosModel.get(idx).interactivityJson);
+                                selectSettings.loadCurrentSources(viewport.videosModel.get(idx).sourcesJson);
                             } else if (selectSettings.hasActiveShader) {
                                 var idx = viewport.selectedShaders[0];
                                 selectSettings.syncedType = "shader";
                                 selectSettings.syncedIdx = idx;
                                 viewport.loadInteractivityModel(selectInteractivityModel, viewport.shadersModel.get(idx).interactivityJson);
+                                selectSettings.loadCurrentSources(viewport.shadersModel.get(idx).sourcesJson);
                             }
                         }
                     }
@@ -6843,6 +6957,7 @@ Window {
                         target: buttonGrid
                         function onSelectedToolChanged() {
                             selectSettings.saveCurrentInteractivity();
+                            selectSettings.saveCurrentSources();
                         }
                     }
 
@@ -7151,6 +7266,10 @@ Window {
 
                     ListModel {
                         id: selectInteractivityModel
+                    }
+
+                    ListModel {
+                        id: selectSourcesModel
                     }
 
                     ScrollView {
@@ -7508,9 +7627,9 @@ Window {
                                 }
                             }
 
-                            // Image swap — visible when a single image is selected
+                            // Image swap — visible when a single image is selected (single-source mode)
                             RowLayout {
-                                visible: selectSettings.hasActiveImage
+                                visible: selectSettings.hasActiveImage && selectSourcesModel.count === 0
                                 width: parent.width
                                 height: 26
                                 spacing: 4
@@ -7606,14 +7725,225 @@ Window {
                                         hoverEnabled: true
                                         onEntered: parent.hovered = true
                                         onExited: parent.hovered = false
-                                        onClicked: selectImageSwapDialog.open()
+                                        onClicked: selectSettings.initSourcesModel()
                                     }
                                 }
                             }
 
-                            // Video swap — visible when a single video is selected
+                            // Image multi-source — visible when sources model is populated
+                            Column {
+                                visible: selectSettings.hasActiveImage && selectSourcesModel.count > 0
+                                width: parent.width
+                                spacing: 4
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                Repeater {
+                                    model: selectSourcesModel
+                                    delegate: Column {
+                                        id: imgSrcRow
+                                        width: parent ? parent.width : 0
+                                        spacing: 4
+                                        property int rowIdx: index
+
+                                        RowLayout {
+                                            width: parent.width
+                                            height: 26
+                                            spacing: 4
+
+                                            ComboBox {
+                                                id: imgSrcCondCombo
+                                                Layout.preferredWidth: 62
+                                                Layout.preferredHeight: 26
+                                                model: {
+                                                    var hasVars = false
+                                                    for (var i = 0; i < variablesModel.count; i++) {
+                                                        if (variablesModel.get(i).varName !== "") { hasVars = true; break }
+                                                    }
+                                                    var hasNets = nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0
+                                                    var opts = []
+                                                    if (hasVars) opts.push("if")
+                                                    if (hasNets) opts.push("where")
+                                                    if (imgSrcRow.rowIdx === selectSourcesModel.count - 1) opts.push("else")
+                                                    if (opts.length === 0) opts.push("else")
+                                                    return opts
+                                                }
+                                                currentIndex: Math.max(0, model.indexOf(srcCondition))
+                                                onActivated: function(ai) {
+                                                    selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcCondition", imgSrcCondCombo.model[ai])
+                                                    selectSettings.saveCurrentSources()
+                                                }
+                                                contentItem: Text { leftPadding: 6; rightPadding: 18; text: parent.displayText; font.pixelSize: 11; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 10; color: "white" }
+                                                HoverHandler { id: imgSrcCondHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcCondHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: parent.width; height: imgSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcCondCombo.delegateModel; currentIndex: imgSrcCondCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: imgSrcCondVarCombo
+                                                visible: srcCondition === "if"
+                                                Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                                model: { var names = [""]; for (var i = 0; i < variablesModel.count; i++) { var n = variablesModel.get(i).varName; if (n !== "") names.push(n) } return names }
+                                                currentIndex: Math.max(0, model.indexOf(srcCondVar))
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcCondVar", imgSrcCondVarCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: imgSrcCondVarHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcCondVarHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcCondVarCombo.delegateModel; currentIndex: imgSrcCondVarCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: imgSrcCondOpCombo
+                                                visible: srcCondition === "if"
+                                                Layout.preferredWidth: 44; Layout.preferredHeight: 26
+                                                model: { var vt = ""; for (var i = 0; i < variablesModel.count; i++) { if (variablesModel.get(i).varName === srcCondVar) { vt = variablesModel.get(i).varType; break } } return vt === "number" ? ["is","not",">","<"] : ["is","not"] }
+                                                currentIndex: Math.max(0, model.indexOf(srcCondOp || "is"))
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcCondOp", imgSrcCondOpCombo.model[ai]); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: imgSrcCondOpHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcCondOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: parent.width; height: imgSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcCondOpCombo.delegateModel; currentIndex: imgSrcCondOpCombo.currentIndex } }
+                                            }
+
+                                            Item {
+                                                visible: srcCondition === "if"
+                                                Layout.fillWidth: true; Layout.preferredHeight: 26
+                                                Rectangle {
+                                                    anchors.fill: parent; radius: 4; color: "transparent"; border.color: "#555"; border.width: 1
+                                                    TextInput {
+                                                        anchors.fill: parent; anchors.margins: 4; color: "white"; font.pixelSize: 10; verticalAlignment: TextInput.AlignVCenter; clip: true
+                                                        text: srcCondVal || ""
+                                                        onEditingFinished: { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcCondVal", text); selectSettings.saveCurrentSources() }
+                                                    }
+                                                }
+                                            }
+
+                                            ComboBox {
+                                                id: imgSrcWhereNetCombo
+                                                visible: srcCondition === "where"
+                                                Layout.preferredWidth: 44; Layout.preferredHeight: 26
+                                                model: { var arr = []; if (nodeWorkspace.networksModel) { var mc = nodeWorkspace.networksModel.count; for (var i = 0; i < mc; i++) { var n = nodeWorkspace.networksModel.get(i); arr.push({ id: n.netId, name: n.netName }) } } return arr }
+                                                currentIndex: { var id = srcWhereNetId; for (var i = 0; i < model.length; i++) { if (model[i].id === id) return i } return 0 }
+                                                onActivated: function(ai) { if (ai < model.length) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereNetId", model[ai].id); selectSettings.saveCurrentSources() } }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: { var m = parent.model; var ci = parent.currentIndex; return (m && ci >= 0 && ci < m.length) ? (m[ci].name || "") : "" }; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: imgSrcWhereNetHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcWhereNetHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData.name || ""; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcWhereNetCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcWhereNetCombo.delegateModel; currentIndex: imgSrcWhereNetCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: imgSrcWhereCharCombo
+                                                visible: srcCondition === "where"
+                                                Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                                model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
+                                                currentIndex: { var n = srcWhereCharName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereCharName", imgSrcWhereCharCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: imgSrcWhereCharHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcWhereCharHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcWhereCharCombo.delegateModel; currentIndex: imgSrcWhereCharCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: imgSrcWhereOpCombo
+                                                visible: srcCondition === "where"
+                                                Layout.preferredWidth: 50; Layout.preferredHeight: 26
+                                                model: ["is at", "not at"]
+                                                currentIndex: srcWhereOp === "not at" ? 1 : 0
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereOp", model[ai]); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: imgSrcWhereOpHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcWhereOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcWhereOpCombo.delegateModel; currentIndex: imgSrcWhereOpCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: imgSrcWhereNodeCombo
+                                                visible: srcCondition === "where"
+                                                Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                                model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
+                                                currentIndex: { var n = srcWhereNodeName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereNodeName", imgSrcWhereNodeCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: imgSrcWhereNodeHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcWhereNodeHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcWhereNodeCombo.delegateModel; currentIndex: imgSrcWhereNodeCombo.currentIndex } }
+                                            }
+
+                                            Item { visible: srcCondition === "else"; Layout.fillWidth: true }
+                                        }
+
+                                        RowLayout {
+                                            width: parent.width
+                                            height: 26
+                                            spacing: 4
+
+                                            Rectangle {
+                                                Layout.fillWidth: true; Layout.preferredHeight: 26
+                                                color: "black"; radius: 4
+                                                Image {
+                                                    id: imgMultiSrcIcon; anchors.centerIn: parent; width: 20; height: 20
+                                                    source: "icons/dropimage.svg"; fillMode: Image.PreserveAspectFit; visible: false
+                                                }
+                                                ColorOverlay {
+                                                    anchors.fill: imgMultiSrcIcon; source: imgMultiSrcIcon; color: "#666"
+                                                    opacity: srcFilePath !== "" ? 0.3 : 1.0
+                                                    Behavior on opacity { NumberAnimation { duration: 100 } }
+                                                }
+                                                Text {
+                                                    anchors.fill: parent; anchors.margins: 4
+                                                    text: srcFilePath.replace(/.*\//, ""); color: "white"; font.pixelSize: 10
+                                                    elide: Text.ElideMiddle; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                                                }
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: { selectImageSwapDialog.targetSourceIdx = imgSrcRow.rowIdx; selectImageSwapDialog.open() }
+                                                }
+                                                DropArea {
+                                                    anchors.fill: parent
+                                                    onDropped: drop => { if (drop.hasUrls) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcFilePath", drop.urls[0].toString()); selectSettings.saveCurrentSources() } }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                visible: imgSrcRow.rowIdx === selectSourcesModel.count - 1
+                                                Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 4
+                                                property bool hovered: false
+                                                color: hovered ? "white" : "transparent"; border.color: "white"; border.width: 1
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                Text { anchors.centerIn: parent; anchors.horizontalCenterOffset: -0.5; text: "+"; font.pixelSize: 18; font.bold: true; color: parent.hovered ? "darkslategrey" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
+                                                MouseArea {
+                                                    anchors.fill: parent; hoverEnabled: true
+                                                    onEntered: parent.hovered = true; onExited: parent.hovered = false
+                                                    onClicked: {
+                                                        selectSourcesModel.insert(selectSourcesModel.count - 1, { srcCondition: "if", srcCondVar: "", srcCondOp: "is", srcCondVal: "", srcWhereNetId: -1, srcWhereCharName: "", srcWhereOp: "is at", srcWhereNodeName: "", srcFilePath: "", srcFragPath: "", srcVertPath: "" })
+                                                        selectSettings.saveCurrentSources()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Video swap — visible when a single video is selected (single-source mode)
                             RowLayout {
-                                visible: selectSettings.hasActiveVideo
+                                visible: selectSettings.hasActiveVideo && selectSourcesModel.count === 0
                                 width: parent.width
                                 height: 26
                                 spacing: 4
@@ -7709,7 +8039,198 @@ Window {
                                         hoverEnabled: true
                                         onEntered: parent.hovered = true
                                         onExited: parent.hovered = false
-                                        onClicked: selectVideoSwapDialog.open()
+                                        onClicked: selectSettings.initSourcesModel()
+                                    }
+                                }
+                            }
+
+                            // Video multi-source — visible when sources model is populated
+                            Column {
+                                visible: selectSettings.hasActiveVideo && selectSourcesModel.count > 0
+                                width: parent.width
+                                spacing: 4
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                Repeater {
+                                    model: selectSourcesModel
+                                    delegate: Column {
+                                        id: vidSrcRow
+                                        width: parent ? parent.width : 0
+                                        spacing: 4
+                                        property int rowIdx: index
+
+                                        RowLayout {
+                                            width: parent.width
+                                            height: 26
+                                            spacing: 4
+
+                                            ComboBox {
+                                                id: vidSrcCondCombo
+                                                Layout.preferredWidth: 62; Layout.preferredHeight: 26
+                                                model: { var hv = false; for (var i = 0; i < variablesModel.count; i++) { if (variablesModel.get(i).varName !== "") { hv = true; break } } var hn = nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0; var opts = []; if (hv) opts.push("if"); if (hn) opts.push("where"); if (vidSrcRow.rowIdx === selectSourcesModel.count - 1) opts.push("else"); if (opts.length === 0) opts.push("else"); return opts }
+                                                currentIndex: Math.max(0, model.indexOf(srcCondition))
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcCondition", vidSrcCondCombo.model[ai]); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 6; rightPadding: 18; text: parent.displayText; font.pixelSize: 11; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 10; color: "white" }
+                                                HoverHandler { id: vidSrcCondHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcCondHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: parent.width; height: vidSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcCondCombo.delegateModel; currentIndex: vidSrcCondCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: vidSrcCondVarCombo
+                                                visible: srcCondition === "if"
+                                                Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                                model: { var names = [""]; for (var i = 0; i < variablesModel.count; i++) { var n = variablesModel.get(i).varName; if (n !== "") names.push(n) } return names }
+                                                currentIndex: Math.max(0, model.indexOf(srcCondVar))
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcCondVar", vidSrcCondVarCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: vidSrcCondVarHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcCondVarHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcCondVarCombo.delegateModel; currentIndex: vidSrcCondVarCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: vidSrcCondOpCombo
+                                                visible: srcCondition === "if"
+                                                Layout.preferredWidth: 44; Layout.preferredHeight: 26
+                                                model: { var vt = ""; for (var i = 0; i < variablesModel.count; i++) { if (variablesModel.get(i).varName === srcCondVar) { vt = variablesModel.get(i).varType; break } } return vt === "number" ? ["is","not",">","<"] : ["is","not"] }
+                                                currentIndex: Math.max(0, model.indexOf(srcCondOp || "is"))
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcCondOp", vidSrcCondOpCombo.model[ai]); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: vidSrcCondOpHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcCondOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: parent.width; height: vidSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcCondOpCombo.delegateModel; currentIndex: vidSrcCondOpCombo.currentIndex } }
+                                            }
+
+                                            Item {
+                                                visible: srcCondition === "if"
+                                                Layout.fillWidth: true; Layout.preferredHeight: 26
+                                                Rectangle {
+                                                    anchors.fill: parent; radius: 4; color: "transparent"; border.color: "#555"; border.width: 1
+                                                    TextInput { anchors.fill: parent; anchors.margins: 4; color: "white"; font.pixelSize: 10; verticalAlignment: TextInput.AlignVCenter; clip: true; text: srcCondVal || ""; onEditingFinished: { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcCondVal", text); selectSettings.saveCurrentSources() } }
+                                                }
+                                            }
+
+                                            ComboBox {
+                                                id: vidSrcWhereNetCombo
+                                                visible: srcCondition === "where"
+                                                Layout.preferredWidth: 44; Layout.preferredHeight: 26
+                                                model: { var arr = []; if (nodeWorkspace.networksModel) { var mc = nodeWorkspace.networksModel.count; for (var i = 0; i < mc; i++) { var n = nodeWorkspace.networksModel.get(i); arr.push({ id: n.netId, name: n.netName }) } } return arr }
+                                                currentIndex: { var id = srcWhereNetId; for (var i = 0; i < model.length; i++) { if (model[i].id === id) return i } return 0 }
+                                                onActivated: function(ai) { if (ai < model.length) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereNetId", model[ai].id); selectSettings.saveCurrentSources() } }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: { var m = parent.model; var ci = parent.currentIndex; return (m && ci >= 0 && ci < m.length) ? (m[ci].name || "") : "" }; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: vidSrcWhereNetHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcWhereNetHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData.name || ""; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcWhereNetCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcWhereNetCombo.delegateModel; currentIndex: vidSrcWhereNetCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: vidSrcWhereCharCombo
+                                                visible: srcCondition === "where"
+                                                Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                                model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
+                                                currentIndex: { var n = srcWhereCharName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereCharName", vidSrcWhereCharCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: vidSrcWhereCharHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcWhereCharHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcWhereCharCombo.delegateModel; currentIndex: vidSrcWhereCharCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: vidSrcWhereOpCombo
+                                                visible: srcCondition === "where"
+                                                Layout.preferredWidth: 50; Layout.preferredHeight: 26
+                                                model: ["is at", "not at"]
+                                                currentIndex: srcWhereOp === "not at" ? 1 : 0
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereOp", model[ai]); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: vidSrcWhereOpHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcWhereOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcWhereOpCombo.delegateModel; currentIndex: vidSrcWhereOpCombo.currentIndex } }
+                                            }
+
+                                            ComboBox {
+                                                id: vidSrcWhereNodeCombo
+                                                visible: srcCondition === "where"
+                                                Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                                model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
+                                                currentIndex: { var n = srcWhereNodeName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereNodeName", vidSrcWhereNodeCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
+                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                HoverHandler { id: vidSrcWhereNodeHover }
+                                                background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcWhereNodeHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcWhereNodeCombo.delegateModel; currentIndex: vidSrcWhereNodeCombo.currentIndex } }
+                                            }
+
+                                            Item { visible: srcCondition === "else"; Layout.fillWidth: true }
+                                        }
+
+                                        RowLayout {
+                                            width: parent.width
+                                            height: 26
+                                            spacing: 4
+
+                                            Rectangle {
+                                                Layout.fillWidth: true; Layout.preferredHeight: 26
+                                                color: "black"; radius: 4
+                                                Image {
+                                                    id: vidMultiSrcIcon; anchors.centerIn: parent; width: 20; height: 20
+                                                    source: "icons/dropvideo.svg"; fillMode: Image.PreserveAspectFit; visible: false
+                                                }
+                                                ColorOverlay {
+                                                    anchors.fill: vidMultiSrcIcon; source: vidMultiSrcIcon; color: "#666"
+                                                    opacity: srcFilePath !== "" ? 0.3 : 1.0
+                                                    Behavior on opacity { NumberAnimation { duration: 100 } }
+                                                }
+                                                Text {
+                                                    anchors.fill: parent; anchors.margins: 4
+                                                    text: srcFilePath.replace(/.*\//, ""); color: "white"; font.pixelSize: 10
+                                                    elide: Text.ElideMiddle; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                                                }
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: { selectVideoSwapDialog.targetSourceIdx = vidSrcRow.rowIdx; selectVideoSwapDialog.open() }
+                                                }
+                                                DropArea {
+                                                    anchors.fill: parent
+                                                    onDropped: drop => { if (drop.hasUrls) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcFilePath", drop.urls[0].toString()); selectSettings.saveCurrentSources() } }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                visible: vidSrcRow.rowIdx === selectSourcesModel.count - 1
+                                                Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 4
+                                                property bool hovered: false
+                                                color: hovered ? "white" : "transparent"; border.color: "white"; border.width: 1
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                Text { anchors.centerIn: parent; anchors.horizontalCenterOffset: -0.5; text: "+"; font.pixelSize: 18; font.bold: true; color: parent.hovered ? "darkslategrey" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
+                                                MouseArea {
+                                                    anchors.fill: parent; hoverEnabled: true
+                                                    onEntered: parent.hovered = true; onExited: parent.hovered = false
+                                                    onClicked: {
+                                                        selectSourcesModel.insert(selectSourcesModel.count - 1, { srcCondition: "if", srcCondVar: "", srcCondOp: "is", srcCondVal: "", srcWhereNetId: -1, srcWhereCharName: "", srcWhereOp: "is at", srcWhereNodeName: "", srcFilePath: "", srcFragPath: "", srcVertPath: "" })
+                                                        selectSettings.saveCurrentSources()
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -7728,6 +8249,7 @@ Window {
                                 }
 
                                 RowLayout {
+                                    visible: selectSourcesModel.count === 0
                                     width: parent.width
                                     height: 26
                                     spacing: 4
@@ -7882,7 +8404,222 @@ Window {
                                             hoverEnabled: true
                                             onEntered: parent.hovered = true
                                             onExited: parent.hovered = false
-                                            onClicked: selectFragSwapDialog.open()
+                                            onClicked: selectSettings.initSourcesModel()
+                                        }
+                                    }
+                                }
+
+                                // Shader multi-source — visible when sources model is populated
+                                Column {
+                                    visible: selectSourcesModel.count > 0
+                                    width: parent.width
+                                    spacing: 4
+
+                                    Repeater {
+                                        model: selectSourcesModel
+                                        delegate: Column {
+                                            id: shaderSrcRow
+                                            width: parent ? parent.width : 0
+                                            spacing: 4
+                                            property int rowIdx: index
+
+                                            RowLayout {
+                                                width: parent.width
+                                                height: 26
+                                                spacing: 4
+
+                                                ComboBox {
+                                                    id: shaderSrcCondCombo
+                                                    Layout.preferredWidth: 62; Layout.preferredHeight: 26
+                                                    model: { var hv = false; for (var i = 0; i < variablesModel.count; i++) { if (variablesModel.get(i).varName !== "") { hv = true; break } } var hn = nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0; var opts = []; if (hv) opts.push("if"); if (hn) opts.push("where"); if (shaderSrcRow.rowIdx === selectSourcesModel.count - 1) opts.push("else"); if (opts.length === 0) opts.push("else"); return opts }
+                                                    currentIndex: Math.max(0, model.indexOf(srcCondition))
+                                                    onActivated: function(ai) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcCondition", shaderSrcCondCombo.model[ai]); selectSettings.saveCurrentSources() }
+                                                    contentItem: Text { leftPadding: 6; rightPadding: 18; text: parent.displayText; font.pixelSize: 11; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                    indicator: Text { x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 10; color: "white" }
+                                                    HoverHandler { id: shaderSrcCondHover }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcCondHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: parent.width; height: shaderSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcCondCombo.delegateModel; currentIndex: shaderSrcCondCombo.currentIndex } }
+                                                }
+
+                                                ComboBox {
+                                                    id: shaderSrcCondVarCombo
+                                                    visible: srcCondition === "if"
+                                                    Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                                    model: { var names = [""]; for (var i = 0; i < variablesModel.count; i++) { var n = variablesModel.get(i).varName; if (n !== "") names.push(n) } return names }
+                                                    currentIndex: Math.max(0, model.indexOf(srcCondVar))
+                                                    onActivated: function(ai) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcCondVar", shaderSrcCondVarCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
+                                                    contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                    indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                    HoverHandler { id: shaderSrcCondVarHover }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcCondVarHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcCondVarCombo.delegateModel; currentIndex: shaderSrcCondVarCombo.currentIndex } }
+                                                }
+
+                                                ComboBox {
+                                                    id: shaderSrcCondOpCombo
+                                                    visible: srcCondition === "if"
+                                                    Layout.preferredWidth: 44; Layout.preferredHeight: 26
+                                                    model: { var vt = ""; for (var i = 0; i < variablesModel.count; i++) { if (variablesModel.get(i).varName === srcCondVar) { vt = variablesModel.get(i).varType; break } } return vt === "number" ? ["is","not",">","<"] : ["is","not"] }
+                                                    currentIndex: Math.max(0, model.indexOf(srcCondOp || "is"))
+                                                    onActivated: function(ai) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcCondOp", shaderSrcCondOpCombo.model[ai]); selectSettings.saveCurrentSources() }
+                                                    contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                    indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                    HoverHandler { id: shaderSrcCondOpHover }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcCondOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: parent.width; height: shaderSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcCondOpCombo.delegateModel; currentIndex: shaderSrcCondOpCombo.currentIndex } }
+                                                }
+
+                                                Item {
+                                                    visible: srcCondition === "if"
+                                                    Layout.fillWidth: true; Layout.preferredHeight: 26
+                                                    Rectangle {
+                                                        anchors.fill: parent; radius: 4; color: "transparent"; border.color: "#555"; border.width: 1
+                                                        TextInput { anchors.fill: parent; anchors.margins: 4; color: "white"; font.pixelSize: 10; verticalAlignment: TextInput.AlignVCenter; clip: true; text: srcCondVal || ""; onEditingFinished: { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcCondVal", text); selectSettings.saveCurrentSources() } }
+                                                    }
+                                                }
+
+                                                ComboBox {
+                                                    id: shaderSrcWhereNetCombo
+                                                    visible: srcCondition === "where"
+                                                    Layout.preferredWidth: 44; Layout.preferredHeight: 26
+                                                    model: { var arr = []; if (nodeWorkspace.networksModel) { var mc = nodeWorkspace.networksModel.count; for (var i = 0; i < mc; i++) { var n = nodeWorkspace.networksModel.get(i); arr.push({ id: n.netId, name: n.netName }) } } return arr }
+                                                    currentIndex: { var id = srcWhereNetId; for (var i = 0; i < model.length; i++) { if (model[i].id === id) return i } return 0 }
+                                                    onActivated: function(ai) { if (ai < model.length) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereNetId", model[ai].id); selectSettings.saveCurrentSources() } }
+                                                    contentItem: Text { leftPadding: 4; rightPadding: 14; text: { var m = parent.model; var ci = parent.currentIndex; return (m && ci >= 0 && ci < m.length) ? (m[ci].name || "") : "" }; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                    indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                    HoverHandler { id: shaderSrcWhereNetHover }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcWhereNetHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData.name || ""; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcWhereNetCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcWhereNetCombo.delegateModel; currentIndex: shaderSrcWhereNetCombo.currentIndex } }
+                                                }
+
+                                                ComboBox {
+                                                    id: shaderSrcWhereCharCombo
+                                                    visible: srcCondition === "where"
+                                                    Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                                    model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
+                                                    currentIndex: { var n = srcWhereCharName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                    onActivated: function(ai) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereCharName", shaderSrcWhereCharCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
+                                                    contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                    indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                    HoverHandler { id: shaderSrcWhereCharHover }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcWhereCharHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcWhereCharCombo.delegateModel; currentIndex: shaderSrcWhereCharCombo.currentIndex } }
+                                                }
+
+                                                ComboBox {
+                                                    id: shaderSrcWhereOpCombo
+                                                    visible: srcCondition === "where"
+                                                    Layout.preferredWidth: 50; Layout.preferredHeight: 26
+                                                    model: ["is at", "not at"]
+                                                    currentIndex: srcWhereOp === "not at" ? 1 : 0
+                                                    onActivated: function(ai) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereOp", model[ai]); selectSettings.saveCurrentSources() }
+                                                    contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                    indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                    HoverHandler { id: shaderSrcWhereOpHover }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcWhereOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcWhereOpCombo.delegateModel; currentIndex: shaderSrcWhereOpCombo.currentIndex } }
+                                                }
+
+                                                ComboBox {
+                                                    id: shaderSrcWhereNodeCombo
+                                                    visible: srcCondition === "where"
+                                                    Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                                    model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
+                                                    currentIndex: { var n = srcWhereNodeName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                    onActivated: function(ai) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereNodeName", shaderSrcWhereNodeCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
+                                                    contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                    indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                                    HoverHandler { id: shaderSrcWhereNodeHover }
+                                                    background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcWhereNodeHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcWhereNodeCombo.delegateModel; currentIndex: shaderSrcWhereNodeCombo.currentIndex } }
+                                                }
+
+                                                Item { visible: srcCondition === "else"; Layout.fillWidth: true }
+                                            }
+
+                                            RowLayout {
+                                                width: parent.width
+                                                height: 26
+                                                spacing: 4
+
+                                                Rectangle {
+                                                    Layout.fillWidth: true; Layout.preferredHeight: 26
+                                                    color: "black"; radius: 4
+                                                    Image {
+                                                        id: shaderMultiSrcFragIcon; anchors.centerIn: parent; width: 20; height: 20
+                                                        source: "icons/dropfrag.svg"; fillMode: Image.PreserveAspectFit; visible: false
+                                                    }
+                                                    ColorOverlay {
+                                                        anchors.fill: shaderMultiSrcFragIcon; source: shaderMultiSrcFragIcon; color: "#666"
+                                                        opacity: srcFragPath !== "" ? 0.3 : 1.0
+                                                        Behavior on opacity { NumberAnimation { duration: 100 } }
+                                                    }
+                                                    Text {
+                                                        anchors.fill: parent; anchors.margins: 4
+                                                        text: srcFragPath.replace(/.*\//, ""); color: "white"; font.pixelSize: 10
+                                                        elide: Text.ElideMiddle; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                                                    }
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onClicked: { selectFragSwapDialog.targetSourceIdx = shaderSrcRow.rowIdx; selectFragSwapDialog.open() }
+                                                    }
+                                                    DropArea {
+                                                        anchors.fill: parent
+                                                        onDropped: drop => { if (drop.hasUrls && drop.urls[0].toString().endsWith(".frag.qsb")) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcFragPath", drop.urls[0].toString()); selectSettings.saveCurrentSources() } }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    Layout.fillWidth: true; Layout.preferredHeight: 26
+                                                    color: "black"; radius: 4
+                                                    Image {
+                                                        id: shaderMultiSrcVertIcon; anchors.centerIn: parent; width: 20; height: 20
+                                                        source: "icons/dropvert.svg"; fillMode: Image.PreserveAspectFit; visible: false
+                                                    }
+                                                    ColorOverlay {
+                                                        anchors.fill: shaderMultiSrcVertIcon; source: shaderMultiSrcVertIcon; color: "#666"
+                                                        opacity: srcVertPath !== "" ? 0.3 : 1.0
+                                                        Behavior on opacity { NumberAnimation { duration: 100 } }
+                                                    }
+                                                    Text {
+                                                        anchors.fill: parent; anchors.margins: 4
+                                                        text: srcVertPath.replace(/.*\//, ""); color: "white"; font.pixelSize: 10
+                                                        elide: Text.ElideMiddle; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                                                    }
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onClicked: { selectVertSwapDialog.open() }
+                                                    }
+                                                    DropArea {
+                                                        anchors.fill: parent
+                                                        onDropped: drop => { if (drop.hasUrls && drop.urls[0].toString().endsWith(".vert.qsb")) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcVertPath", drop.urls[0].toString()); selectSettings.saveCurrentSources() } }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    visible: shaderSrcRow.rowIdx === selectSourcesModel.count - 1
+                                                    Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 4
+                                                    property bool hovered: false
+                                                    color: hovered ? "white" : "transparent"; border.color: "white"; border.width: 1
+                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                    Text { anchors.centerIn: parent; anchors.horizontalCenterOffset: -0.5; text: "+"; font.pixelSize: 18; font.bold: true; color: parent.hovered ? "darkslategrey" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
+                                                    MouseArea {
+                                                        anchors.fill: parent; hoverEnabled: true
+                                                        onEntered: parent.hovered = true; onExited: parent.hovered = false
+                                                        onClicked: {
+                                                            selectSourcesModel.insert(selectSourcesModel.count - 1, { srcCondition: "if", srcCondVar: "", srcCondOp: "is", srcCondVal: "", srcWhereNetId: -1, srcWhereCharName: "", srcWhereOp: "is at", srcWhereNodeName: "", srcFilePath: "", srcFragPath: "", srcVertPath: "" })
+                                                            selectSettings.saveCurrentSources()
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
