@@ -3057,7 +3057,8 @@ Window {
                             y2: Math.max(viewport.areaY1, viewport.areaY2),
                             name: areaSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
-                            interactivityJson: "[]"
+                            interactivityJson: "[]",
+                            locked: false
                         });
                         viewport.selectArea(viewport.areasModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -3101,7 +3102,8 @@ Window {
                             textColor: textSettings.txtColor.toString(),
                             content: "",
                             name: textSpatialProps.propName,
-                            stackOrder: viewport.nextStackOrder++
+                            stackOrder: viewport.nextStackOrder++,
+                            locked: false
                         });
                         viewport.selectTb(viewport.textBoxesModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -3162,7 +3164,8 @@ Window {
                             y2: Math.max(viewport.imgY1, viewport.imgY2),
                             filePath: imageSettings.selectedFilePath,
                             name: imageSpatialProps.propName,
-                            stackOrder: viewport.nextStackOrder++
+                            stackOrder: viewport.nextStackOrder++,
+                            locked: false
                         });
                         viewport.selectImage(viewport.imagesModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -3224,7 +3227,8 @@ Window {
                             y2: Math.max(viewport.vidY1, viewport.vidY2),
                             filePath: videoSettings.selectedFilePath,
                             name: videoSpatialProps.propName,
-                            stackOrder: viewport.nextStackOrder++
+                            stackOrder: viewport.nextStackOrder++,
+                            locked: false
                         });
                         viewport.selectVideo(viewport.videosModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -3283,7 +3287,8 @@ Window {
                                 vertPath: newshaderSettings.vertFilePath,
                                 name: newshaderSettings.propName,
                                 stackOrder: viewport.nextStackOrder++,
-                                uniformsJson: newshaderSettings.buildCurrentUniformsList()
+                                uniformsJson: newshaderSettings.buildCurrentUniformsList(),
+                                locked: false
                             });
                             viewport.selectShader(viewport.shadersModel.count - 1);
                             buttonGrid.selectedTool = "select";
@@ -4228,7 +4233,8 @@ Window {
                             vertPath: newshaderSettings.vertFilePath,
                             name: newshaderSettings.propName,
                             stackOrder: viewport.nextStackOrder++,
-                            uniformsJson: newshaderSettings.buildCurrentUniformsList()
+                            uniformsJson: newshaderSettings.buildCurrentUniformsList(),
+                            locked: false
                         });
                         viewport.selectShader(viewport.shadersModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -4307,7 +4313,8 @@ Window {
                             x1: x1, y1: y1,
                             x2: x1 + defaultW, y2: y1 + defaultH,
                             filePath: viewport.dropPendingImagePath,
-                            stackOrder: viewport.nextStackOrder++
+                            stackOrder: viewport.nextStackOrder++,
+                            locked: false
                         });
                         viewport.selectImage(viewport.imagesModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -4338,7 +4345,8 @@ Window {
                             x1: x1, y1: y1,
                             x2: x1 + defaultW, y2: y1 + defaultH,
                             filePath: viewport.dropPendingVideoPath,
-                            stackOrder: viewport.nextStackOrder++
+                            stackOrder: viewport.nextStackOrder++,
+                            locked: false
                         });
                         viewport.selectVideo(viewport.videosModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -6230,8 +6238,22 @@ Window {
                             selCursor = m.cursor || "select";
                             selCursorPath = m.cursorPath || "";
                             selTemplate = m.template || "none";
+                            selLock = m.locked || false;
                         }
                     }
+
+                    function writeLockToModel() {
+                        var idx = -1; var mod = null
+                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = viewport.areasModel }
+                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = viewport.textBoxesModel }
+                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = viewport.imagesModel }
+                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = viewport.videosModel }
+                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = viewport.shadersModel }
+                        if (mod !== null && idx >= 0)
+                            mod.setProperty(idx, "locked", selLock)
+                    }
+
+                    onSelLockChanged: writeLockToModel()
 
                     function writeSpatialToModel() {
                         var idx = -1;
@@ -6407,6 +6429,9 @@ Window {
                                 visible: selectSettings.hasActiveTb
                                 width: parent.width
                                 spacing: 8
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
 
                         // Font family
                         ComboBox {
@@ -6564,6 +6589,7 @@ Window {
                                     color: "white"
                                     font.pixelSize: 11
                                     horizontalAlignment: TextInput.AlignHCenter
+                                    readOnly: selectSettings.selLock
                                     text: selectSettings.tbSize.toString()
                                     validator: IntValidator {
                                         bottom: 6
@@ -6719,6 +6745,9 @@ Window {
                                 height: 80
                                 color: "black"
                                 radius: 4
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
 
                             Image {
                                 anchors.fill: parent
@@ -6761,7 +6790,10 @@ Window {
                                 width: parent.width
                                 height: 80
                                 color: "black"
-                            radius: 4
+                                radius: 4
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
 
                             Image {
                                 anchors.fill: parent
@@ -6803,6 +6835,9 @@ Window {
                                 visible: selectSettings.hasActiveShader
                                 width: parent.width
                                 spacing: 8
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
 
                                 Item {
                                     id: shaderSwapItem
@@ -7078,6 +7113,9 @@ Window {
                                 visible: selectSettings.hasActiveArea || selectSettings.hasActiveTb || selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
                                 width: parent.width
                                 spacing: 4
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
 
                                 Text {
                                     text: "information"
@@ -7101,6 +7139,7 @@ Window {
                                             TextInput {
                                                 anchors.fill: parent; anchors.margins: 3
                                                 color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                readOnly: selectSettings.selLock
                                                 text: selectSettings.selName
                                                 Keys.onReturnPressed: focus = false
                                                 Keys.onEscapePressed: focus = false
@@ -7202,6 +7241,7 @@ Window {
                                             TextInput {
                                                 anchors.fill: parent; anchors.margins: 3
                                                 color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                readOnly: selectSettings.selLock
                                                 text: selectSettings.selX.toFixed(0)
                                                 Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
                                                 onEditingFinished: { selectSettings.selX = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
@@ -7217,6 +7257,7 @@ Window {
                                             TextInput {
                                                 anchors.fill: parent; anchors.margins: 3
                                                 color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                readOnly: selectSettings.selLock
                                                 text: selectSettings.selW.toFixed(0)
                                                 Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
                                                 onEditingFinished: { selectSettings.selW = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
@@ -7237,6 +7278,7 @@ Window {
                                             TextInput {
                                                 anchors.fill: parent; anchors.margins: 3
                                                 color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                readOnly: selectSettings.selLock
                                                 text: selectSettings.selY.toFixed(0)
                                                 Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
                                                 onEditingFinished: { selectSettings.selY = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
@@ -7252,6 +7294,7 @@ Window {
                                             TextInput {
                                                 anchors.fill: parent; anchors.margins: 3
                                                 color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                readOnly: selectSettings.selLock
                                                 text: selectSettings.selH.toFixed(0)
                                                 Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
                                                 onEditingFinished: { selectSettings.selH = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
@@ -7266,6 +7309,9 @@ Window {
                                 visible: selectSettings.hasActiveArea || selectSettings.hasActiveTb || selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
                                 width: parent.width
                                 spacing: 4
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
 
                                 // cursor field — toggle buttons
                                 Row {
@@ -8096,7 +8142,7 @@ Window {
                                         name: "east", stackOrder: viewport.nextStackOrder++,
                                         cursor: "right", cursorPath: "",
                                         interactivityJson: makeInteractivity(3, eSettingsArea.linkedSceneId, eSettingsArea.linkedSceneName),
-                                        template: "east"
+                                        template: "east", locked: false
                                     })
                                 }
 
@@ -8107,7 +8153,7 @@ Window {
                                         name: "west", stackOrder: viewport.nextStackOrder++,
                                         cursor: "left", cursorPath: "",
                                         interactivityJson: makeInteractivity(4, wSettingsArea.linkedSceneId, wSettingsArea.linkedSceneName),
-                                        template: "west"
+                                        template: "west", locked: false
                                     })
                                 }
 
@@ -8123,7 +8169,7 @@ Window {
                                         name: "south", stackOrder: viewport.nextStackOrder++,
                                         cursor: "down", cursorPath: "",
                                         interactivityJson: makeInteractivity(2, sSettingsArea.linkedSceneId, sSettingsArea.linkedSceneName),
-                                        template: "south"
+                                        template: "south", locked: false
                                     })
                                 }
 
@@ -8137,7 +8183,7 @@ Window {
                                         name: "north", stackOrder: viewport.nextStackOrder++,
                                         cursor: "up", cursorPath: "",
                                         interactivityJson: makeInteractivity(1, nSettingsArea.linkedSceneId, nSettingsArea.linkedSceneName),
-                                        template: "north"
+                                        template: "north", locked: false
                                     })
                                 }
                             }

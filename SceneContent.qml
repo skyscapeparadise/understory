@@ -95,7 +95,8 @@ Item {
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
-                    template: el.template || "none"
+                    template: el.template || "none",
+                    locked: el.locked || false
                 })
             } else if (el.type === "text") {
                 textBoxesModelInst.append({
@@ -110,7 +111,8 @@ Item {
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
-                    template: el.template || "none"
+                    template: el.template || "none",
+                    locked: el.locked || false
                 })
             } else if (el.type === "image") {
                 imagesModelInst.append({
@@ -119,7 +121,8 @@ Item {
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
-                    template: el.template || "none"
+                    template: el.template || "none",
+                    locked: el.locked || false
                 })
             } else if (el.type === "video") {
                 videosModelInst.append({
@@ -128,7 +131,8 @@ Item {
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
-                    template: el.template || "none"
+                    template: el.template || "none",
+                    locked: el.locked || false
                 })
             } else if (el.type === "shader") {
                 shadersModelInst.append({
@@ -139,7 +143,8 @@ Item {
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
-                    template: el.template || "none"
+                    template: el.template || "none",
+                    locked: el.locked || false
                 })
             }
             if (z >= nextStackOrder) nextStackOrder = z + 1
@@ -160,7 +165,8 @@ Item {
                 name: m.name || "", z_order: m.stackOrder,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
-                template: m.template || "none" })
+                template: m.template || "none",
+                locked: m.locked || false })
         }
         for (i = 0; i < textBoxesModelInst.count; i++) {
             m = textBoxesModelInst.get(i)
@@ -173,7 +179,8 @@ Item {
                 textColor: m.textColor, content: m.content,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
-                template: m.template || "none" })
+                template: m.template || "none",
+                locked: m.locked || false })
         }
         for (i = 0; i < imagesModelInst.count; i++) {
             m = imagesModelInst.get(i)
@@ -183,7 +190,8 @@ Item {
                 name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
-                template: m.template || "none" })
+                template: m.template || "none",
+                locked: m.locked || false })
         }
         for (i = 0; i < videosModelInst.count; i++) {
             m = videosModelInst.get(i)
@@ -193,7 +201,8 @@ Item {
                 name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
-                template: m.template || "none" })
+                template: m.template || "none",
+                locked: m.locked || false })
         }
         for (i = 0; i < shadersModelInst.count; i++) {
             m = shadersModelInst.get(i)
@@ -205,7 +214,8 @@ Item {
                 uniformsJson: m.uniformsJson,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
-                template: m.template || "none" })
+                template: m.template || "none",
+                locked: m.locked || false })
         }
         return JSON.stringify(elements)
     }
@@ -411,7 +421,7 @@ Item {
                         enabled: areaDelegate.isSelect
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
-                        cursorShape: areaDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
+                        cursorShape: areaDelegate.isActive && !model.locked ? Qt.SizeAllCursor : Qt.ArrowCursor
                         onPressed: function (mouse) {
                             if (mouse.button === Qt.RightButton) {
                                 viewportRef.tempDestroyMode = true;
@@ -421,24 +431,23 @@ Item {
                             }
                             viewportRef.selectArea(index);
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
-                            if (areaDelegate.isActive) {
+                            viewportRef.elementDragging = true;
+                            viewportRef.elementDragX = pt.x;
+                            viewportRef.elementDragY = pt.y;
+                            if (!model.locked && areaDelegate.isActive) {
                                 areaDelegate.pressVpX = pt.x;
                                 areaDelegate.pressVpY = pt.y;
                                 areaDelegate.origX1 = model.x1;
                                 areaDelegate.origY1 = model.y1;
                                 areaDelegate.origX2 = model.x2;
                                 areaDelegate.origY2 = model.y2;
-                                viewportRef.elementDragging = true;
-                                viewportRef.elementDragX = pt.x;
-                                viewportRef.elementDragY = pt.y;
                             }
                         }
                         onPositionChanged: function (mouse) {
-                            if (!areaDelegate.isActive)
-                                return;
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
                             viewportRef.elementDragX = pt.x;
                             viewportRef.elementDragY = pt.y;
+                            if (!areaDelegate.isActive || model.locked) return;
                             var dx = pt.x - areaDelegate.pressVpX, dy = pt.y - areaDelegate.pressVpY;
                             var w = areaDelegate.origX2 - areaDelegate.origX1, h = areaDelegate.origY2 - areaDelegate.origY1;
                             var nx1 = Math.max(0, Math.min(areaDelegate.origX1 + dx, viewportRef.width - w));
@@ -525,7 +534,7 @@ Item {
                         y: 0
                         width: 56
                         height: 56
-                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -578,7 +587,7 @@ Item {
                         y: 14
                         width: 28
                         height: 28
-                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -614,7 +623,7 @@ Item {
                         y: 0
                         width: 56
                         height: 56
-                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -667,7 +676,7 @@ Item {
                         y: parent.height / 2 - 14
                         width: 28
                         height: 28
-                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -703,7 +712,7 @@ Item {
                         y: parent.height - 56
                         width: 56
                         height: 56
-                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -756,7 +765,7 @@ Item {
                         y: parent.height - 42
                         width: 28
                         height: 28
-                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -792,7 +801,7 @@ Item {
                         y: parent.height - 56
                         width: 56
                         height: 56
-                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -845,7 +854,7 @@ Item {
                         y: parent.height / 2 - 14
                         width: 28
                         height: 28
-                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -955,9 +964,9 @@ Item {
                         enabled: !tbDelegate.editing
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
-                        cursorShape: tbDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
+                        cursorShape: tbDelegate.isActive && !model.locked ? Qt.SizeAllCursor : Qt.ArrowCursor
                         onDoubleClicked: {
-                            if (tbDelegate.isActive) {
+                            if (tbDelegate.isActive && !model.locked) {
                                 tbDelegate.editing = true;
                                 tbTextEdit.forceActiveFocus();
                             }
@@ -970,24 +979,24 @@ Item {
                                 return;
                             }
                             viewportRef.selectTb(index);
-                            if (tbDelegate.isSelect) {
-                                var pt = mapToItem(viewport, mouse.x, mouse.y);
+                            var pt = mapToItem(viewport, mouse.x, mouse.y);
+                            viewportRef.elementDragging = true;
+                            viewportRef.elementDragX = pt.x;
+                            viewportRef.elementDragY = pt.y;
+                            if (!model.locked && tbDelegate.isSelect) {
                                 tbDelegate.pressVpX = pt.x;
                                 tbDelegate.pressVpY = pt.y;
                                 tbDelegate.origX1 = model.x1;
                                 tbDelegate.origY1 = model.y1;
                                 tbDelegate.origX2 = model.x2;
                                 tbDelegate.origY2 = model.y2;
-                                viewportRef.elementDragging = true;
-                                viewportRef.elementDragX = pt.x;
-                                viewportRef.elementDragY = pt.y;
                             }
                         }
                         onPositionChanged: function (mouse) {
-                            if (tbDelegate.isActive && tbDelegate.isSelect) {
-                                var pt = mapToItem(viewport, mouse.x, mouse.y);
-                                viewportRef.elementDragX = pt.x;
-                                viewportRef.elementDragY = pt.y;
+                            var pt = mapToItem(viewport, mouse.x, mouse.y);
+                            viewportRef.elementDragX = pt.x;
+                            viewportRef.elementDragY = pt.y;
+                            if (tbDelegate.isActive && tbDelegate.isSelect && !model.locked) {
                                 var dx = pt.x - tbDelegate.pressVpX, dy = pt.y - tbDelegate.pressVpY;
                                 var w = tbDelegate.origX2 - tbDelegate.origX1, h = tbDelegate.origY2 - tbDelegate.origY1;
                                 var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + dx, viewportRef.width - w));
@@ -1075,7 +1084,7 @@ Item {
                         y: 0
                         width: 56
                         height: 56
-                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1128,7 +1137,7 @@ Item {
                         y: 14
                         width: 28
                         height: 28
-                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1164,7 +1173,7 @@ Item {
                         y: 0
                         width: 56
                         height: 56
-                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1217,7 +1226,7 @@ Item {
                         y: parent.height / 2 - 14
                         width: 28
                         height: 28
-                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1253,7 +1262,7 @@ Item {
                         y: parent.height - 56
                         width: 56
                         height: 56
-                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1306,7 +1315,7 @@ Item {
                         y: parent.height - 42
                         width: 28
                         height: 28
-                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1342,7 +1351,7 @@ Item {
                         y: parent.height - 56
                         width: 56
                         height: 56
-                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1395,7 +1404,7 @@ Item {
                         y: parent.height / 2 - 14
                         width: 28
                         height: 28
-                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1569,7 +1578,7 @@ Item {
                         enabled: imgDelegate.isSelect
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
-                        cursorShape: imgDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
+                        cursorShape: imgDelegate.isActive && !model.locked ? Qt.SizeAllCursor : Qt.ArrowCursor
                         onPressed: function (mouse) {
                             if (mouse.button === Qt.RightButton) {
                                 viewportRef.tempDestroyMode = true;
@@ -1579,24 +1588,23 @@ Item {
                             }
                             viewportRef.selectImage(index);
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
-                            if (imgDelegate.isActive) {
+                            viewportRef.elementDragging = true;
+                            viewportRef.elementDragX = pt.x;
+                            viewportRef.elementDragY = pt.y;
+                            if (!model.locked && imgDelegate.isActive) {
                                 imgDelegate.pressVpX = pt.x;
                                 imgDelegate.pressVpY = pt.y;
                                 imgDelegate.origX1 = model.x1;
                                 imgDelegate.origY1 = model.y1;
                                 imgDelegate.origX2 = model.x2;
                                 imgDelegate.origY2 = model.y2;
-                                viewportRef.elementDragging = true;
-                                viewportRef.elementDragX = pt.x;
-                                viewportRef.elementDragY = pt.y;
                             }
                         }
                         onPositionChanged: function (mouse) {
-                            if (!imgDelegate.isActive)
-                                return;
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
                             viewportRef.elementDragX = pt.x;
                             viewportRef.elementDragY = pt.y;
+                            if (!imgDelegate.isActive || model.locked) return;
                             var dx = pt.x - imgDelegate.pressVpX, dy = pt.y - imgDelegate.pressVpY;
                             var w = imgDelegate.origX2 - imgDelegate.origX1, h = imgDelegate.origY2 - imgDelegate.origY1;
                             var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + dx, viewportRef.width - w));
@@ -1683,7 +1691,7 @@ Item {
                         y: 0
                         width: 56
                         height: 56
-                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1736,7 +1744,7 @@ Item {
                         y: 14
                         width: 28
                         height: 28
-                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1772,7 +1780,7 @@ Item {
                         y: 0
                         width: 56
                         height: 56
-                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1825,7 +1833,7 @@ Item {
                         y: parent.height / 2 - 14
                         width: 28
                         height: 28
-                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1861,7 +1869,7 @@ Item {
                         y: parent.height - 56
                         width: 56
                         height: 56
-                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1914,7 +1922,7 @@ Item {
                         y: parent.height - 42
                         width: 28
                         height: 28
-                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1950,7 +1958,7 @@ Item {
                         y: parent.height - 56
                         width: 56
                         height: 56
-                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2003,7 +2011,7 @@ Item {
                         y: parent.height / 2 - 14
                         width: 28
                         height: 28
-                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2207,7 +2215,7 @@ Item {
                         enabled: vidDelegate.isSelect
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
-                        cursorShape: vidDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
+                        cursorShape: vidDelegate.isActive && !model.locked ? Qt.SizeAllCursor : Qt.ArrowCursor
                         onPressed: function (mouse) {
                             if (mouse.button === Qt.RightButton) {
                                 viewportRef.tempDestroyMode = true;
@@ -2217,24 +2225,23 @@ Item {
                             }
                             viewportRef.selectVideo(index);
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
-                            if (vidDelegate.isActive) {
+                            viewportRef.elementDragging = true;
+                            viewportRef.elementDragX = pt.x;
+                            viewportRef.elementDragY = pt.y;
+                            if (!model.locked && vidDelegate.isActive) {
                                 vidDelegate.pressVpX = pt.x;
                                 vidDelegate.pressVpY = pt.y;
                                 vidDelegate.origX1 = model.x1;
                                 vidDelegate.origY1 = model.y1;
                                 vidDelegate.origX2 = model.x2;
                                 vidDelegate.origY2 = model.y2;
-                                viewportRef.elementDragging = true;
-                                viewportRef.elementDragX = pt.x;
-                                viewportRef.elementDragY = pt.y;
                             }
                         }
                         onPositionChanged: function (mouse) {
-                            if (!vidDelegate.isActive)
-                                return;
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
                             viewportRef.elementDragX = pt.x;
                             viewportRef.elementDragY = pt.y;
+                            if (!vidDelegate.isActive || model.locked) return;
                             var dx = pt.x - vidDelegate.pressVpX, dy = pt.y - vidDelegate.pressVpY;
                             var w = vidDelegate.origX2 - vidDelegate.origX1, h = vidDelegate.origY2 - vidDelegate.origY1;
                             var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + dx, viewportRef.width - w));
@@ -2321,7 +2328,7 @@ Item {
                         y: 0
                         width: 56
                         height: 56
-                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2372,7 +2379,7 @@ Item {
                         y: 14
                         width: 28
                         height: 28
-                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2417,7 +2424,7 @@ Item {
                         y: 0
                         width: 56
                         height: 56
-                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2468,7 +2475,7 @@ Item {
                         y: parent.height / 2 - 14
                         width: 28
                         height: 28
-                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2513,7 +2520,7 @@ Item {
                         y: parent.height - 56
                         width: 56
                         height: 56
-                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2564,7 +2571,7 @@ Item {
                         y: parent.height - 42
                         width: 28
                         height: 28
-                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2609,7 +2616,7 @@ Item {
                         y: parent.height - 56
                         width: 56
                         height: 56
-                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2660,7 +2667,7 @@ Item {
                         y: parent.height / 2 - 14
                         width: 28
                         height: 28
-                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -3022,7 +3029,7 @@ Item {
                         enabled: shaderDelegate.isSelect
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
-                        cursorShape: shaderDelegate.isActive ? Qt.SizeAllCursor : Qt.ArrowCursor
+                        cursorShape: shaderDelegate.isActive && !model.locked ? Qt.SizeAllCursor : Qt.ArrowCursor
                         onPressed: function (mouse) {
                             if (mouse.button === Qt.RightButton) {
                                 viewportRef.tempDestroyMode = true;
@@ -3032,23 +3039,23 @@ Item {
                             }
                             viewportRef.selectShader(index);
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
-                            if (shaderDelegate.isActive) {
+                            viewportRef.elementDragging = true;
+                            viewportRef.elementDragX = pt.x;
+                            viewportRef.elementDragY = pt.y;
+                            if (!model.locked && shaderDelegate.isActive) {
                                 shaderDelegate.pressVpX = pt.x;
                                 shaderDelegate.pressVpY = pt.y;
                                 shaderDelegate.origX1 = model.x1;
                                 shaderDelegate.origY1 = model.y1;
                                 shaderDelegate.origX2 = model.x2;
                                 shaderDelegate.origY2 = model.y2;
-                                viewportRef.elementDragging = true;
-                                viewportRef.elementDragX = pt.x;
-                                viewportRef.elementDragY = pt.y;
                             }
                         }
                         onPositionChanged: function (mouse) {
-                            if (!shaderDelegate.isActive) return;
                             var pt = mapToItem(viewport, mouse.x, mouse.y);
                             viewportRef.elementDragX = pt.x;
                             viewportRef.elementDragY = pt.y;
+                            if (!shaderDelegate.isActive || model.locked) return;
                             var dx = pt.x - shaderDelegate.pressVpX, dy = pt.y - shaderDelegate.pressVpY;
                             var w = shaderDelegate.origX2 - shaderDelegate.origX1, h = shaderDelegate.origY2 - shaderDelegate.origY1;
                             var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + dx, viewportRef.width - w));
@@ -3132,7 +3139,7 @@ Item {
                     // Top-left
                     Item {
                         x: 0; y: 0; width: 56; height: 56
-                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3164,7 +3171,7 @@ Item {
                     // Top-mid
                     Item {
                         x: parent.width / 2 - 14; y: 14; width: 28; height: 28
-                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3186,7 +3193,7 @@ Item {
                     // Top-right
                     Item {
                         x: parent.width - 56; y: 0; width: 56; height: 56
-                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3218,7 +3225,7 @@ Item {
                     // Right-mid
                     Item {
                         x: parent.width - 42; y: parent.height / 2 - 14; width: 28; height: 28
-                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3240,7 +3247,7 @@ Item {
                     // Bottom-right
                     Item {
                         x: parent.width - 56; y: parent.height - 56; width: 56; height: 56
-                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3272,7 +3279,7 @@ Item {
                     // Bottom-mid
                     Item {
                         x: parent.width / 2 - 14; y: parent.height - 42; width: 28; height: 28
-                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3294,7 +3301,7 @@ Item {
                     // Bottom-left
                     Item {
                         x: 0; y: parent.height - 56; width: 56; height: 56
-                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3326,7 +3333,7 @@ Item {
                     // Left-mid
                     Item {
                         x: 14; y: parent.height / 2 - 14; width: 28; height: 28
-                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1
+                        visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
