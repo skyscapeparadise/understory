@@ -5129,10 +5129,27 @@ Window {
             }
 
             Rectangle {
+                id: toolSettingsAreaMask
+                anchors.top: toolPalette.bottom
+                anchors.topMargin: 14
+                anchors.bottom: sceneEditorButtons.top
+                anchors.bottomMargin: 14
+                anchors.left: parent.left
+                anchors.leftMargin: 14
+                width: 377
+                radius: 12
+                color: "white"
+                visible: false
+            }
+
+            Rectangle {
                 id: toolSettingsArea
                 radius: 12
                 width: 377
                 color: "transparent"
+                clip: true
+                layer.enabled: true
+                layer.effect: OpacityMask { maskSource: toolSettingsAreaMask }
                 border.color: "white"
                 border.width: sceneEditorButtons.navigationOpen ? 0 : 2
                 anchors.top: toolPalette.bottom
@@ -5151,35 +5168,42 @@ Window {
                     color: "transparent"
 
 
-                    Text {
-                        id: areaSettingsHeading
-                        text: "new area"
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: "white"
+                    Row {
+                        id: areaSettingsHeadingRow
                         anchors.top: parent.top
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                        spacing: 10
+
+                        Text {
+                            id: areaSettingsHeading
+                            text: "new area"
+                            font.pixelSize: 24
+                            font.bold: true
+                            color: "white"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
                     }
 
 
 
                     ScrollView {
                         id: areaPropsScroll
-                        anchors.top: areaSettingsHeading.bottom
+                        anchors.top: areaSettingsHeadingRow.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
-                        anchors.rightMargin: 14
+                        anchors.rightMargin: 0
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 8
+                        anchors.bottomMargin: 0
                         clip: true
 
                         Column {
                             id: areaSpatialProps
-                            width: areaPropsScroll.availableWidth
+                            width: areaPropsScroll.availableWidth - 14
                             spacing: 4
 
                             property real propX: 0
@@ -5199,44 +5223,20 @@ Window {
                                 bottomPadding: 6
                             }
 
-                            // Row 1: name | lock
-                            Row {
-                                width: areaSpatialProps.width; height: 26; spacing: 6
-                                RowLayout {
-                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                    Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
-                                    Rectangle {
-                                        Layout.fillWidth: true; height: 26
-                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                        TextInput {
-                                            anchors.fill: parent; anchors.margins: 3
-                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                            text: areaSpatialProps.propName
-                                            Keys.onReturnPressed: focus = false
-                                            Keys.onEscapePressed: focus = false
-                                            onEditingFinished: areaSpatialProps.propName = text
-                                        }
-                                    }
-                                }
-                                Row {
-                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                    Text { text: "lock"; font.pixelSize: 11; color: "white"; width: 44; height: 26; verticalAlignment: Text.AlignVCenter }
-                                    Row {
-                                        spacing: 6; anchors.verticalCenter: parent.verticalCenter
-                                        Repeater {
-                                            model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                            delegate: Row {
-                                                spacing: 3; anchors.verticalCenter: parent.verticalCenter
-                                                Rectangle {
-                                                    width: 12; height: 12; radius: 6
-                                                    border.color: "white"; border.width: 1; color: "transparent"
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: "white"; visible: areaSpatialProps.propLock === modelData.val }
-                                                    MouseArea { anchors.fill: parent; onClicked: areaSpatialProps.propLock = modelData.val }
-                                                }
-                                                Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                                            }
-                                        }
+                            // Row 1: name (full width)
+                            RowLayout {
+                                width: areaSpatialProps.width; height: 26; spacing: 4
+                                Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                Rectangle {
+                                    Layout.fillWidth: true; height: 26
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        anchors.fill: parent; anchors.margins: 3
+                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                        text: areaSpatialProps.propName
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: areaSpatialProps.propName = text
                                     }
                                 }
                             }
@@ -5340,22 +5340,29 @@ Window {
                         }
                     }
 
-                    Text {
-                        id: imageSettingsHeading
-                        text: "new image"
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: "white"
+                    Row {
+                        id: imageSettingsHeadingRow
                         anchors.top: parent.top
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                        spacing: 10
+
+                        Text {
+                            id: imageSettingsHeading
+                            text: "new image"
+                            font.pixelSize: 24
+                            font.bold: true
+                            color: "white"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
                     }
 
                     // Image drop zone — fixed, not scrollable
                     Rectangle {
                         id: imageDropZone
-                        anchors.top: imageSettingsHeading.bottom
+                        anchors.top: imageSettingsHeadingRow.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
@@ -5411,13 +5418,13 @@ Window {
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        anchors.bottomMargin: 8
+                        anchors.rightMargin: 0
+                        anchors.bottomMargin: 0
                         clip: true
 
                         Column {
                             id: imageSpatialProps
-                            width: imagePropsScroll.availableWidth
+                            width: imagePropsScroll.availableWidth - 14
                             spacing: 4
 
                             property real propX: 0
@@ -5464,30 +5471,6 @@ Window {
                                 }
                             }
 
-                            Row {
-                                width: imageSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                Row {
-                                    spacing: 12; anchors.verticalCenter: parent.verticalCenter
-                                    Repeater {
-                                        model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                        delegate: Row {
-                                            spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                                            Rectangle {
-                                                width: 12; height: 12; radius: 6
-                                                border.color: "white"; border.width: 1; color: "transparent"
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Rectangle {
-                                                    anchors.centerIn: parent; width: 6; height: 6; radius: 3
-                                                    color: "white"; visible: imageSpatialProps.propLock === modelData.val
-                                                }
-                                                MouseArea { anchors.fill: parent; onClicked: imageSpatialProps.propLock = modelData.val }
-                                            }
-                                            Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -5517,22 +5500,29 @@ Window {
                         }
                     }
 
-                    Text {
-                        id: videoSettingsHeading
-                        text: "new video"
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: "white"
+                    Row {
+                        id: videoSettingsHeadingRow
                         anchors.top: parent.top
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                        spacing: 10
+
+                        Text {
+                            id: videoSettingsHeading
+                            text: "new video"
+                            font.pixelSize: 24
+                            font.bold: true
+                            color: "white"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
                     }
 
                     // Video drop zone — fixed, not scrollable
                     Rectangle {
                         id: videoDropZone
-                        anchors.top: videoSettingsHeading.bottom
+                        anchors.top: videoSettingsHeadingRow.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
@@ -5588,13 +5578,13 @@ Window {
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        anchors.bottomMargin: 8
+                        anchors.rightMargin: 0
+                        anchors.bottomMargin: 0
                         clip: true
 
                         Column {
                             id: videoSpatialProps
-                            width: videoPropsScroll.availableWidth
+                            width: videoPropsScroll.availableWidth - 14
                             spacing: 4
 
                             property real propX: 0
@@ -5641,30 +5631,6 @@ Window {
                                 }
                             }
 
-                            Row {
-                                width: videoSpatialProps.width; height: 26; spacing: 6
-                                Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                                Row {
-                                    spacing: 12; anchors.verticalCenter: parent.verticalCenter
-                                    Repeater {
-                                        model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                        delegate: Row {
-                                            spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                                            Rectangle {
-                                                width: 12; height: 12; radius: 6
-                                                border.color: "white"; border.width: 1; color: "transparent"
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Rectangle {
-                                                    anchors.centerIn: parent; width: 6; height: 6; radius: 3
-                                                    color: "white"; visible: videoSpatialProps.propLock === modelData.val
-                                                }
-                                                MouseArea { anchors.fill: parent; onClicked: videoSpatialProps.propLock = modelData.val }
-                                            }
-                                            Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -5697,32 +5663,39 @@ Window {
                     property bool txtUnderline: false
                     property color txtColor: "white"
 
-                    Text {
-                        id: textSettingsHeading
-                        text: "new text"
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: "white"
+                    Row {
+                        id: textSettingsHeadingRow
                         anchors.top: parent.top
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                        spacing: 10
+
+                        Text {
+                            id: textSettingsHeading
+                            text: "new text"
+                            font.pixelSize: 24
+                            font.bold: true
+                            color: "white"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
                     }
 
                     ScrollView {
                         id: textPropsScroll
-                        anchors.top: textSettingsHeading.bottom
+                        anchors.top: textSettingsHeadingRow.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
-                        anchors.rightMargin: 14
+                        anchors.rightMargin: 0
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 8
+                        anchors.bottomMargin: 0
                         clip: true
 
                         Column {
-                            width: textPropsScroll.availableWidth
+                            width: textPropsScroll.availableWidth - 14
                             spacing: 8
 
                     Column {
@@ -6043,44 +6016,20 @@ Window {
                         property bool propLock: false
                         property string propName: ""
 
-                        // Row 1: name | lock
-                        Row {
-                            width: textSpatialProps.width; height: 26; spacing: 6
-                            RowLayout {
-                                width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    Layout.fillWidth: true; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: textSpatialProps.propName
-                                        Keys.onReturnPressed: focus = false
-                                        Keys.onEscapePressed: focus = false
-                                        onEditingFinished: textSpatialProps.propName = text
-                                    }
-                                }
-                            }
-                            Row {
-                                width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                Text { text: "lock"; font.pixelSize: 11; color: "white"; width: 44; height: 26; verticalAlignment: Text.AlignVCenter }
-                                Row {
-                                    spacing: 6; anchors.verticalCenter: parent.verticalCenter
-                                    Repeater {
-                                        model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                        delegate: Row {
-                                            spacing: 3; anchors.verticalCenter: parent.verticalCenter
-                                            Rectangle {
-                                                width: 12; height: 12; radius: 6
-                                                border.color: "white"; border.width: 1; color: "transparent"
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: "white"; visible: textSpatialProps.propLock === modelData.val }
-                                                MouseArea { anchors.fill: parent; onClicked: textSpatialProps.propLock = modelData.val }
-                                            }
-                                            Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                                        }
-                                    }
+                        // Row 1: name (full width)
+                        RowLayout {
+                            width: textSpatialProps.width; height: 26; spacing: 4
+                            Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                            Rectangle {
+                                Layout.fillWidth: true; height: 26
+                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                TextInput {
+                                    anchors.fill: parent; anchors.margins: 3
+                                    color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                    text: textSpatialProps.propName
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: focus = false
+                                    onEditingFinished: textSpatialProps.propName = text
                                 }
                             }
                         }
@@ -6391,34 +6340,66 @@ Window {
                         }
                     }
 
-                    Text {
-                        id: selectSettingsHeading
-                        text: selectSettings.hasActiveArea ? "area" : (selectSettings.hasActiveTb ? "text" : (selectSettings.hasActiveImage ? "image" : (selectSettings.hasActiveVideo ? "video" : (selectSettings.hasActiveShader ? "shader" : "select"))))
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: "white"
+                    Row {
+                        id: selectSettingsHeadingRow
                         anchors.top: parent.top
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                        spacing: 10
+
+                        Text {
+                            id: selectSettingsHeading
+                            text: selectSettings.hasActiveArea ? "area" : (selectSettings.hasActiveTb ? "text" : (selectSettings.hasActiveImage ? "image" : (selectSettings.hasActiveVideo ? "video" : (selectSettings.hasActiveShader ? "shader" : "select"))))
+                            font.pixelSize: 24
+                            font.bold: true
+                            color: "white"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Rectangle {
+                            visible: selectSettings.hasActiveArea || selectSettings.hasActiveTb || selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
+                            width: 22; height: 22
+                            anchors.verticalCenter: parent.verticalCenter
+                            radius: 4
+                            color: selectSettings.selLock ? "white" : "transparent"
+                            border.color: "white"; border.width: 1
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                            Image {
+                                id: lockIconSel
+                                anchors.fill: parent; anchors.margins: 4
+                                source: "icons/lock.svg"
+                                fillMode: Image.PreserveAspectFit
+                                visible: false
+                            }
+                            ColorOverlay {
+                                anchors.fill: lockIconSel; source: lockIconSel
+                                color: selectSettings.selLock ? "#477B78" : "white"
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: selectSettings.selLock = !selectSettings.selLock
+                            }
+                        }
                     }
 
                     ListModel { id: selectInteractivityModel }
 
                     ScrollView {
                         id: selectPropsScroll
-                        anchors.top: selectSettingsHeading.bottom
+                        anchors.top: selectSettingsHeadingRow.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
-                        anchors.rightMargin: 14
+                        anchors.rightMargin: 0
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 8
+                        anchors.bottomMargin: 0
                         clip: true
 
                         Column {
-                            width: selectPropsScroll.availableWidth
+                            width: selectPropsScroll.availableWidth - 14
                             spacing: 8
 
                             // Text formatting controls — visible when a text box is active
@@ -7108,7 +7089,7 @@ Window {
                                     bottomPadding: 6
                                 }
 
-                                // Row 1: name | lock
+                                // Row 1: name | type
                                 Row {
                                     width: parent.width; height: 26; spacing: 6
                                     RowLayout {
@@ -7130,23 +7111,79 @@ Window {
                                             }
                                         }
                                     }
-                                    Row {
+                                    RowLayout {
                                         width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                        Text { text: "lock"; font.pixelSize: 11; color: "white"; width: 44; height: 26; verticalAlignment: Text.AlignVCenter }
-                                        Row {
-                                            spacing: 6; anchors.verticalCenter: parent.verticalCenter
-                                            Repeater {
-                                                model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                                delegate: Row {
-                                                    spacing: 3; anchors.verticalCenter: parent.verticalCenter
-                                                    Rectangle {
-                                                        width: 12; height: 12; radius: 6
-                                                        border.color: "white"; border.width: 1; color: "transparent"
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                        Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: "white"; visible: selectSettings.selLock === modelData.val }
-                                                        MouseArea { anchors.fill: parent; onClicked: selectSettings.selLock = modelData.val }
-                                                    }
-                                                    Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                        Text { text: "type"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        ComboBox {
+                                            id: templateCombo
+                                            Layout.fillWidth: true
+                                            height: 26
+                                            model: ["none", "default", "north", "south", "east", "west"]
+                                            currentIndex: {
+                                                var idx = model.indexOf(selectSettings.selTemplate)
+                                                return idx >= 0 ? idx : 0
+                                            }
+                                            onActivated: {
+                                                var t = model[currentIndex]
+                                                selectSettings.selTemplate = t
+                                                if      (t === "north") selectSettings.selCursor = "up"
+                                                else if (t === "south") selectSettings.selCursor = "down"
+                                                else if (t === "east")  selectSettings.selCursor = "right"
+                                                else if (t === "west")  selectSettings.selCursor = "left"
+                                            }
+
+                                            HoverHandler { id: templateHover }
+
+                                            contentItem: Text {
+                                                leftPadding: 6
+                                                text: templateCombo.displayText
+                                                color: "white"
+                                                font.pixelSize: 11
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+
+                                            indicator: Text {
+                                                x: templateCombo.width - width - 8
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: "▾"
+                                                font.pixelSize: 10
+                                                color: "white"
+                                            }
+
+                                            background: Rectangle {
+                                                radius: 4
+                                                color: "transparent"
+                                                border.color: templateHover.hovered ? "#80cfff" : "white"
+                                                border.width: 1
+                                                Behavior on border.color { ColorAnimation { duration: 100 } }
+                                            }
+
+                                            popup: Popup {
+                                                y: templateCombo.height + 2
+                                                width: templateCombo.width
+                                                padding: 1
+                                                background: Rectangle { color: "#162020"; radius: 4; border.color: "#333"; border.width: 1 }
+                                                contentItem: ListView {
+                                                    clip: true
+                                                    implicitHeight: Math.min(contentHeight, 300)
+                                                    model: templateCombo.popup.visible ? templateCombo.delegateModel : null
+                                                    currentIndex: templateCombo.highlightedIndex
+                                                    ScrollIndicator.vertical: ScrollIndicator { }
+                                                }
+                                            }
+
+                                            delegate: ItemDelegate {
+                                                width: templateCombo.width
+                                                height: 26
+                                                contentItem: Text {
+                                                    leftPadding: 6
+                                                    text: modelData
+                                                    color: templateCombo.currentIndex === index ? "#80cfff" : "white"
+                                                    font.pixelSize: 11
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                background: Rectangle {
+                                                    color: (highlighted || hovered) ? "#477B78" : "transparent"
                                                 }
                                             }
                                         }
@@ -7223,89 +7260,6 @@ Window {
                                     }
                                 }
 
-                                // template field
-                                Row {
-                                    width: parent.width; height: 26; spacing: 8
-
-                                    Text {
-                                        text: "template"; width: 44; color: "white"; font.pixelSize: 11
-                                        height: parent.height; verticalAlignment: Text.AlignVCenter
-                                    }
-
-                                    ComboBox {
-                                        id: templateCombo
-                                        width: parent.width - 52
-                                        height: 26
-                                        model: ["none", "default", "north", "south", "east", "west"]
-                                        currentIndex: {
-                                            var idx = model.indexOf(selectSettings.selTemplate)
-                                            return idx >= 0 ? idx : 0
-                                        }
-                                        onActivated: {
-                                            var t = model[currentIndex]
-                                            selectSettings.selTemplate = t
-                                            if      (t === "north") selectSettings.selCursor = "up"
-                                            else if (t === "south") selectSettings.selCursor = "down"
-                                            else if (t === "east")  selectSettings.selCursor = "right"
-                                            else if (t === "west")  selectSettings.selCursor = "left"
-                                        }
-
-                                        HoverHandler { id: templateHover }
-
-                                        contentItem: Text {
-                                            leftPadding: 6
-                                            text: templateCombo.displayText
-                                            color: "white"
-                                            font.pixelSize: 11
-                                            verticalAlignment: Text.AlignVCenter
-                                        }
-
-                                        indicator: Text {
-                                            x: templateCombo.width - width - 8
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: "▾"
-                                            font.pixelSize: 10
-                                            color: "white"
-                                        }
-
-                                        background: Rectangle {
-                                            radius: 4
-                                            color: "transparent"
-                                            border.color: templateHover.hovered ? "#80cfff" : "white"
-                                            border.width: 1
-                                            Behavior on border.color { ColorAnimation { duration: 100 } }
-                                        }
-
-                                        popup: Popup {
-                                            y: templateCombo.height + 2
-                                            width: templateCombo.width
-                                            padding: 1
-                                            background: Rectangle { color: "#162020"; radius: 4; border.color: "#333"; border.width: 1 }
-                                            contentItem: ListView {
-                                                clip: true
-                                                implicitHeight: Math.min(contentHeight, 300)
-                                                model: templateCombo.popup.visible ? templateCombo.delegateModel : null
-                                                currentIndex: templateCombo.highlightedIndex
-                                                ScrollIndicator.vertical: ScrollIndicator { }
-                                            }
-                                        }
-
-                                        delegate: ItemDelegate {
-                                            width: templateCombo.width
-                                            height: 26
-                                            contentItem: Text {
-                                                leftPadding: 6
-                                                text: modelData
-                                                color: templateCombo.currentIndex === index ? "#80cfff" : "white"
-                                                font.pixelSize: 11
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                            background: Rectangle {
-                                                color: (highlighted || hovered) ? "#477B78" : "transparent"
-                                            }
-                                        }
-                                    }
-                                }
                             }
 
                             Column {
@@ -7315,15 +7269,15 @@ Window {
 
                                 // cursor field — toggle buttons
                                 Row {
-                                    width: parent.width; height: 26; spacing: 6
+                                    width: parent.width; height: 26; spacing: 4
 
                                     Text {
-                                        text: "cursor"; width: 44; color: "white"; font.pixelSize: 11
+                                        text: "cursor"; width: 38; color: "white"; font.pixelSize: 11
                                         height: parent.height; verticalAlignment: Text.AlignVCenter
                                     }
 
                                     RowLayout {
-                                        width: parent.width - 50
+                                        width: parent.width - 42
                                         height: 26
                                         spacing: 2
 
@@ -7388,12 +7342,12 @@ Window {
                                 // cursor field — custom drop zone (own row, indented to align with controls)
                                 Row {
                                     visible: selectSettings.selCursor === "custom"
-                                    width: parent.width; height: 26; spacing: 6
+                                    width: parent.width; height: 26; spacing: 4
 
-                                    Item { width: 44; height: 26 }
+                                    Item { width: 38; height: 26 }
 
                                     Rectangle {
-                                        width: parent.width - 50; height: 26
+                                        width: parent.width - 42; height: 26
                                         color: "black"; radius: 4
 
                                         Image {
@@ -7517,16 +7471,23 @@ Window {
                         shaderWarningTimer.restart();
                     }
 
-                    Text {
-                        id: newshaderSettingsHeading
-                        text: "new shader"
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: "white"
+                    Row {
+                        id: newshaderSettingsHeadingRow
                         anchors.top: parent.top
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                        spacing: 10
+
+                        Text {
+                            id: newshaderSettingsHeading
+                            text: "new shader"
+                            font.pixelSize: 24
+                            font.bold: true
+                            color: "white"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
                     }
 
                     Text {
@@ -7543,7 +7504,7 @@ Window {
 
                     Row {
                         id: shaderDropZonesRow
-                        anchors.top: newshaderSettingsHeading.bottom
+                        anchors.top: newshaderSettingsHeadingRow.bottom
                         anchors.topMargin: 12
                         anchors.left: parent.left
                         anchors.leftMargin: 14
@@ -7657,12 +7618,12 @@ Window {
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        anchors.bottomMargin: 8
+                        anchors.rightMargin: 0
+                        anchors.bottomMargin: 0
                         clip: true
 
                         Column {
-                            width: newShaderUniformsScroll.availableWidth
+                            width: newShaderUniformsScroll.availableWidth - 14
                             spacing: 5
 
                         Repeater {
@@ -7833,30 +7794,6 @@ Window {
                             }
                         }
 
-                        Row {
-                            width: parent.width; height: 26; spacing: 6
-                            Text { text: "lock"; width: 44; color: "white"; font.pixelSize: 11; height: parent.height; verticalAlignment: Text.AlignVCenter }
-                            Row {
-                                spacing: 12; anchors.verticalCenter: parent.verticalCenter
-                                Repeater {
-                                    model: [{ lbl: "on", val: true }, { lbl: "off", val: false }]
-                                    delegate: Row {
-                                        spacing: 4; anchors.verticalCenter: parent.verticalCenter
-                                        Rectangle {
-                                            width: 12; height: 12; radius: 6
-                                            border.color: "white"; border.width: 1; color: "transparent"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            Rectangle {
-                                                anchors.centerIn: parent; width: 6; height: 6; radius: 3
-                                                color: "white"; visible: newshaderSettings.propLock === modelData.val
-                                            }
-                                            MouseArea { anchors.fill: parent; onClicked: newshaderSettings.propLock = modelData.val }
-                                        }
-                                        Text { text: modelData.lbl; color: "white"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
-                                    }
-                                }
-                            }
-                        }
 
                         Item { width: 1; height: 16 }
                         }  // Column
