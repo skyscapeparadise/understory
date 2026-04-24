@@ -16,10 +16,13 @@ Window {
     width: 960
     height: 540
     title: {
-        if (!storyManager.isOpen) return qsTr("understory")
-        if (sceneEditor.visible && currentSceneName) return "understory — " + storyManager.storyTitle + " — " + currentSceneName
-        if (sceneMenu.visible) return "understory — " + storyManager.storyTitle
-        return qsTr("understory")
+        if (!storyManager.isOpen)
+            return qsTr("understory");
+        if (sceneEditor.visible && currentSceneName)
+            return "understory — " + storyManager.storyTitle + " — " + currentSceneName;
+        if (sceneMenu.visible)
+            return "understory — " + storyManager.storyTitle;
+        return qsTr("understory");
     }
     color: "black"
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint | Qt.MSWindowsFixedSizeDialogHint
@@ -60,8 +63,8 @@ Window {
                 shortcut: StandardKey.Save
                 enabled: storyManager.isOpen
                 onTriggered: {
-                    nodeWorkspace.saveToDb()
-                    storyManager.saveStory()
+                    nodeWorkspace.saveToDb();
+                    storyManager.saveStory();
                 }
             }
             Platform.MenuItem {
@@ -92,10 +95,11 @@ Window {
     property int currentSceneId: -1
     property string currentSceneName: {
         for (var i = 0; i < scenesRectModel.count; i++) {
-            var s = scenesRectModel.get(i)
-            if (s.sceneId === currentSceneId) return s.sceneName
+            var s = scenesRectModel.get(i);
+            if (s.sceneId === currentSceneId)
+                return s.sceneName;
         }
-        return ""
+        return "";
     }
 
     // flags to distinguish programmatic animations from user resize attempts
@@ -108,17 +112,17 @@ Window {
 
     onWidthChanged: {
         if (!widthAnimating && !snapBackWidth) {
-            snapBackWidth = true
-            width = lockedWidth
-            snapBackWidth = false
+            snapBackWidth = true;
+            width = lockedWidth;
+            snapBackWidth = false;
         }
     }
 
     onHeightChanged: {
         if (!heightAnimating && !snapBackHeight) {
-            snapBackHeight = true
-            height = lockedHeight
-            snapBackHeight = false
+            snapBackHeight = true;
+            height = lockedHeight;
+            snapBackHeight = false;
         }
     }
 
@@ -126,15 +130,19 @@ Window {
     Behavior on width {
         enabled: !mainWindow.snapBackWidth
         SequentialAnimation {
-            PropertyAction { target: mainWindow; property: "widthAnimating"; value: true }
+            PropertyAction {
+                target: mainWindow
+                property: "widthAnimating"
+                value: true
+            }
             NumberAnimation {
                 duration: 1000
                 easing.type: Easing.InOutQuad
             }
             ScriptAction {
                 script: {
-                    mainWindow.lockedWidth = mainWindow.width
-                    mainWindow.widthAnimating = false
+                    mainWindow.lockedWidth = mainWindow.width;
+                    mainWindow.widthAnimating = false;
                     if (sceneEditor2sceneMenu.windowSizeCompleteTrigger) {
                         console.log("ScriptAction triggered");
                         sceneEditor2sceneMenu.visible = true;
@@ -166,15 +174,19 @@ Window {
     Behavior on height {
         enabled: !mainWindow.snapBackHeight
         SequentialAnimation {
-            PropertyAction { target: mainWindow; property: "heightAnimating"; value: true }
+            PropertyAction {
+                target: mainWindow
+                property: "heightAnimating"
+                value: true
+            }
             NumberAnimation {
                 duration: 1000
                 easing.type: Easing.InOutQuad
             }
             ScriptAction {
                 script: {
-                    mainWindow.lockedHeight = mainWindow.height
-                    mainWindow.heightAnimating = false
+                    mainWindow.lockedHeight = mainWindow.height;
+                    mainWindow.heightAnimating = false;
                 }
             }
         }
@@ -303,10 +315,10 @@ Window {
                                 Connections {
                                     target: storyManager
                                     function onStoryChanged() {
-                                        var p = storyThumbImg.parent.parent.thumbPath
+                                        var p = storyThumbImg.parent.parent.thumbPath;
                                         if (p !== "") {
-                                            storyThumbImg.source = ""
-                                            storyThumbImg.source = "file://" + p
+                                            storyThumbImg.source = "";
+                                            storyThumbImg.source = "file://" + p;
                                         }
                                     }
                                 }
@@ -318,7 +330,11 @@ Window {
                             anchors.fill: parent
                             color: "black"
                             opacity: parent.hovered && !parent.isLast ? 0.35 : 0.0
-                            Behavior on opacity { NumberAnimation { duration: 120 } }
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: 120
+                                }
+                            }
                         }
 
                         MouseArea {
@@ -480,6 +496,31 @@ Window {
                     Layout.alignment: Qt.AlignRight
                 }
 
+                Text {
+                    text: "testing"
+                    font.pixelSize: 24
+                    font.bold: true
+                    color: "white"
+                    wrapMode: Text.WordWrap
+                    Layout.alignment: Qt.AlignRight
+                }
+
+                Text {
+                    text: "moonriver everpetal"
+                    font.pixelSize: 20
+                    color: "white"
+                    wrapMode: Text.WordWrap
+                    Layout.alignment: Qt.AlignRight
+                }
+
+                Text {
+                    text: "  "
+                    font.pixelSize: 20
+                    color: "white"
+                    wrapMode: Text.WordWrap
+                    Layout.alignment: Qt.AlignRight
+                }
+
                 Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 60
@@ -625,7 +666,11 @@ Window {
             // Populated by reloadScenes(). Each entry: { sceneId, sceneName, thumbnailRev }.
             // The last entry always has sceneId: -1 (the "+" new-scene card).
             // ALL roles must appear here so they are registered before any append().
-            ListElement { sceneId: -1; sceneName: ""; thumbnailRev: 0 }
+            ListElement {
+                sceneId: -1
+                sceneName: ""
+                thumbnailRev: 0
+            }
         }
 
         function reloadScenes() {
@@ -639,12 +684,18 @@ Window {
                     thumbnailRev: rev
                 });
             }
-            scenesRectModel.append({ sceneId: -1, sceneName: "", thumbnailRev: 0 });
+            scenesRectModel.append({
+                sceneId: -1,
+                sceneName: "",
+                thumbnailRev: 0
+            });
         }
 
         Connections {
             target: storyManager
-            function onStoryChanged() { sceneMenu.reloadScenes(); }
+            function onStoryChanged() {
+                sceneMenu.reloadScenes();
+            }
         }
 
         ScrollView {
@@ -706,9 +757,7 @@ Window {
                             }
                             Image {
                                 anchors.fill: parent
-                                source: (!isLast && model.thumbnailRev > 0)
-                                    ? ("image://thumbnails/" + model.sceneId + "?rev=" + model.thumbnailRev)
-                                    : ""
+                                source: (!isLast && model.thumbnailRev > 0) ? ("image://thumbnails/" + model.sceneId + "?rev=" + model.thumbnailRev) : ""
                                 fillMode: Image.PreserveAspectCrop
                                 cache: false
                             }
@@ -719,7 +768,11 @@ Window {
                             anchors.fill: parent
                             color: "black"
                             opacity: hovered && !isLast ? 0.25 : 0.0
-                            Behavior on opacity { NumberAnimation { duration: 120 } }
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: 120
+                                }
+                            }
                         }
 
                         MouseArea {
@@ -731,10 +784,14 @@ Window {
                                 if (isLast) {
                                     var newId = storyManager.createScene("new scene");
                                     if (newId !== -1) {
-                                        scenesRectModel.insert(scenesRectModel.count - 1,
-                                            { sceneId: newId, sceneName: "new scene", thumbnailRev: 0 });
+                                        scenesRectModel.insert(scenesRectModel.count - 1, {
+                                            sceneId: newId,
+                                            sceneName: "new scene",
+                                            thumbnailRev: 0
+                                        });
                                         mainWindow.currentSceneId = newId;
-                                        viewport.activeContent.clear(); viewport.nextStackOrder = 0;
+                                        viewport.activeContent.clear();
+                                        viewport.nextStackOrder = 0;
                                         sceneMenu2sceneEditor.visible = true;
                                         sceneMenu2sceneEditorPlayer.play();
                                     }
@@ -815,23 +872,83 @@ Window {
 
             // ---- resolution preset data ----
             property var res169: [
-                {label: "360p  · 640 × 360",   w: 640,  h: 360},
-                {label: "480p  · 854 × 480",   w: 854,  h: 480},
-                {label: "720p  · 1280 × 720",  w: 1280, h: 720},
-                {label: "1080p · 1920 × 1080", w: 1920, h: 1080},
-                {label: "1440p · 2560 × 1440", w: 2560, h: 1440},
-                {label: "4K    · 3840 × 2160", w: 3840, h: 2160},
-                {label: "8K    · 7680 × 4320", w: 7680, h: 4320},
-                {label: "Custom",              w: -1,   h: -1}
+                {
+                    label: "360p  · 640 × 360",
+                    w: 640,
+                    h: 360
+                },
+                {
+                    label: "480p  · 854 × 480",
+                    w: 854,
+                    h: 480
+                },
+                {
+                    label: "720p  · 1280 × 720",
+                    w: 1280,
+                    h: 720
+                },
+                {
+                    label: "1080p · 1920 × 1080",
+                    w: 1920,
+                    h: 1080
+                },
+                {
+                    label: "1440p · 2560 × 1440",
+                    w: 2560,
+                    h: 1440
+                },
+                {
+                    label: "4K    · 3840 × 2160",
+                    w: 3840,
+                    h: 2160
+                },
+                {
+                    label: "8K    · 7680 × 4320",
+                    w: 7680,
+                    h: 4320
+                },
+                {
+                    label: "Custom",
+                    w: -1,
+                    h: -1
+                }
             ]
             property var res43: [
-                {label: "VGA   · 640 × 480",   w: 640,  h: 480},
-                {label: "SVGA  · 800 × 600",   w: 800,  h: 600},
-                {label: "XGA   · 1024 × 768",  w: 1024, h: 768},
-                {label: "SXGA- · 1280 × 960",  w: 1280, h: 960},
-                {label: "UXGA  · 1600 × 1200", w: 1600, h: 1200},
-                {label: "2048 × 1536",         w: 2048, h: 1536},
-                {label: "Custom",              w: -1,   h: -1}
+                {
+                    label: "VGA   · 640 × 480",
+                    w: 640,
+                    h: 480
+                },
+                {
+                    label: "SVGA  · 800 × 600",
+                    w: 800,
+                    h: 600
+                },
+                {
+                    label: "XGA   · 1024 × 768",
+                    w: 1024,
+                    h: 768
+                },
+                {
+                    label: "SXGA- · 1280 × 960",
+                    w: 1280,
+                    h: 960
+                },
+                {
+                    label: "UXGA  · 1600 × 1200",
+                    w: 1600,
+                    h: 1200
+                },
+                {
+                    label: "2048 × 1536",
+                    w: 2048,
+                    h: 1536
+                },
+                {
+                    label: "Custom",
+                    w: -1,
+                    h: -1
+                }
             ]
             property bool _loading: false
 
@@ -839,195 +956,300 @@ Window {
             property string selectedCursor: "angel"
             property var cursorLabels: ["select", "highlight", "drag", "left", "up", "down", "right"]
             property var cursorOptions: [
-                {name: "angel",  icons: ["select.svg","select.svg","pinch.svg","handleft.svg","select.svg","select.svg","handright.svg"]},
-                {name: "arrows", icons: ["select.svg","select.svg","pinch.svg","left.svg","up.svg","down.svg","right.svg"]},
-                {name: "custom", icons: []}
+                {
+                    name: "angel",
+                    icons: ["select.svg", "select.svg", "pinch.svg", "handleft.svg", "select.svg", "select.svg", "handright.svg"]
+                },
+                {
+                    name: "arrows",
+                    icons: ["select.svg", "select.svg", "pinch.svg", "left.svg", "up.svg", "down.svg", "right.svg"]
+                },
+                {
+                    name: "custom",
+                    icons: []
+                }
             ]
             property var cursorCustomPaths: ["", "", "", "", "", "", ""]
             property int _cursorSlot: 0
 
             function loadResolution() {
-                if (!storyManager.isOpen) return
-                _loading = true
-                var res = storyManager.getResolution()
-                var w = res.width, h = res.height
+                if (!storyManager.isOpen)
+                    return;
+                _loading = true;
+                var res = storyManager.getResolution();
+                var w = res.width, h = res.height;
                 for (var i = 0; i < res169.length - 1; i++) {
                     if (res169[i].w === w && res169[i].h === h) {
-                        aspectCombo.currentIndex = 0
-                        resCombo169.currentIndex = i
-                        _loading = false
-                        return
+                        aspectCombo.currentIndex = 0;
+                        resCombo169.currentIndex = i;
+                        _loading = false;
+                        return;
                     }
                 }
                 for (var j = 0; j < res43.length - 1; j++) {
                     if (res43[j].w === w && res43[j].h === h) {
-                        aspectCombo.currentIndex = 1
-                        resCombo43.currentIndex = j
-                        _loading = false
-                        return
+                        aspectCombo.currentIndex = 1;
+                        resCombo43.currentIndex = j;
+                        _loading = false;
+                        return;
                     }
                 }
-                var ratio = (h > 0) ? (w / h) : 0
+                var ratio = (h > 0) ? (w / h) : 0;
                 if (Math.abs(ratio - 16 / 9) < 0.02) {
-                    aspectCombo.currentIndex = 0
-                    resCombo169.currentIndex = res169.length - 1
+                    aspectCombo.currentIndex = 0;
+                    resCombo169.currentIndex = res169.length - 1;
                 } else if (Math.abs(ratio - 4 / 3) < 0.02) {
-                    aspectCombo.currentIndex = 1
-                    resCombo43.currentIndex = res43.length - 1
+                    aspectCombo.currentIndex = 1;
+                    resCombo43.currentIndex = res43.length - 1;
                 } else {
-                    aspectCombo.currentIndex = 2
+                    aspectCombo.currentIndex = 2;
                 }
-                customWidthField.text = w.toString()
-                customHeightField.text = h.toString()
-                _loading = false
+                customWidthField.text = w.toString();
+                customHeightField.text = h.toString();
+                _loading = false;
             }
 
             function loadStoryCursor() {
-                if (!storyManager.isOpen) return
-                var mode = storyManager.getEditorState("cursor_mode")
-                if (mode !== "") selectedCursor = mode
-                var pathsJson = storyManager.getEditorState("cursor_paths")
+                if (!storyManager.isOpen)
+                    return;
+                var mode = storyManager.getEditorState("cursor_mode");
+                if (mode !== "")
+                    selectedCursor = mode;
+                var pathsJson = storyManager.getEditorState("cursor_paths");
                 if (pathsJson !== "") {
-                    try { cursorCustomPaths = JSON.parse(pathsJson) } catch(e) {}
+                    try {
+                        cursorCustomPaths = JSON.parse(pathsJson);
+                    } catch (e) {}
                 }
             }
 
             onSelectedCursorChanged: {
                 if (storyManager.isOpen)
-                    storyManager.setEditorState("cursor_mode", selectedCursor)
+                    storyManager.setEditorState("cursor_mode", selectedCursor);
             }
             onCursorCustomPathsChanged: {
                 if (storyManager.isOpen)
-                    storyManager.setEditorState("cursor_paths", JSON.stringify(cursorCustomPaths))
+                    storyManager.setEditorState("cursor_paths", JSON.stringify(cursorCustomPaths));
             }
 
             // ---- transitions data ----
             property var dirTransitions: [
-                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
-                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
-                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
-                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0},
-                {transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0}
+                {
+                    transition: "cut",
+                    speed: 1.0,
+                    pushDir: "right",
+                    wipeFeather: 0.0,
+                    wipeDir: "right",
+                    lookSpeed: 0.4,
+                    lookFov: 24.0,
+                    lookOvershoot: 1.0,
+                    lookShutter: 0.10,
+                    lookYaw: 90.0,
+                    lookPitch: 0.0
+                },
+                {
+                    transition: "cut",
+                    speed: 1.0,
+                    pushDir: "right",
+                    wipeFeather: 0.0,
+                    wipeDir: "right",
+                    lookSpeed: 0.4,
+                    lookFov: 24.0,
+                    lookOvershoot: 1.0,
+                    lookShutter: 0.10,
+                    lookYaw: 90.0,
+                    lookPitch: 0.0
+                },
+                {
+                    transition: "cut",
+                    speed: 1.0,
+                    pushDir: "right",
+                    wipeFeather: 0.0,
+                    wipeDir: "right",
+                    lookSpeed: 0.4,
+                    lookFov: 24.0,
+                    lookOvershoot: 1.0,
+                    lookShutter: 0.10,
+                    lookYaw: 90.0,
+                    lookPitch: 0.0
+                },
+                {
+                    transition: "cut",
+                    speed: 1.0,
+                    pushDir: "right",
+                    wipeFeather: 0.0,
+                    wipeDir: "right",
+                    lookSpeed: 0.4,
+                    lookFov: 24.0,
+                    lookOvershoot: 1.0,
+                    lookShutter: 0.10,
+                    lookYaw: 90.0,
+                    lookPitch: 0.0
+                },
+                {
+                    transition: "cut",
+                    speed: 1.0,
+                    pushDir: "right",
+                    wipeFeather: 0.0,
+                    wipeDir: "right",
+                    lookSpeed: 0.4,
+                    lookFov: 24.0,
+                    lookOvershoot: 1.0,
+                    lookShutter: 0.10,
+                    lookYaw: 90.0,
+                    lookPitch: 0.0
+                }
             ]
             // index 0 = default, 1 = north, 2 = south, 3 = east, 4 = west
 
             function setTransProp(dirIdx, key, val) {
-                var arr = dirTransitions.slice()
-                arr[dirIdx] = Object.assign({}, arr[dirIdx])
-                arr[dirIdx][key] = val
-                dirTransitions = arr
+                var arr = dirTransitions.slice();
+                arr[dirIdx] = Object.assign({}, arr[dirIdx]);
+                arr[dirIdx][key] = val;
+                dirTransitions = arr;
             }
 
             function loadTransitions() {
-                if (!storyManager.isOpen) return
-                var json = storyManager.getEditorState("dir_transitions")
+                if (!storyManager.isOpen)
+                    return;
+                var json = storyManager.getEditorState("dir_transitions");
                 if (json !== "") {
                     try {
-                        var loaded = JSON.parse(json)
+                        var loaded = JSON.parse(json);
                         // migrate old 4-element saves (no default entry) by prepending one
                         if (loaded.length === 4) {
-                            loaded.unshift({transition:"cut", speed:1.0, pushDir:"right", wipeFeather:0.0, wipeDir:"right", lookSpeed:0.4, lookFov:24.0, lookOvershoot:1.0, lookShutter:0.10, lookYaw:90.0, lookPitch:0.0})
+                            loaded.unshift({
+                                transition: "cut",
+                                speed: 1.0,
+                                pushDir: "right",
+                                wipeFeather: 0.0,
+                                wipeDir: "right",
+                                lookSpeed: 0.4,
+                                lookFov: 24.0,
+                                lookOvershoot: 1.0,
+                                lookShutter: 0.10,
+                                lookYaw: 90.0,
+                                lookPitch: 0.0
+                            });
                         }
-                        dirTransitions = loaded
-                    } catch(e) {}
+                        dirTransitions = loaded;
+                    } catch (e) {}
                 }
             }
 
             onDirTransitionsChanged: {
                 if (storyManager.isOpen) {
-                    storyManager.setEditorState("dir_transitions", JSON.stringify(dirTransitions))
+                    storyManager.setEditorState("dir_transitions", JSON.stringify(dirTransitions));
                     for (var i = 0; i < dirTransitions.length; i++)
-                        sceneSettingsView.applyTemplateTransitions(i)
-                    sceneSettingsView.applyAllTemplateTransitionsToDb()
+                        sceneSettingsView.applyTemplateTransitions(i);
+                    sceneSettingsView.applyAllTemplateTransitionsToDb();
                 }
             }
 
             function applyAllTemplateTransitionsToDb() {
-                if (!storyManager.isOpen) return
-                var names = ["default", "north", "south", "east", "west"]
+                if (!storyManager.isOpen)
+                    return;
+                var names = ["default", "north", "south", "east", "west"];
                 for (var si = 0; si < scenesRectModel.count; si++) {
-                    var sceneId = scenesRectModel.get(si).sceneId
-                    if (sceneId === mainWindow.currentSceneId) continue
-                    var raw = storyManager.loadSceneElements(sceneId)
-                    var elements
-                    try { elements = JSON.parse(raw) } catch(e) { continue }
-                    var sceneChanged = false
+                    var sceneId = scenesRectModel.get(si).sceneId;
+                    if (sceneId === mainWindow.currentSceneId)
+                        continue;
+                    var raw = storyManager.loadSceneElements(sceneId);
+                    var elements;
+                    try {
+                        elements = JSON.parse(raw);
+                    } catch (e) {
+                        continue;
+                    }
+                    var sceneChanged = false;
                     for (var ei = 0; ei < elements.length; ei++) {
-                        var el = elements[ei]
-                        var tmpl = el.template || "none"
-                        if (tmpl === "none") continue
-                        var dirIdx = names.indexOf(tmpl)
-                        if (dirIdx < 0) continue
-                        var td = dirTransitions[dirIdx]
-                        if (!td) continue
-                        var items
-                        try { items = JSON.parse(el.interactivityJson || "[]") } catch(e) { continue }
-                        var itemChanged = false
+                        var el = elements[ei];
+                        var tmpl = el.template || "none";
+                        if (tmpl === "none")
+                            continue;
+                        var dirIdx = names.indexOf(tmpl);
+                        if (dirIdx < 0)
+                            continue;
+                        var td = dirTransitions[dirIdx];
+                        if (!td)
+                            continue;
+                        var items;
+                        try {
+                            items = JSON.parse(el.interactivityJson || "[]");
+                        } catch (e) {
+                            continue;
+                        }
+                        var itemChanged = false;
                         for (var j = 0; j < items.length; j++) {
-                            if (items[j].itemCommand !== "jump") continue
-                            items[j].itemTransition      = td.transition   || "cut"
-                            items[j].itemTransitionSpeed = td.transition === "look"
-                                ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4)
-                                : (td.speed     !== undefined ? td.speed     : 1.0)
-                            items[j].itemPushDirection   = td.pushDir      || "right"
-                            items[j].itemWipeFeather     = td.wipeFeather  !== undefined ? td.wipeFeather  : 0.0
-                            items[j].itemWipeDirection   = td.wipeDir      || "right"
-                            items[j].itemLookYaw         = td.lookYaw      !== undefined ? td.lookYaw      : 90.0
-                            items[j].itemLookPitch       = td.lookPitch    !== undefined ? td.lookPitch    : 0.0
-                            items[j].itemLookFovMM       = td.lookFov      !== undefined ? td.lookFov      : 24.0
-                            items[j].itemLookOvershoot   = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0
-                            items[j].itemLookShutter     = td.lookShutter  !== undefined ? td.lookShutter  : 0.10
-                            itemChanged = true
+                            if (items[j].itemCommand !== "jump")
+                                continue;
+                            items[j].itemTransition = td.transition || "cut";
+                            items[j].itemTransitionSpeed = td.transition === "look" ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4) : (td.speed !== undefined ? td.speed : 1.0);
+                            items[j].itemPushDirection = td.pushDir || "right";
+                            items[j].itemWipeFeather = td.wipeFeather !== undefined ? td.wipeFeather : 0.0;
+                            items[j].itemWipeDirection = td.wipeDir || "right";
+                            items[j].itemLookYaw = td.lookYaw !== undefined ? td.lookYaw : 90.0;
+                            items[j].itemLookPitch = td.lookPitch !== undefined ? td.lookPitch : 0.0;
+                            items[j].itemLookFovMM = td.lookFov !== undefined ? td.lookFov : 24.0;
+                            items[j].itemLookOvershoot = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0;
+                            items[j].itemLookShutter = td.lookShutter !== undefined ? td.lookShutter : 0.10;
+                            itemChanged = true;
                         }
                         if (itemChanged) {
-                            el.interactivityJson = JSON.stringify(items)
-                            sceneChanged = true
+                            el.interactivityJson = JSON.stringify(items);
+                            sceneChanged = true;
                         }
                     }
                     if (sceneChanged)
-                        storyManager.saveSceneElements(sceneId, JSON.stringify(elements))
+                        storyManager.saveSceneElements(sceneId, JSON.stringify(elements));
                 }
             }
 
             function applyTemplateTransitions(dirIdx) {
-                var names = ["default", "north", "south", "east", "west"]
-                if (dirIdx < 0 || dirIdx >= names.length) return
-                var dirName = names[dirIdx]
-                var td = dirTransitions[dirIdx]
-                if (!td) return
-                var models = [viewport.areasModel, viewport.textBoxesModel,
-                              viewport.imagesModel, viewport.videosModel, viewport.shadersModel]
-                var typeNames = ["area", "tb", "image", "video", "shader"]
+                var names = ["default", "north", "south", "east", "west"];
+                if (dirIdx < 0 || dirIdx >= names.length)
+                    return;
+                var dirName = names[dirIdx];
+                var td = dirTransitions[dirIdx];
+                if (!td)
+                    return;
+                var models = [viewport.areasModel, viewport.textBoxesModel, viewport.imagesModel, viewport.videosModel, viewport.shadersModel];
+                var typeNames = ["area", "tb", "image", "video", "shader"];
                 for (var mi = 0; mi < models.length; mi++) {
-                    var model = models[mi]
-                    if (!model) continue
+                    var model = models[mi];
+                    if (!model)
+                        continue;
                     for (var i = 0; i < model.count; i++) {
-                        var elem = model.get(i)
-                        if ((elem.template || "none") !== dirName) continue
-                        var items = []
-                        try { items = JSON.parse(elem.interactivityJson || "[]") } catch(e) { continue }
-                        var changed = false
+                        var elem = model.get(i);
+                        if ((elem.template || "none") !== dirName)
+                            continue;
+                        var items = [];
+                        try {
+                            items = JSON.parse(elem.interactivityJson || "[]");
+                        } catch (e) {
+                            continue;
+                        }
+                        var changed = false;
                         for (var j = 0; j < items.length; j++) {
-                            if (items[j].itemCommand !== "jump") continue
-                            items[j].itemTransition      = td.transition   || "cut"
-                            items[j].itemTransitionSpeed = td.transition === "look"
-                                ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4)
-                                : (td.speed     !== undefined ? td.speed     : 1.0)
-                            items[j].itemPushDirection   = td.pushDir      || "right"
-                            items[j].itemWipeFeather     = td.wipeFeather  !== undefined ? td.wipeFeather  : 0.0
-                            items[j].itemWipeDirection   = td.wipeDir      || "right"
-                            items[j].itemLookYaw         = td.lookYaw      !== undefined ? td.lookYaw      : 90.0
-                            items[j].itemLookPitch       = td.lookPitch    !== undefined ? td.lookPitch    : 0.0
-                            items[j].itemLookFovMM       = td.lookFov      !== undefined ? td.lookFov      : 24.0
-                            items[j].itemLookOvershoot   = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0
-                            items[j].itemLookShutter     = td.lookShutter  !== undefined ? td.lookShutter  : 0.10
-                            changed = true
+                            if (items[j].itemCommand !== "jump")
+                                continue;
+                            items[j].itemTransition = td.transition || "cut";
+                            items[j].itemTransitionSpeed = td.transition === "look" ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4) : (td.speed !== undefined ? td.speed : 1.0);
+                            items[j].itemPushDirection = td.pushDir || "right";
+                            items[j].itemWipeFeather = td.wipeFeather !== undefined ? td.wipeFeather : 0.0;
+                            items[j].itemWipeDirection = td.wipeDir || "right";
+                            items[j].itemLookYaw = td.lookYaw !== undefined ? td.lookYaw : 90.0;
+                            items[j].itemLookPitch = td.lookPitch !== undefined ? td.lookPitch : 0.0;
+                            items[j].itemLookFovMM = td.lookFov !== undefined ? td.lookFov : 24.0;
+                            items[j].itemLookOvershoot = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0;
+                            items[j].itemLookShutter = td.lookShutter !== undefined ? td.lookShutter : 0.10;
+                            changed = true;
                         }
                         if (changed) {
-                            var newJson = JSON.stringify(items)
-                            model.setProperty(i, "interactivityJson", newJson)
+                            var newJson = JSON.stringify(items);
+                            model.setProperty(i, "interactivityJson", newJson);
                             if (selectSettings.syncedType === typeNames[mi] && selectSettings.syncedIdx === i)
-                                viewport.loadInteractivityModel(selectInteractivityModel, newJson)
+                                viewport.loadInteractivityModel(selectInteractivityModel, newJson);
                         }
                     }
                 }
@@ -1036,9 +1258,9 @@ Window {
             Connections {
                 target: storyManager
                 function onStoryOpened() {
-                    sceneSettingsView.loadResolution()
-                    sceneSettingsView.loadStoryCursor()
-                    sceneSettingsView.loadTransitions()
+                    sceneSettingsView.loadResolution();
+                    sceneSettingsView.loadStoryCursor();
+                    sceneSettingsView.loadTransitions();
                 }
             }
 
@@ -1078,9 +1300,12 @@ Window {
                         Layout.preferredHeight: 28
                         model: ["16:9", "4:3", "Custom"]
                         onCurrentIndexChanged: {
-                            if (sceneSettingsView._loading) return
-                            if (currentIndex === 0) resCombo169.currentIndex = 3
-                            else if (currentIndex === 1) resCombo43.currentIndex = 2
+                            if (sceneSettingsView._loading)
+                                return;
+                            if (currentIndex === 0)
+                                resCombo169.currentIndex = 3;
+                            else if (currentIndex === 1)
+                                resCombo43.currentIndex = 2;
                         }
                         contentItem: Text {
                             leftPadding: 8
@@ -1154,15 +1379,18 @@ Window {
                         id: resCombo169
                         Layout.preferredWidth: 220
                         Layout.preferredHeight: 28
-                        model: sceneSettingsView.res169.map(function(r) { return r.label })
+                        model: sceneSettingsView.res169.map(function (r) {
+                            return r.label;
+                        })
                         currentIndex: 3
                         onCurrentIndexChanged: {
-                            if (sceneSettingsView._loading) return
-                            var entry = sceneSettingsView.res169[currentIndex]
+                            if (sceneSettingsView._loading)
+                                return;
+                            var entry = sceneSettingsView.res169[currentIndex];
                             if (entry && entry.w !== -1) {
-                                storyManager.setResolution(entry.w, entry.h)
-                                customWidthField.text = entry.w.toString()
-                                customHeightField.text = entry.h.toString()
+                                storyManager.setResolution(entry.w, entry.h);
+                                customWidthField.text = entry.w.toString();
+                                customHeightField.text = entry.h.toString();
                             }
                         }
                         contentItem: Text {
@@ -1238,15 +1466,18 @@ Window {
                         id: resCombo43
                         Layout.preferredWidth: 220
                         Layout.preferredHeight: 28
-                        model: sceneSettingsView.res43.map(function(r) { return r.label })
+                        model: sceneSettingsView.res43.map(function (r) {
+                            return r.label;
+                        })
                         currentIndex: 2
                         onCurrentIndexChanged: {
-                            if (sceneSettingsView._loading) return
-                            var entry = sceneSettingsView.res43[currentIndex]
+                            if (sceneSettingsView._loading)
+                                return;
+                            var entry = sceneSettingsView.res43[currentIndex];
                             if (entry && entry.w !== -1) {
-                                storyManager.setResolution(entry.w, entry.h)
-                                customWidthField.text = entry.w.toString()
-                                customHeightField.text = entry.h.toString()
+                                storyManager.setResolution(entry.w, entry.h);
+                                customWidthField.text = entry.w.toString();
+                                customHeightField.text = entry.h.toString();
                             }
                         }
                         contentItem: Text {
@@ -1310,9 +1541,7 @@ Window {
 
                 // ---- custom resolution row ----
                 RowLayout {
-                    visible: (aspectCombo.currentIndex === 0 && resCombo169.currentIndex === sceneSettingsView.res169.length - 1) ||
-                             (aspectCombo.currentIndex === 1 && resCombo43.currentIndex === sceneSettingsView.res43.length - 1) ||
-                             aspectCombo.currentIndex === 2
+                    visible: (aspectCombo.currentIndex === 0 && resCombo169.currentIndex === sceneSettingsView.res169.length - 1) || (aspectCombo.currentIndex === 1 && resCombo43.currentIndex === sceneSettingsView.res43.length - 1) || aspectCombo.currentIndex === 2
                     spacing: 10
                     Text {
                         text: "dimensions"
@@ -1336,14 +1565,17 @@ Window {
                             horizontalAlignment: TextInput.AlignHCenter
                             verticalAlignment: TextInput.AlignVCenter
                             text: "1920"
-                            validator: IntValidator { bottom: 1; top: 32768 }
+                            validator: IntValidator {
+                                bottom: 1
+                                top: 32768
+                            }
                             selectByMouse: true
                             Keys.onReturnPressed: focus = false
                             Keys.onEscapePressed: focus = false
                             onEditingFinished: {
-                                var w = parseInt(text) || 1920
-                                var h = parseInt(customHeightField.text) || 1080
-                                storyManager.setResolution(w, h)
+                                var w = parseInt(text) || 1920;
+                                var h = parseInt(customHeightField.text) || 1080;
+                                storyManager.setResolution(w, h);
                             }
                         }
                     }
@@ -1368,14 +1600,17 @@ Window {
                             horizontalAlignment: TextInput.AlignHCenter
                             verticalAlignment: TextInput.AlignVCenter
                             text: "1080"
-                            validator: IntValidator { bottom: 1; top: 32768 }
+                            validator: IntValidator {
+                                bottom: 1
+                                top: 32768
+                            }
                             selectByMouse: true
                             Keys.onReturnPressed: focus = false
                             Keys.onEscapePressed: focus = false
                             onEditingFinished: {
-                                var w = parseInt(customWidthField.text) || 1920
-                                var h = parseInt(text) || 1080
-                                storyManager.setResolution(w, h)
+                                var w = parseInt(customWidthField.text) || 1920;
+                                var h = parseInt(text) || 1080;
+                                storyManager.setResolution(w, h);
                             }
                         }
                     }
@@ -1409,13 +1644,22 @@ Window {
                             width: parent.width
                             // expands to fit drop zones when custom is selected
                             height: (modelData.name === "custom" && isSelected) ? 168 : (modelData.icons.length > 0 ? 92 : 52)
-                            Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+                            Behavior on height {
+                                NumberAnimation {
+                                    duration: 150
+                                    easing.type: Easing.InOutQuad
+                                }
+                            }
                             radius: 10
                             clip: true
                             color: isSelected ? "white" : "transparent"
                             border.width: 2
                             border.color: "white"
-                            Behavior on color { ColorAnimation { duration: 120 } }
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 120
+                                }
+                            }
 
                             property bool isSelected: sceneSettingsView.selectedCursor === modelData.name
 
@@ -1445,7 +1689,11 @@ Window {
                                         font.pixelSize: 14
                                         font.bold: true
                                         color: cursorOptionRect.isSelected ? "#477B78" : "white"
-                                        Behavior on color { ColorAnimation { duration: 120 } }
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 120
+                                            }
+                                        }
                                     }
 
                                     Row {
@@ -1479,7 +1727,11 @@ Window {
                                                         anchors.fill: cursorIcon
                                                         source: cursorIcon
                                                         color: cursorOptionRect.isSelected ? "#477B78" : "white"
-                                                        Behavior on color { ColorAnimation { duration: 120 } }
+                                                        Behavior on color {
+                                                            ColorAnimation {
+                                                                duration: 120
+                                                            }
+                                                        }
                                                     }
                                                 }
 
@@ -1489,7 +1741,11 @@ Window {
                                                     color: cursorOptionRect.isSelected ? "#477B78" : "white"
                                                     horizontalAlignment: Text.AlignHCenter
                                                     width: 50
-                                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                                    Behavior on color {
+                                                        ColorAnimation {
+                                                            duration: 120
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -1540,8 +1796,8 @@ Window {
                                                 MouseArea {
                                                     anchors.fill: parent
                                                     onClicked: {
-                                                        sceneSettingsView._cursorSlot = cursorDropZone.slotIndex
-                                                        cursorIconFileDialog.open()
+                                                        sceneSettingsView._cursorSlot = cursorDropZone.slotIndex;
+                                                        cursorIconFileDialog.open();
                                                     }
                                                 }
 
@@ -1549,9 +1805,9 @@ Window {
                                                     anchors.fill: parent
                                                     onDropped: drop => {
                                                         if (drop.hasUrls) {
-                                                            var paths = sceneSettingsView.cursorCustomPaths.slice()
-                                                            paths[cursorDropZone.slotIndex] = drop.urls[0].toString()
-                                                            sceneSettingsView.cursorCustomPaths = paths
+                                                            var paths = sceneSettingsView.cursorCustomPaths.slice();
+                                                            paths[cursorDropZone.slotIndex] = drop.urls[0].toString();
+                                                            sceneSettingsView.cursorCustomPaths = paths;
                                                         }
                                                     }
                                                 }
@@ -1580,510 +1836,990 @@ Window {
                     rowSpacing: 16
 
                     Repeater {
-                    model: ["default", "north", "south", "west", "east"]
-                    delegate: ColumnLayout {
-                        id: dirDelegate
-                        Layout.fillWidth: true
-                        Layout.columnSpan: index === 0 ? 2 : 1
-                        Layout.maximumWidth: index === 0 ? sceneSettingsLayout.width : Math.floor((sceneSettingsLayout.width - 16) / 2)
-                        Layout.alignment: Qt.AlignTop
-                        spacing: 6
-                        property int dirIdx: [0, 1, 2, 4, 3][index]
-                        property var td: sceneSettingsView.dirTransitions[dirIdx]
-
-                        onTdChanged: {
-                            var s = td.speed || 1.0
-                            dSpeedSlider.value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
-                            dSpeedField.text = s.toFixed(1)
-                            dFeatherSlider.value = td.wipeFeather || 0.0
-                            dFeatherField.text = Math.round((td.wipeFeather || 0.0) * 200).toString()
-                            var ls = td.lookSpeed || 0.4
-                            dLookSpeedSlider.value = ls <= 2.0 ? ls / 4.0 : 0.5 + (ls - 2.0) / 16.0
-                            dLookSpeedField.text = ls.toFixed(1)
-                            dFovSlider.value = td.lookFov || 24.0
-                            dFovField.text = Math.round(td.lookFov || 24).toString()
-                            dOvershootSlider.value = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0
-                            dOvershootField.text = (td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0).toFixed(2)
-                            dShutterSlider.value = td.lookShutter !== undefined ? td.lookShutter : 0.10
-                            dShutterField.text = (td.lookShutter !== undefined ? td.lookShutter : 0.10).toFixed(2)
-                            dYawField.text = (td.lookYaw !== undefined ? td.lookYaw : 90.0).toFixed(1)
-                            dPitchField.text = (td.lookPitch !== undefined ? td.lookPitch : 0.0).toFixed(1)
-                        }
-
-                        // direction label
-                        Text {
-                            text: modelData
-                            font.pixelSize: 12
-                            font.bold: true
-                            color: "#aaa"
-                        }
-
-                        // transition type buttons
-                        RowLayout {
+                        model: ["default", "north", "south", "west", "east"]
+                        delegate: ColumnLayout {
+                            id: dirDelegate
                             Layout.fillWidth: true
-                            spacing: 4
-                            Repeater {
-                                model: [
-                                    { icon: "cut",      key: "cut"      },
-                                    { icon: "dissolve", key: "dissolve" },
-                                    { icon: "wipe",     key: "wipe"     },
-                                    { icon: "push",     key: "push"     },
-                                    { icon: "look",     key: "look"     }
-                                ]
-                                delegate: Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: Math.round((sceneSettingsView.availableWidth - 40 - 16) / 2 / 5)
-                                    radius: 4
-                                    property bool isActive: dirDelegate.td.transition === modelData.key
-                                    color: isActive ? "white" : "transparent"
-                                    border.color: "white"; border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 100 } }
-                                    Image {
-                                        id: dtTransIcon
-                                        anchors.centerIn: parent
-                                        width: Math.round(parent.height * 0.72); height: width
-                                        source: "icons/" + modelData.icon + ".svg"
-                                        fillMode: Image.PreserveAspectFit; visible: false
-                                    }
-                                    ColorOverlay {
-                                        anchors.fill: dtTransIcon; source: dtTransIcon
-                                        color: isActive ? "#477B78" : "white"
-                                        Behavior on color { ColorAnimation { duration: 100 } }
-                                    }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "transition", modelData.key)
-                                    }
-                                }
-                            }
-                        }
-
-                        // speed row (dissolve / wipe / push)
-                        RowLayout {
-                            Layout.fillWidth: true
+                            Layout.columnSpan: index === 0 ? 2 : 1
+                            Layout.maximumWidth: index === 0 ? sceneSettingsLayout.width : Math.floor((sceneSettingsLayout.width - 16) / 2)
+                            Layout.alignment: Qt.AlignTop
                             spacing: 6
-                            visible: dirDelegate.td.transition !== "cut" && dirDelegate.td.transition !== "look"
-                            Text { text: "speed"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                            Slider {
-                                id: dSpeedSlider
-                                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
-                                from: 0; to: 1; stepSize: 0
-                                Component.onCompleted: {
-                                    var s = dirDelegate.td.speed || 1.0
-                                    value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
-                                }
-                                onMoved: {
-                                    var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
-                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "speed", Math.round(speed * 100) / 100)
-                                }
-                                background: Rectangle {
-                                    x: dSpeedSlider.leftPadding; y: dSpeedSlider.topPadding + dSpeedSlider.availableHeight / 2 - height / 2
-                                    implicitWidth: 200; implicitHeight: 4; width: dSpeedSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                    Rectangle { width: dSpeedSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                }
-                                handle: Rectangle {
-                                    x: dSpeedSlider.leftPadding + dSpeedSlider.visualPosition * (dSpeedSlider.availableWidth - width)
-                                    y: dSpeedSlider.topPadding + dSpeedSlider.availableHeight / 2 - height / 2
-                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: dSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                }
-                            }
-                            Rectangle {
-                                Layout.preferredWidth: 52; Layout.preferredHeight: 22
-                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                TextInput {
-                                    id: dSpeedField
-                                    anchors.left: parent.left; anchors.right: dSpeedSec.left
-                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                    validator: DoubleValidator { bottom: 0.0; top: 10.0 }
-                                    Component.onCompleted: text = (dirDelegate.td.speed || 1.0).toFixed(1)
-                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                    onEditingFinished: {
-                                        var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
-                                        text = speed.toFixed(1)
-                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "speed", speed)
-                                    }
-                                }
-                                Text { id: dSpeedSec; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "sec"; font.pixelSize: 10; color: "#aaa" }
-                            }
-                            Repeater {
-                                model: ["left", "up", "down", "right"]
-                                delegate: Rectangle {
-                                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
-                                    visible: dirDelegate.td.transition === "push"
-                                    radius: 4
-                                    property bool isActive: dirDelegate.td.pushDir === modelData
-                                    color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 100 } }
-                                    Image { id: dtPushDirIcon; anchors.centerIn: parent; width: 14; height: 14; source: "icons/" + modelData + ".svg"; fillMode: Image.PreserveAspectFit; visible: false }
-                                    ColorOverlay { anchors.fill: dtPushDirIcon; source: dtPushDirIcon; color: isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
-                                    MouseArea { anchors.fill: parent; onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "pushDir", modelData) }
-                                }
-                            }
-                        }
+                            property int dirIdx: [0, 1, 2, 4, 3][index]
+                            property var td: sceneSettingsView.dirTransitions[dirIdx]
 
-                        // wipe feather row
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            visible: dirDelegate.td.transition === "wipe"
-                            Text { text: "feather"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                            Slider {
-                                id: dFeatherSlider
-                                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
-                                from: 0.0; to: 0.5; stepSize: 0
-                                Component.onCompleted: value = dirDelegate.td.wipeFeather || 0.0
-                                onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(value * 1000) / 1000)
-                                background: Rectangle {
-                                    x: dFeatherSlider.leftPadding; y: dFeatherSlider.topPadding + dFeatherSlider.availableHeight / 2 - height / 2
-                                    implicitWidth: 200; implicitHeight: 4; width: dFeatherSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                    Rectangle { width: dFeatherSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                }
-                                handle: Rectangle {
-                                    x: dFeatherSlider.leftPadding + dFeatherSlider.visualPosition * (dFeatherSlider.availableWidth - width)
-                                    y: dFeatherSlider.topPadding + dFeatherSlider.availableHeight / 2 - height / 2
-                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: dFeatherSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                }
+                            onTdChanged: {
+                                var s = td.speed || 1.0;
+                                dSpeedSlider.value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0;
+                                dSpeedField.text = s.toFixed(1);
+                                dFeatherSlider.value = td.wipeFeather || 0.0;
+                                dFeatherField.text = Math.round((td.wipeFeather || 0.0) * 200).toString();
+                                var ls = td.lookSpeed || 0.4;
+                                dLookSpeedSlider.value = ls <= 2.0 ? ls / 4.0 : 0.5 + (ls - 2.0) / 16.0;
+                                dLookSpeedField.text = ls.toFixed(1);
+                                dFovSlider.value = td.lookFov || 24.0;
+                                dFovField.text = Math.round(td.lookFov || 24).toString();
+                                dOvershootSlider.value = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0;
+                                dOvershootField.text = (td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0).toFixed(2);
+                                dShutterSlider.value = td.lookShutter !== undefined ? td.lookShutter : 0.10;
+                                dShutterField.text = (td.lookShutter !== undefined ? td.lookShutter : 0.10).toFixed(2);
+                                dYawField.text = (td.lookYaw !== undefined ? td.lookYaw : 90.0).toFixed(1);
+                                dPitchField.text = (td.lookPitch !== undefined ? td.lookPitch : 0.0).toFixed(1);
                             }
-                            Rectangle {
-                                Layout.preferredWidth: 42; Layout.preferredHeight: 22
-                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                TextInput {
-                                    id: dFeatherField
-                                    anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter
-                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                    validator: IntValidator { bottom: 0; top: 100 }
-                                    Component.onCompleted: text = Math.round((dirDelegate.td.wipeFeather || 0.0) * 200).toString()
-                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                    onEditingFinished: {
-                                        var pct = Math.min(100, Math.max(0, parseInt(text) || 0))
-                                        text = pct.toString()
-                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(pct / 200 * 1000) / 1000)
-                                    }
-                                }
-                            }
-                            Repeater {
-                                model: ["left", "up", "down", "right"]
-                                delegate: Rectangle {
-                                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
-                                    radius: 4
-                                    property bool isActive: dirDelegate.td.wipeDir === modelData
-                                    color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 100 } }
-                                    Image { id: dtWipeDirIcon; anchors.centerIn: parent; width: 14; height: 14; source: "icons/" + modelData + ".svg"; fillMode: Image.PreserveAspectFit; visible: false }
-                                    ColorOverlay { anchors.fill: dtWipeDirIcon; source: dtWipeDirIcon; color: isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
-                                    MouseArea { anchors.fill: parent; onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeDir", modelData) }
-                                }
-                            }
-                        }
 
-                        // look controls
-                        Item {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: dirDelegate.td.transition === "look" ? 126 : 0
-                            clip: true
+                            // direction label
+                            Text {
+                                text: modelData
+                                font.pixelSize: 12
+                                font.bold: true
+                                color: "#aaa"
+                            }
 
+                            // transition type buttons
                             RowLayout {
-                                anchors.fill: parent
-                                spacing: 8
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    Layout.alignment: Qt.AlignTop
-                                    spacing: 4
-
-                                    RowLayout {
-                                        Layout.fillWidth: true; height: 22; spacing: 6
-                                        Text { text: "speed"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                        Slider {
-                                            id: dLookSpeedSlider
-                                            Layout.fillWidth: true; Layout.preferredHeight: 22
-                                            from: 0; to: 1; stepSize: 0
-                                            Component.onCompleted: {
-                                                var s = dirDelegate.td.lookSpeed || 0.4
-                                                value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
-                                            }
-                                            onMoved: {
-                                                var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
-                                                sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", Math.round(speed * 100) / 100)
-                                            }
-                                            background: Rectangle {
-                                                x: dLookSpeedSlider.leftPadding; y: dLookSpeedSlider.topPadding + dLookSpeedSlider.availableHeight / 2 - height / 2
-                                                implicitWidth: 200; implicitHeight: 4; width: dLookSpeedSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                Rectangle { width: dLookSpeedSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                            }
-                                            handle: Rectangle {
-                                                x: dLookSpeedSlider.leftPadding + dLookSpeedSlider.visualPosition * (dLookSpeedSlider.availableWidth - width)
-                                                y: dLookSpeedSlider.topPadding + dLookSpeedSlider.availableHeight / 2 - height / 2
-                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: dLookSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                Layout.fillWidth: true
+                                spacing: 4
+                                Repeater {
+                                    model: [
+                                        {
+                                            icon: "cut",
+                                            key: "cut"
+                                        },
+                                        {
+                                            icon: "dissolve",
+                                            key: "dissolve"
+                                        },
+                                        {
+                                            icon: "wipe",
+                                            key: "wipe"
+                                        },
+                                        {
+                                            icon: "push",
+                                            key: "push"
+                                        },
+                                        {
+                                            icon: "look",
+                                            key: "look"
+                                        }
+                                    ]
+                                    delegate: Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: Math.round((sceneSettingsView.availableWidth - 40 - 16) / 2 / 5)
+                                        radius: 4
+                                        property bool isActive: dirDelegate.td.transition === modelData.key
+                                        color: isActive ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
                                             }
                                         }
-                                        Rectangle {
-                                            Layout.preferredWidth: 52; Layout.preferredHeight: 22
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                            TextInput {
-                                                id: dLookSpeedField
-                                                anchors.left: parent.left; anchors.right: dLookSpeedSec.left
-                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                validator: DoubleValidator { bottom: 0.0; top: 10.0 }
-                                                Component.onCompleted: text = (dirDelegate.td.lookSpeed || 0.4).toFixed(1)
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: {
-                                                    var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
-                                                    text = speed.toFixed(1)
-                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", speed)
+                                        Image {
+                                            id: dtTransIcon
+                                            anchors.centerIn: parent
+                                            width: Math.round(parent.height * 0.72)
+                                            height: width
+                                            source: "icons/" + modelData.icon + ".svg"
+                                            fillMode: Image.PreserveAspectFit
+                                            visible: false
+                                        }
+                                        ColorOverlay {
+                                            anchors.fill: dtTransIcon
+                                            source: dtTransIcon
+                                            color: isActive ? "#477B78" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
                                                 }
                                             }
-                                            Text { id: dLookSpeedSec; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "sec"; font.pixelSize: 10; color: "#aaa" }
-                                        }
-                                    }
-
-                                    RowLayout {
-                                        Layout.fillWidth: true; height: 22; spacing: 6
-                                        Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                        Slider {
-                                            id: dFovSlider
-                                            Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
-                                            from: 10; to: 75; stepSize: 0
-                                            Component.onCompleted: value = dirDelegate.td.lookFov || 24.0
-                                            onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", Math.round(value * 10) / 10)
-                                            background: Rectangle {
-                                                x: dFovSlider.leftPadding; y: dFovSlider.topPadding + dFovSlider.availableHeight / 2 - height / 2
-                                                implicitWidth: 200; implicitHeight: 4; width: dFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                Rectangle { width: dFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                            }
-                                            handle: Rectangle {
-                                                x: dFovSlider.leftPadding + dFovSlider.visualPosition * (dFovSlider.availableWidth - width)
-                                                y: dFovSlider.topPadding + dFovSlider.availableHeight / 2 - height / 2
-                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: dFovSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                            }
-                                        }
-                                        Rectangle {
-                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                            TextInput {
-                                                id: dFovField
-                                                anchors.left: parent.left; anchors.right: dFovMmLabel.left
-                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                validator: IntValidator { bottom: 10; top: 75 }
-                                                Component.onCompleted: text = Math.round(dirDelegate.td.lookFov || 24).toString()
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: {
-                                                    var v = Math.min(75, Math.max(10, parseInt(text) || 24))
-                                                    text = v.toString()
-                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", v)
-                                                }
-                                            }
-                                            Text { id: dFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
-                                        }
-                                    }
-
-                                    RowLayout {
-                                        Layout.fillWidth: true; height: 22; spacing: 6
-                                        Text { text: "overshoot"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                        Slider {
-                                            id: dOvershootSlider
-                                            Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
-                                            from: 0.0; to: 3.0; stepSize: 0
-                                            Component.onCompleted: value = dirDelegate.td.lookOvershoot !== undefined ? dirDelegate.td.lookOvershoot : 1.0
-                                            onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", Math.round(value * 100) / 100)
-                                            background: Rectangle {
-                                                x: dOvershootSlider.leftPadding; y: dOvershootSlider.topPadding + dOvershootSlider.availableHeight / 2 - height / 2
-                                                implicitWidth: 200; implicitHeight: 4; width: dOvershootSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                Rectangle { width: dOvershootSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                            }
-                                            handle: Rectangle {
-                                                x: dOvershootSlider.leftPadding + dOvershootSlider.visualPosition * (dOvershootSlider.availableWidth - width)
-                                                y: dOvershootSlider.topPadding + dOvershootSlider.availableHeight / 2 - height / 2
-                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: dOvershootSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                            }
-                                        }
-                                        Rectangle {
-                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                            TextInput {
-                                                id: dOvershootField
-                                                anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter
-                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                validator: DoubleValidator { bottom: 0.0; top: 3.0 }
-                                                Component.onCompleted: text = (dirDelegate.td.lookOvershoot !== undefined ? dirDelegate.td.lookOvershoot : 1.0).toFixed(2)
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: {
-                                                    var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0))
-                                                    text = v.toFixed(2)
-                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", v)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    RowLayout {
-                                        Layout.fillWidth: true; height: 22; spacing: 6
-                                        Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                        Slider {
-                                            id: dShutterSlider
-                                            Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
-                                            from: 0.0; to: 0.5; stepSize: 0
-                                            Component.onCompleted: value = dirDelegate.td.lookShutter !== undefined ? dirDelegate.td.lookShutter : 0.10
-                                            onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", Math.round(value * 1000) / 1000)
-                                            background: Rectangle {
-                                                x: dShutterSlider.leftPadding; y: dShutterSlider.topPadding + dShutterSlider.availableHeight / 2 - height / 2
-                                                implicitWidth: 200; implicitHeight: 4; width: dShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                Rectangle { width: dShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                            }
-                                            handle: Rectangle {
-                                                x: dShutterSlider.leftPadding + dShutterSlider.visualPosition * (dShutterSlider.availableWidth - width)
-                                                y: dShutterSlider.topPadding + dShutterSlider.availableHeight / 2 - height / 2
-                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: dShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                            }
-                                        }
-                                        Rectangle {
-                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                            TextInput {
-                                                id: dShutterField
-                                                anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter
-                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                validator: DoubleValidator { bottom: 0.0; top: 0.5 }
-                                                Component.onCompleted: text = (dirDelegate.td.lookShutter !== undefined ? dirDelegate.td.lookShutter : 0.10).toFixed(2)
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: {
-                                                    var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0))
-                                                    text = v.toFixed(2)
-                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", v)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    RowLayout {
-                                        Layout.fillWidth: true; height: 22; spacing: 4
-                                        Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
-                                        Rectangle {
-                                            Layout.fillWidth: true; Layout.preferredHeight: 22
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                            TextInput {
-                                                id: dYawField
-                                                anchors.left: parent.left; anchors.right: dYawDeg.left
-                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                validator: DoubleValidator { bottom: -9999; top: 9999 }
-                                                Component.onCompleted: text = (dirDelegate.td.lookYaw !== undefined ? dirDelegate.td.lookYaw : 90.0).toFixed(1)
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: {
-                                                    var v = parseFloat(text) || 0.0
-                                                    text = v.toFixed(1)
-                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", v)
-                                                }
-                                            }
-                                            Text { id: dYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
-                                        }
-                                        Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
-                                        Rectangle {
-                                            Layout.fillWidth: true; Layout.preferredHeight: 22
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                            TextInput {
-                                                id: dPitchField
-                                                anchors.left: parent.left; anchors.right: dPitchDeg.left
-                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                validator: DoubleValidator { bottom: -9999; top: 9999 }
-                                                Component.onCompleted: text = (dirDelegate.td.lookPitch !== undefined ? dirDelegate.td.lookPitch : 0.0).toFixed(1)
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: {
-                                                    var v = parseFloat(text) || 0.0
-                                                    text = v.toFixed(1)
-                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", v)
-                                                }
-                                            }
-                                            Text { id: dPitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
-                                        }
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    id: lookPickerCol
-                                    Layout.preferredWidth: 76
-                                    Layout.alignment: Qt.AlignTop
-                                    spacing: 4
-                                    property bool lookPickerBack: false
-
-                                    RowLayout {
-                                        Layout.preferredWidth: 76; height: 16; spacing: 4
-                                        Repeater {
-                                            model: [{ label: "front", back: false }, { label: "back", back: true }]
-                                            delegate: Rectangle {
-                                                Layout.fillWidth: true; Layout.preferredHeight: 16; radius: 4
-                                                property bool isActive: lookPickerCol.lookPickerBack === modelData.back
-                                                color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
-                                                Behavior on color { ColorAnimation { duration: 100 } }
-                                                Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 9; color: parent.isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
-                                                MouseArea { anchors.fill: parent; onClicked: lookPickerCol.lookPickerBack = modelData.back }
-                                            }
-                                        }
-                                    }
-
-                                    Item {
-                                        Layout.preferredWidth: 68; Layout.preferredHeight: 68
-                                        Layout.alignment: Qt.AlignHCenter
-                                        ShaderEffect {
-                                            anchors.fill: parent
-                                            fragmentShader: "lookpicker.frag.qsb"
-                                            property real yaw:   dirDelegate.td.lookYaw   !== undefined ? dirDelegate.td.lookYaw   : 90.0
-                                            property real pitch: dirDelegate.td.lookPitch !== undefined ? dirDelegate.td.lookPitch : 0.0
-                                            property real fovMM: dirDelegate.td.lookFov   !== undefined ? dirDelegate.td.lookFov   : 24.0
-                                            property real back:  lookPickerCol.lookPickerBack ? 1.0 : 0.0
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onPressed: dLookPickerMouse(mouseX, mouseY)
-                                            onPositionChanged: if (pressed) dLookPickerMouse(mouseX, mouseY)
-                                            function dLookPickerMouse(mx, my) {
-                                                var cx = 34.0, cy = 34.0
-                                                var nx = (mx - cx) / cx, ny = (my - cy) / cy
-                                                var r = Math.sqrt(nx * nx + ny * ny)
-                                                if (r > 1.0) { nx /= r; ny /= r; r = 1.0 }
-                                                var z = Math.sqrt(Math.max(0.0, 1.0 - r * r))
-                                                var lx = nx, ly = -ny
-                                                var lz = lookPickerCol.lookPickerBack ? -z : z
-                                                var newYaw   = Math.round(Math.atan2(lx, lz) * 1800.0 / Math.PI) / 10
-                                                var absCosy  = Math.sqrt(ly * ly + lz * lz)
-                                                var sinPitch = absCosy > 0.0001 ? ly / (lz >= 0 ? absCosy : -absCosy) : 0.0
-                                                var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, sinPitch))) * 1800.0 / Math.PI) / 10
-                                                sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw",   newYaw)
-                                                sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", newPitch)
-                                                dYawField.text   = newYaw.toFixed(1)
-                                                dPitchField.text = newPitch.toFixed(1)
+                                            onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "transition", modelData.key)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // speed row (dissolve / wipe / push)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                visible: dirDelegate.td.transition !== "cut" && dirDelegate.td.transition !== "look"
+                                Text {
+                                    text: "speed"
+                                    font.pixelSize: 10
+                                    color: "#aaa"
+                                    Layout.preferredHeight: 22
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                Slider {
+                                    id: dSpeedSlider
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    Layout.preferredHeight: 22
+                                    from: 0
+                                    to: 1
+                                    stepSize: 0
+                                    Component.onCompleted: {
+                                        var s = dirDelegate.td.speed || 1.0;
+                                        value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0;
+                                    }
+                                    onMoved: {
+                                        var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0;
+                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "speed", Math.round(speed * 100) / 100);
+                                    }
+                                    background: Rectangle {
+                                        x: dSpeedSlider.leftPadding
+                                        y: dSpeedSlider.topPadding + dSpeedSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 200
+                                        implicitHeight: 4
+                                        width: dSpeedSlider.availableWidth
+                                        height: 4
+                                        radius: 2
+                                        color: "#333"
+                                        Rectangle {
+                                            width: dSpeedSlider.visualPosition * parent.width
+                                            height: parent.height
+                                            color: "#5DA9A4"
+                                            radius: 2
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: dSpeedSlider.leftPadding + dSpeedSlider.visualPosition * (dSpeedSlider.availableWidth - width)
+                                        y: dSpeedSlider.topPadding + dSpeedSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 12
+                                        implicitHeight: 12
+                                        radius: 6
+                                        color: dSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: 52
+                                    Layout.preferredHeight: 22
+                                    color: "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    radius: 4
+                                    TextInput {
+                                        id: dSpeedField
+                                        anchors.left: parent.left
+                                        anchors.right: dSpeedSec.left
+                                        anchors.leftMargin: 4
+                                        anchors.rightMargin: 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: "white"
+                                        font.pixelSize: 10
+                                        clip: true
+                                        selectByMouse: true
+                                        validator: DoubleValidator {
+                                            bottom: 0.0
+                                            top: 10.0
+                                        }
+                                        Component.onCompleted: text = (dirDelegate.td.speed || 1.0).toFixed(1)
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: {
+                                            var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0));
+                                            text = speed.toFixed(1);
+                                            sceneSettingsView.setTransProp(dirDelegate.dirIdx, "speed", speed);
+                                        }
+                                    }
+                                    Text {
+                                        id: dSpeedSec
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "sec"
+                                        font.pixelSize: 10
+                                        color: "#aaa"
+                                    }
+                                }
+                                Repeater {
+                                    model: ["left", "up", "down", "right"]
+                                    delegate: Rectangle {
+                                        Layout.preferredWidth: 22
+                                        Layout.preferredHeight: 22
+                                        visible: dirDelegate.td.transition === "push"
+                                        radius: 4
+                                        property bool isActive: dirDelegate.td.pushDir === modelData
+                                        color: isActive ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                        Image {
+                                            id: dtPushDirIcon
+                                            anchors.centerIn: parent
+                                            width: 14
+                                            height: 14
+                                            source: "icons/" + modelData + ".svg"
+                                            fillMode: Image.PreserveAspectFit
+                                            visible: false
+                                        }
+                                        ColorOverlay {
+                                            anchors.fill: dtPushDirIcon
+                                            source: dtPushDirIcon
+                                            color: isActive ? "#477B78" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "pushDir", modelData)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // wipe feather row
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                visible: dirDelegate.td.transition === "wipe"
+                                Text {
+                                    text: "feather"
+                                    font.pixelSize: 10
+                                    color: "#aaa"
+                                    Layout.preferredHeight: 22
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                Slider {
+                                    id: dFeatherSlider
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    Layout.preferredHeight: 22
+                                    from: 0.0
+                                    to: 0.5
+                                    stepSize: 0
+                                    Component.onCompleted: value = dirDelegate.td.wipeFeather || 0.0
+                                    onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(value * 1000) / 1000)
+                                    background: Rectangle {
+                                        x: dFeatherSlider.leftPadding
+                                        y: dFeatherSlider.topPadding + dFeatherSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 200
+                                        implicitHeight: 4
+                                        width: dFeatherSlider.availableWidth
+                                        height: 4
+                                        radius: 2
+                                        color: "#333"
+                                        Rectangle {
+                                            width: dFeatherSlider.visualPosition * parent.width
+                                            height: parent.height
+                                            color: "#5DA9A4"
+                                            radius: 2
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: dFeatherSlider.leftPadding + dFeatherSlider.visualPosition * (dFeatherSlider.availableWidth - width)
+                                        y: dFeatherSlider.topPadding + dFeatherSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 12
+                                        implicitHeight: 12
+                                        radius: 6
+                                        color: dFeatherSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: 42
+                                    Layout.preferredHeight: 22
+                                    color: "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    radius: 4
+                                    TextInput {
+                                        id: dFeatherField
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.leftMargin: 4
+                                        anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: "white"
+                                        font.pixelSize: 10
+                                        clip: true
+                                        selectByMouse: true
+                                        validator: IntValidator {
+                                            bottom: 0
+                                            top: 100
+                                        }
+                                        Component.onCompleted: text = Math.round((dirDelegate.td.wipeFeather || 0.0) * 200).toString()
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: {
+                                            var pct = Math.min(100, Math.max(0, parseInt(text) || 0));
+                                            text = pct.toString();
+                                            sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(pct / 200 * 1000) / 1000);
+                                        }
+                                    }
+                                }
+                                Repeater {
+                                    model: ["left", "up", "down", "right"]
+                                    delegate: Rectangle {
+                                        Layout.preferredWidth: 22
+                                        Layout.preferredHeight: 22
+                                        radius: 4
+                                        property bool isActive: dirDelegate.td.wipeDir === modelData
+                                        color: isActive ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                        Image {
+                                            id: dtWipeDirIcon
+                                            anchors.centerIn: parent
+                                            width: 14
+                                            height: 14
+                                            source: "icons/" + modelData + ".svg"
+                                            fillMode: Image.PreserveAspectFit
+                                            visible: false
+                                        }
+                                        ColorOverlay {
+                                            anchors.fill: dtWipeDirIcon
+                                            source: dtWipeDirIcon
+                                            color: isActive ? "#477B78" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeDir", modelData)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // look controls
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: dirDelegate.td.transition === "look" ? 126 : 0
+                                clip: true
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: 8
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignTop
+                                        spacing: 4
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            height: 22
+                                            spacing: 6
+                                            Text {
+                                                text: "speed"
+                                                font.pixelSize: 10
+                                                color: "#aaa"
+                                                Layout.preferredHeight: 22
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            Slider {
+                                                id: dLookSpeedSlider
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 22
+                                                from: 0
+                                                to: 1
+                                                stepSize: 0
+                                                Component.onCompleted: {
+                                                    var s = dirDelegate.td.lookSpeed || 0.4;
+                                                    value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0;
+                                                }
+                                                onMoved: {
+                                                    var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0;
+                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", Math.round(speed * 100) / 100);
+                                                }
+                                                background: Rectangle {
+                                                    x: dLookSpeedSlider.leftPadding
+                                                    y: dLookSpeedSlider.topPadding + dLookSpeedSlider.availableHeight / 2 - height / 2
+                                                    implicitWidth: 200
+                                                    implicitHeight: 4
+                                                    width: dLookSpeedSlider.availableWidth
+                                                    height: 4
+                                                    radius: 2
+                                                    color: "#333"
+                                                    Rectangle {
+                                                        width: dLookSpeedSlider.visualPosition * parent.width
+                                                        height: parent.height
+                                                        color: "#5DA9A4"
+                                                        radius: 2
+                                                    }
+                                                }
+                                                handle: Rectangle {
+                                                    x: dLookSpeedSlider.leftPadding + dLookSpeedSlider.visualPosition * (dLookSpeedSlider.availableWidth - width)
+                                                    y: dLookSpeedSlider.topPadding + dLookSpeedSlider.availableHeight / 2 - height / 2
+                                                    implicitWidth: 12
+                                                    implicitHeight: 12
+                                                    radius: 6
+                                                    color: dLookSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                }
+                                            }
+                                            Rectangle {
+                                                Layout.preferredWidth: 52
+                                                Layout.preferredHeight: 22
+                                                color: "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+                                                TextInput {
+                                                    id: dLookSpeedField
+                                                    anchors.left: parent.left
+                                                    anchors.right: dLookSpeedSec.left
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 2
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: "white"
+                                                    font.pixelSize: 10
+                                                    clip: true
+                                                    selectByMouse: true
+                                                    validator: DoubleValidator {
+                                                        bottom: 0.0
+                                                        top: 10.0
+                                                    }
+                                                    Component.onCompleted: text = (dirDelegate.td.lookSpeed || 0.4).toFixed(1)
+                                                    Keys.onReturnPressed: focus = false
+                                                    Keys.onEscapePressed: focus = false
+                                                    onEditingFinished: {
+                                                        var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0));
+                                                        text = speed.toFixed(1);
+                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", speed);
+                                                    }
+                                                }
+                                                Text {
+                                                    id: dLookSpeedSec
+                                                    anchors.right: parent.right
+                                                    anchors.rightMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: "sec"
+                                                    font.pixelSize: 10
+                                                    color: "#aaa"
+                                                }
+                                            }
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            height: 22
+                                            spacing: 6
+                                            Text {
+                                                text: "fov"
+                                                font.pixelSize: 10
+                                                color: "#aaa"
+                                                Layout.preferredHeight: 22
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            Slider {
+                                                id: dFovSlider
+                                                Layout.fillWidth: true
+                                                Layout.minimumWidth: 0
+                                                Layout.preferredHeight: 22
+                                                from: 10
+                                                to: 75
+                                                stepSize: 0
+                                                Component.onCompleted: value = dirDelegate.td.lookFov || 24.0
+                                                onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", Math.round(value * 10) / 10)
+                                                background: Rectangle {
+                                                    x: dFovSlider.leftPadding
+                                                    y: dFovSlider.topPadding + dFovSlider.availableHeight / 2 - height / 2
+                                                    implicitWidth: 200
+                                                    implicitHeight: 4
+                                                    width: dFovSlider.availableWidth
+                                                    height: 4
+                                                    radius: 2
+                                                    color: "#333"
+                                                    Rectangle {
+                                                        width: dFovSlider.visualPosition * parent.width
+                                                        height: parent.height
+                                                        color: "#5DA9A4"
+                                                        radius: 2
+                                                    }
+                                                }
+                                                handle: Rectangle {
+                                                    x: dFovSlider.leftPadding + dFovSlider.visualPosition * (dFovSlider.availableWidth - width)
+                                                    y: dFovSlider.topPadding + dFovSlider.availableHeight / 2 - height / 2
+                                                    implicitWidth: 12
+                                                    implicitHeight: 12
+                                                    radius: 6
+                                                    color: dFovSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                }
+                                            }
+                                            Rectangle {
+                                                Layout.preferredWidth: 46
+                                                Layout.preferredHeight: 22
+                                                color: "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+                                                TextInput {
+                                                    id: dFovField
+                                                    anchors.left: parent.left
+                                                    anchors.right: dFovMmLabel.left
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 2
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: "white"
+                                                    font.pixelSize: 10
+                                                    clip: true
+                                                    selectByMouse: true
+                                                    validator: IntValidator {
+                                                        bottom: 10
+                                                        top: 75
+                                                    }
+                                                    Component.onCompleted: text = Math.round(dirDelegate.td.lookFov || 24).toString()
+                                                    Keys.onReturnPressed: focus = false
+                                                    Keys.onEscapePressed: focus = false
+                                                    onEditingFinished: {
+                                                        var v = Math.min(75, Math.max(10, parseInt(text) || 24));
+                                                        text = v.toString();
+                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", v);
+                                                    }
+                                                }
+                                                Text {
+                                                    id: dFovMmLabel
+                                                    anchors.right: parent.right
+                                                    anchors.rightMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: "mm"
+                                                    font.pixelSize: 10
+                                                    color: "#aaa"
+                                                }
+                                            }
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            height: 22
+                                            spacing: 6
+                                            Text {
+                                                text: "overshoot"
+                                                font.pixelSize: 10
+                                                color: "#aaa"
+                                                Layout.preferredHeight: 22
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            Slider {
+                                                id: dOvershootSlider
+                                                Layout.fillWidth: true
+                                                Layout.minimumWidth: 0
+                                                Layout.preferredHeight: 22
+                                                from: 0.0
+                                                to: 3.0
+                                                stepSize: 0
+                                                Component.onCompleted: value = dirDelegate.td.lookOvershoot !== undefined ? dirDelegate.td.lookOvershoot : 1.0
+                                                onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", Math.round(value * 100) / 100)
+                                                background: Rectangle {
+                                                    x: dOvershootSlider.leftPadding
+                                                    y: dOvershootSlider.topPadding + dOvershootSlider.availableHeight / 2 - height / 2
+                                                    implicitWidth: 200
+                                                    implicitHeight: 4
+                                                    width: dOvershootSlider.availableWidth
+                                                    height: 4
+                                                    radius: 2
+                                                    color: "#333"
+                                                    Rectangle {
+                                                        width: dOvershootSlider.visualPosition * parent.width
+                                                        height: parent.height
+                                                        color: "#5DA9A4"
+                                                        radius: 2
+                                                    }
+                                                }
+                                                handle: Rectangle {
+                                                    x: dOvershootSlider.leftPadding + dOvershootSlider.visualPosition * (dOvershootSlider.availableWidth - width)
+                                                    y: dOvershootSlider.topPadding + dOvershootSlider.availableHeight / 2 - height / 2
+                                                    implicitWidth: 12
+                                                    implicitHeight: 12
+                                                    radius: 6
+                                                    color: dOvershootSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                }
+                                            }
+                                            Rectangle {
+                                                Layout.preferredWidth: 46
+                                                Layout.preferredHeight: 22
+                                                color: "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+                                                TextInput {
+                                                    id: dOvershootField
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: "white"
+                                                    font.pixelSize: 10
+                                                    clip: true
+                                                    selectByMouse: true
+                                                    validator: DoubleValidator {
+                                                        bottom: 0.0
+                                                        top: 3.0
+                                                    }
+                                                    Component.onCompleted: text = (dirDelegate.td.lookOvershoot !== undefined ? dirDelegate.td.lookOvershoot : 1.0).toFixed(2)
+                                                    Keys.onReturnPressed: focus = false
+                                                    Keys.onEscapePressed: focus = false
+                                                    onEditingFinished: {
+                                                        var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0));
+                                                        text = v.toFixed(2);
+                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", v);
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            height: 22
+                                            spacing: 6
+                                            Text {
+                                                text: "shutter"
+                                                font.pixelSize: 10
+                                                color: "#aaa"
+                                                Layout.preferredHeight: 22
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            Slider {
+                                                id: dShutterSlider
+                                                Layout.fillWidth: true
+                                                Layout.minimumWidth: 0
+                                                Layout.preferredHeight: 22
+                                                from: 0.0
+                                                to: 0.5
+                                                stepSize: 0
+                                                Component.onCompleted: value = dirDelegate.td.lookShutter !== undefined ? dirDelegate.td.lookShutter : 0.10
+                                                onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", Math.round(value * 1000) / 1000)
+                                                background: Rectangle {
+                                                    x: dShutterSlider.leftPadding
+                                                    y: dShutterSlider.topPadding + dShutterSlider.availableHeight / 2 - height / 2
+                                                    implicitWidth: 200
+                                                    implicitHeight: 4
+                                                    width: dShutterSlider.availableWidth
+                                                    height: 4
+                                                    radius: 2
+                                                    color: "#333"
+                                                    Rectangle {
+                                                        width: dShutterSlider.visualPosition * parent.width
+                                                        height: parent.height
+                                                        color: "#5DA9A4"
+                                                        radius: 2
+                                                    }
+                                                }
+                                                handle: Rectangle {
+                                                    x: dShutterSlider.leftPadding + dShutterSlider.visualPosition * (dShutterSlider.availableWidth - width)
+                                                    y: dShutterSlider.topPadding + dShutterSlider.availableHeight / 2 - height / 2
+                                                    implicitWidth: 12
+                                                    implicitHeight: 12
+                                                    radius: 6
+                                                    color: dShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                                }
+                                            }
+                                            Rectangle {
+                                                Layout.preferredWidth: 46
+                                                Layout.preferredHeight: 22
+                                                color: "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+                                                TextInput {
+                                                    id: dShutterField
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: "white"
+                                                    font.pixelSize: 10
+                                                    clip: true
+                                                    selectByMouse: true
+                                                    validator: DoubleValidator {
+                                                        bottom: 0.0
+                                                        top: 0.5
+                                                    }
+                                                    Component.onCompleted: text = (dirDelegate.td.lookShutter !== undefined ? dirDelegate.td.lookShutter : 0.10).toFixed(2)
+                                                    Keys.onReturnPressed: focus = false
+                                                    Keys.onEscapePressed: focus = false
+                                                    onEditingFinished: {
+                                                        var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0));
+                                                        text = v.toFixed(2);
+                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", v);
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            height: 22
+                                            spacing: 4
+                                            Text {
+                                                text: "yaw"
+                                                font.pixelSize: 10
+                                                color: "#aaa"
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 22
+                                                color: "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+                                                TextInput {
+                                                    id: dYawField
+                                                    anchors.left: parent.left
+                                                    anchors.right: dYawDeg.left
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 2
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: "white"
+                                                    font.pixelSize: 10
+                                                    clip: true
+                                                    selectByMouse: true
+                                                    validator: DoubleValidator {
+                                                        bottom: -9999
+                                                        top: 9999
+                                                    }
+                                                    Component.onCompleted: text = (dirDelegate.td.lookYaw !== undefined ? dirDelegate.td.lookYaw : 90.0).toFixed(1)
+                                                    Keys.onReturnPressed: focus = false
+                                                    Keys.onEscapePressed: focus = false
+                                                    onEditingFinished: {
+                                                        var v = parseFloat(text) || 0.0;
+                                                        text = v.toFixed(1);
+                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", v);
+                                                    }
+                                                }
+                                                Text {
+                                                    id: dYawDeg
+                                                    anchors.right: parent.right
+                                                    anchors.rightMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: "°"
+                                                    font.pixelSize: 10
+                                                    color: "#aaa"
+                                                }
+                                            }
+                                            Text {
+                                                text: "pitch"
+                                                font.pixelSize: 10
+                                                color: "#aaa"
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 22
+                                                color: "transparent"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+                                                TextInput {
+                                                    id: dPitchField
+                                                    anchors.left: parent.left
+                                                    anchors.right: dPitchDeg.left
+                                                    anchors.leftMargin: 4
+                                                    anchors.rightMargin: 2
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: "white"
+                                                    font.pixelSize: 10
+                                                    clip: true
+                                                    selectByMouse: true
+                                                    validator: DoubleValidator {
+                                                        bottom: -9999
+                                                        top: 9999
+                                                    }
+                                                    Component.onCompleted: text = (dirDelegate.td.lookPitch !== undefined ? dirDelegate.td.lookPitch : 0.0).toFixed(1)
+                                                    Keys.onReturnPressed: focus = false
+                                                    Keys.onEscapePressed: focus = false
+                                                    onEditingFinished: {
+                                                        var v = parseFloat(text) || 0.0;
+                                                        text = v.toFixed(1);
+                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", v);
+                                                    }
+                                                }
+                                                Text {
+                                                    id: dPitchDeg
+                                                    anchors.right: parent.right
+                                                    anchors.rightMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: "°"
+                                                    font.pixelSize: 10
+                                                    color: "#aaa"
+                                                }
                                             }
                                         }
                                     }
 
-                                    RowLayout {
-                                        Layout.preferredWidth: 76; height: 16; spacing: 4
-                                        Repeater {
-                                            model: [
-                                                { icon: "left",  yaw: -90.0, pitch:   0.0 },
-                                                { icon: "up",    yaw:   0.0, pitch:  90.0 },
-                                                { icon: "down",  yaw:   0.0, pitch: -90.0 },
-                                                { icon: "right", yaw:  90.0, pitch:   0.0 }
-                                            ]
-                                            delegate: Rectangle {
-                                                Layout.preferredWidth: 16; Layout.preferredHeight: 16; radius: 4
-                                                property bool isActive: Math.abs((dirDelegate.td.lookYaw !== undefined ? dirDelegate.td.lookYaw : 90.0) - modelData.yaw) < 0.6 &&
-                                                                        Math.abs((dirDelegate.td.lookPitch !== undefined ? dirDelegate.td.lookPitch : 0.0) - modelData.pitch) < 0.6
-                                                color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
-                                                Behavior on color { ColorAnimation { duration: 100 } }
-                                                Image { id: dtLookDirIcon; anchors.centerIn: parent; width: 12; height: 12; source: "icons/" + modelData.icon + ".svg"; fillMode: Image.PreserveAspectFit; visible: false }
-                                                ColorOverlay { anchors.fill: dtLookDirIcon; source: dtLookDirIcon; color: isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    onClicked: {
-                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw",   modelData.yaw)
-                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", modelData.pitch)
-                                                        dYawField.text   = modelData.yaw.toFixed(1)
-                                                        dPitchField.text = modelData.pitch.toFixed(1)
+                                    ColumnLayout {
+                                        id: lookPickerCol
+                                        Layout.preferredWidth: 76
+                                        Layout.alignment: Qt.AlignTop
+                                        spacing: 4
+                                        property bool lookPickerBack: false
+
+                                        RowLayout {
+                                            Layout.preferredWidth: 76
+                                            height: 16
+                                            spacing: 4
+                                            Repeater {
+                                                model: [
+                                                    {
+                                                        label: "front",
+                                                        back: false
+                                                    },
+                                                    {
+                                                        label: "back",
+                                                        back: true
+                                                    }
+                                                ]
+                                                delegate: Rectangle {
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 16
+                                                    radius: 4
+                                                    property bool isActive: lookPickerCol.lookPickerBack === modelData.back
+                                                    color: isActive ? "white" : "transparent"
+                                                    border.color: "white"
+                                                    border.width: 1
+                                                    Behavior on color {
+                                                        ColorAnimation {
+                                                            duration: 100
+                                                        }
+                                                    }
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: modelData.label
+                                                        font.pixelSize: 9
+                                                        color: parent.isActive ? "#477B78" : "white"
+                                                        Behavior on color {
+                                                            ColorAnimation {
+                                                                duration: 100
+                                                            }
+                                                        }
+                                                    }
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onClicked: lookPickerCol.lookPickerBack = modelData.back
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Item {
+                                            Layout.preferredWidth: 68
+                                            Layout.preferredHeight: 68
+                                            Layout.alignment: Qt.AlignHCenter
+                                            ShaderEffect {
+                                                anchors.fill: parent
+                                                fragmentShader: "lookpicker.frag.qsb"
+                                                property real yaw: dirDelegate.td.lookYaw !== undefined ? dirDelegate.td.lookYaw : 90.0
+                                                property real pitch: dirDelegate.td.lookPitch !== undefined ? dirDelegate.td.lookPitch : 0.0
+                                                property real fovMM: dirDelegate.td.lookFov !== undefined ? dirDelegate.td.lookFov : 24.0
+                                                property real back: lookPickerCol.lookPickerBack ? 1.0 : 0.0
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onPressed: dLookPickerMouse(mouseX, mouseY)
+                                                onPositionChanged: if (pressed)
+                                                    dLookPickerMouse(mouseX, mouseY)
+                                                function dLookPickerMouse(mx, my) {
+                                                    var cx = 34.0, cy = 34.0;
+                                                    var nx = (mx - cx) / cx, ny = (my - cy) / cy;
+                                                    var r = Math.sqrt(nx * nx + ny * ny);
+                                                    if (r > 1.0) {
+                                                        nx /= r;
+                                                        ny /= r;
+                                                        r = 1.0;
+                                                    }
+                                                    var z = Math.sqrt(Math.max(0.0, 1.0 - r * r));
+                                                    var lx = nx, ly = -ny;
+                                                    var lz = lookPickerCol.lookPickerBack ? -z : z;
+                                                    var newYaw = Math.round(Math.atan2(lx, lz) * 1800.0 / Math.PI) / 10;
+                                                    var absCosy = Math.sqrt(ly * ly + lz * lz);
+                                                    var sinPitch = absCosy > 0.0001 ? ly / (lz >= 0 ? absCosy : -absCosy) : 0.0;
+                                                    var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, sinPitch))) * 1800.0 / Math.PI) / 10;
+                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", newYaw);
+                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", newPitch);
+                                                    dYawField.text = newYaw.toFixed(1);
+                                                    dPitchField.text = newPitch.toFixed(1);
+                                                }
+                                            }
+                                        }
+
+                                        RowLayout {
+                                            Layout.preferredWidth: 76
+                                            height: 16
+                                            spacing: 4
+                                            Repeater {
+                                                model: [
+                                                    {
+                                                        icon: "left",
+                                                        yaw: -90.0,
+                                                        pitch: 0.0
+                                                    },
+                                                    {
+                                                        icon: "up",
+                                                        yaw: 0.0,
+                                                        pitch: 90.0
+                                                    },
+                                                    {
+                                                        icon: "down",
+                                                        yaw: 0.0,
+                                                        pitch: -90.0
+                                                    },
+                                                    {
+                                                        icon: "right",
+                                                        yaw: 90.0,
+                                                        pitch: 0.0
+                                                    }
+                                                ]
+                                                delegate: Rectangle {
+                                                    Layout.preferredWidth: 16
+                                                    Layout.preferredHeight: 16
+                                                    radius: 4
+                                                    property bool isActive: Math.abs((dirDelegate.td.lookYaw !== undefined ? dirDelegate.td.lookYaw : 90.0) - modelData.yaw) < 0.6 && Math.abs((dirDelegate.td.lookPitch !== undefined ? dirDelegate.td.lookPitch : 0.0) - modelData.pitch) < 0.6
+                                                    color: isActive ? "white" : "transparent"
+                                                    border.color: "white"
+                                                    border.width: 1
+                                                    Behavior on color {
+                                                        ColorAnimation {
+                                                            duration: 100
+                                                        }
+                                                    }
+                                                    Image {
+                                                        id: dtLookDirIcon
+                                                        anchors.centerIn: parent
+                                                        width: 12
+                                                        height: 12
+                                                        source: "icons/" + modelData.icon + ".svg"
+                                                        fillMode: Image.PreserveAspectFit
+                                                        visible: false
+                                                    }
+                                                    ColorOverlay {
+                                                        anchors.fill: dtLookDirIcon
+                                                        source: dtLookDirIcon
+                                                        color: isActive ? "#477B78" : "white"
+                                                        Behavior on color {
+                                                            ColorAnimation {
+                                                                duration: 100
+                                                            }
+                                                        }
+                                                    }
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onClicked: {
+                                                            sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", modelData.yaw);
+                                                            sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", modelData.pitch);
+                                                            dYawField.text = modelData.yaw.toFixed(1);
+                                                            dPitchField.text = modelData.pitch.toFixed(1);
+                                                        }
                                                     }
                                                 }
                                             }
@@ -2092,13 +2828,12 @@ Window {
                                 }
                             }
                         }
-
                     }
-                }
-
                 } // GridLayout
 
-                Item { Layout.preferredHeight: 20 }
+                Item {
+                    Layout.preferredHeight: 20
+                }
             }
         }
 
@@ -2107,9 +2842,9 @@ Window {
             title: "Select cursor image"
             nameFilters: ["Image files (*.png *.jpg *.jpeg *.svg *.webp)"]
             onAccepted: {
-                var paths = sceneSettingsView.cursorCustomPaths.slice()
-                paths[sceneSettingsView._cursorSlot] = selectedFile.toString()
-                sceneSettingsView.cursorCustomPaths = paths
+                var paths = sceneSettingsView.cursorCustomPaths.slice();
+                paths[sceneSettingsView._cursorSlot] = selectedFile.toString();
+                sceneSettingsView.cursorCustomPaths = paths;
             }
         }
 
@@ -2234,7 +2969,7 @@ Window {
             property int hoveredShaderIndex: -1
             // ── Dual-layer architecture ─────────────────────────────────────────
             property int foregroundLayer: 0
-            readonly property var activeContent:  foregroundLayer === 0 ? sceneLayerA : sceneLayerB
+            readonly property var activeContent: foregroundLayer === 0 ? sceneLayerA : sceneLayerB
             readonly property var stagingContent: foregroundLayer === 0 ? sceneLayerB : sceneLayerA
 
             property int pendingJumpSceneId: -1
@@ -2247,50 +2982,50 @@ Window {
             property real dissolveOpacity: 0.0   // animates 0→1 on the staging layer
 
             // ── Wipe transition state ────────────────────────────────────────────
-            property bool   wiping:              false
-            property real   wipeProgress:        0.0   // animates 0→1 during wipe
-            property real   pendingWipeFeather:  0.0   // stored from fireInteractivity
+            property bool wiping: false
+            property real wipeProgress: 0.0   // animates 0→1 during wipe
+            property real pendingWipeFeather: 0.0   // stored from fireInteractivity
             property string pendingWipeDirection: "right"
             // Live values fed into the ShaderEffect during a wipe:
-            property real   wipeFeather:   0.0
-            property int    wipeDirection: 0   // 0=right 1=left 2=down 3=up
+            property real wipeFeather: 0.0
+            property int wipeDirection: 0   // 0=right 1=left 2=down 3=up
 
             // ── Slide (push) transition state ────────────────────────────────────
-            property bool   sliding:              false
-            property real   slideProgress:        0.0   // animates 0→1 during slide
+            property bool sliding: false
+            property real slideProgress: 0.0   // animates 0→1 during slide
             property string pendingSlideDirection: "right"
-            property int    slideDirection:       0   // 0=right 1=left 2=down 3=up
+            property int slideDirection: 0   // 0=right 1=left 2=down 3=up
 
             // ── Look transition state ─────────────────────────────────────────────
-            property bool   looking:              false
-            property real   lookProgress:         0.0      // animates 0→1 during look
-            property real   pendingLookYaw:       90.0   // degrees, positive = right
-            property real   pendingLookPitch:     0.0    // degrees, positive = up
-            property real   pendingLookFovMM:     24.0   // mm focal length (full-frame equiv.)
-            property real   pendingLookOvershoot: 1.0    // back-ease-out s param
-            property real   pendingLookShutter:   0.10   // fraction of anim spanned per frame
+            property bool looking: false
+            property real lookProgress: 0.0      // animates 0→1 during look
+            property real pendingLookYaw: 90.0   // degrees, positive = right
+            property real pendingLookPitch: 0.0    // degrees, positive = up
+            property real pendingLookFovMM: 24.0   // mm focal length (full-frame equiv.)
+            property real pendingLookOvershoot: 1.0    // back-ease-out s param
+            property real pendingLookShutter: 0.10   // fraction of anim spanned per frame
             // Live values fed into the ShaderEffect during a look:
-            property real   lookYaw:       90.0
-            property real   lookPitch:     0.0
-            property real   lookFovMM:     24.0
-            property real   lookOvershoot: 1.0
-            property real   lookShutter:   0.10
+            property real lookYaw: 90.0
+            property real lookPitch: 0.0
+            property real lookFovMM: 24.0
+            property real lookOvershoot: 1.0
+            property real lookShutter: 0.10
 
             // ── Cue video state ───────────────────────────────────────────────────
             // cueVideoActive:       video is currently playing
             // cueVideoStagingReady: staging layer fired readyForDisplay while video was active
             // cueVideoHasJump:      a jumpToScene was queued alongside the video
-            property bool cueVideoActive:       false
+            property bool cueVideoActive: false
             property bool cueVideoStagingReady: false
-            property bool cueVideoHasJump:      false
-            property bool cueVideoEarlyCommit:  false
+            property bool cueVideoHasJump: false
+            property bool cueVideoEarlyCommit: false
 
             // Thin wrappers — viewport and sidebar code can use these bare names
-            property var areasModel:     activeContent ? activeContent.areasModel     : null
+            property var areasModel: activeContent ? activeContent.areasModel : null
             property var textBoxesModel: activeContent ? activeContent.textBoxesModel : null
-            property var imagesModel:    activeContent ? activeContent.imagesModel    : null
-            property var videosModel:    activeContent ? activeContent.videosModel    : null
-            property var shadersModel:   activeContent ? activeContent.shadersModel   : null
+            property var imagesModel: activeContent ? activeContent.imagesModel : null
+            property var videosModel: activeContent ? activeContent.videosModel : null
+            property var shadersModel: activeContent ? activeContent.shadersModel : null
 
             property real areaX1: 0
             property real areaY1: 0
@@ -2352,16 +3087,29 @@ Window {
 
             function removeIndexFromSelection(type, idx) {
                 var arr, prop;
-                if (type === "area")        { arr = selectedAreas.slice();   prop = "selectedAreas"; }
-                else if (type === "tb")     { arr = selectedTbs.slice();     prop = "selectedTbs"; }
-                else if (type === "image")  { arr = selectedImages.slice();  prop = "selectedImages"; }
-                else if (type === "video")  { arr = selectedVideos.slice();  prop = "selectedVideos"; }
-                else if (type === "shader") { arr = selectedShaders.slice(); prop = "selectedShaders"; }
-                else return;
+                if (type === "area") {
+                    arr = selectedAreas.slice();
+                    prop = "selectedAreas";
+                } else if (type === "tb") {
+                    arr = selectedTbs.slice();
+                    prop = "selectedTbs";
+                } else if (type === "image") {
+                    arr = selectedImages.slice();
+                    prop = "selectedImages";
+                } else if (type === "video") {
+                    arr = selectedVideos.slice();
+                    prop = "selectedVideos";
+                } else if (type === "shader") {
+                    arr = selectedShaders.slice();
+                    prop = "selectedShaders";
+                } else
+                    return;
                 var pos = arr.indexOf(idx);
-                if (pos !== -1) arr.splice(pos, 1);
+                if (pos !== -1)
+                    arr.splice(pos, 1);
                 for (var k = 0; k < arr.length; k++) {
-                    if (arr[k] > idx) arr[k]--;
+                    if (arr[k] > idx)
+                        arr[k]--;
                 }
                 viewport[prop] = arr;
                 selectionRevision++;
@@ -2524,7 +3272,6 @@ Window {
                 };
             }
 
-
             property real imgX1: 0
             property real imgY1: 0
             property real imgX2: 0
@@ -2572,7 +3319,10 @@ Window {
                 for (var j = 0; j < videosModel.count; j++)
                     rects.push(videosModel.get(j));
 
-                if (rects.length === 0) { bgOccluded = false; return; }
+                if (rects.length === 0) {
+                    bgOccluded = false;
+                    return;
+                }
 
                 // Coordinate compression: build a grid from all rect boundaries
                 // clamped to the viewport, then check each cell for coverage.
@@ -2582,16 +3332,24 @@ Window {
                     xs.push(Math.max(0, Math.min(vw, r.x1)), Math.max(0, Math.min(vw, r.x2)));
                     ys.push(Math.max(0, Math.min(vh, r.y1)), Math.max(0, Math.min(vh, r.y2)));
                 }
-                xs = xs.filter(function(v,i,a){return a.indexOf(v)===i;}).sort(function(a,b){return a-b;});
-                ys = ys.filter(function(v,i,a){return a.indexOf(v)===i;}).sort(function(a,b){return a-b;});
+                xs = xs.filter(function (v, i, a) {
+                    return a.indexOf(v) === i;
+                }).sort(function (a, b) {
+                    return a - b;
+                });
+                ys = ys.filter(function (v, i, a) {
+                    return a.indexOf(v) === i;
+                }).sort(function (a, b) {
+                    return a - b;
+                });
 
                 var coveredArea = 0;
                 for (var xi = 0; xi < xs.length - 1; xi++) {
-                    var cx = (xs[xi] + xs[xi+1]) * 0.5;
-                    var cw = xs[xi+1] - xs[xi];
+                    var cx = (xs[xi] + xs[xi + 1]) * 0.5;
+                    var cw = xs[xi + 1] - xs[xi];
                     for (var yi = 0; yi < ys.length - 1; yi++) {
-                        var cy = (ys[yi] + ys[yi+1]) * 0.5;
-                        var ch = ys[yi+1] - ys[yi];
+                        var cy = (ys[yi] + ys[yi + 1]) * 0.5;
+                        var ch = ys[yi + 1] - ys[yi];
                         for (var ri = 0; ri < rects.length; ri++) {
                             var rc = rects[ri];
                             if (cx >= rc.x1 && cx < rc.x2 && cy >= rc.y1 && cy < rc.y2) {
@@ -2606,11 +3364,15 @@ Window {
 
             Connections {
                 target: viewport.imagesModel
-                function onCountChanged() { viewport.checkOcclusion(); }
+                function onCountChanged() {
+                    viewport.checkOcclusion();
+                }
             }
             Connections {
                 target: viewport.videosModel
-                function onCountChanged() { viewport.checkOcclusion(); }
+                function onCountChanged() {
+                    viewport.checkOcclusion();
+                }
             }
 
             function findHoveredArea(px, py) {
@@ -2627,41 +3389,53 @@ Window {
             }
 
             function findHoveredTb(px, py) {
-                if (buttonGrid.selectedTool !== "simulate") return -1;
-                if (!textBoxesModel) return -1;
+                if (buttonGrid.selectedTool !== "simulate")
+                    return -1;
+                if (!textBoxesModel)
+                    return -1;
                 for (var i = 0; i < textBoxesModel.count; i++) {
                     var m = textBoxesModel.get(i);
-                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2) return i;
+                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2)
+                        return i;
                 }
                 return -1;
             }
 
             function findHoveredImage(px, py) {
-                if (buttonGrid.selectedTool !== "simulate") return -1;
-                if (!imagesModel) return -1;
+                if (buttonGrid.selectedTool !== "simulate")
+                    return -1;
+                if (!imagesModel)
+                    return -1;
                 for (var i = 0; i < imagesModel.count; i++) {
                     var m = imagesModel.get(i);
-                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2) return i;
+                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2)
+                        return i;
                 }
                 return -1;
             }
 
             function findHoveredVideo(px, py) {
-                if (buttonGrid.selectedTool !== "simulate") return -1;
-                if (!videosModel) return -1;
+                if (buttonGrid.selectedTool !== "simulate")
+                    return -1;
+                if (!videosModel)
+                    return -1;
                 for (var i = 0; i < videosModel.count; i++) {
                     var m = videosModel.get(i);
-                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2) return i;
+                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2)
+                        return i;
                 }
                 return -1;
             }
 
             function findHoveredShader(px, py) {
-                if (buttonGrid.selectedTool !== "simulate") return -1;
-                if (!shadersModel) return -1;
+                if (buttonGrid.selectedTool !== "simulate")
+                    return -1;
+                if (!shadersModel)
+                    return -1;
                 for (var i = 0; i < shadersModel.count; i++) {
                     var m = shadersModel.get(i);
-                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2) return i;
+                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2)
+                        return i;
                 }
                 return -1;
             }
@@ -2688,22 +3462,34 @@ Window {
                 var list = [];
                 for (var i = 0; i < rawUniforms.length; i++) {
                     var u = rawUniforms[i];
-                    list.push({name: u.name, type: u.type, value: uniformDefault(u.type)});
+                    list.push({
+                        name: u.name,
+                        type: u.type,
+                        value: uniformDefault(u.type)
+                    });
                 }
                 return list;
             }
             function uniformDefault(type) {
-                if (type === "float" || type === "int") return 1.0;
-                if (type === "vec2") return [1.0, 1.0];
-                if (type === "vec3") return [1.0, 1.0, 1.0];
-                if (type === "vec4") return [1.0, 1.0, 1.0, 1.0];
+                if (type === "float" || type === "int")
+                    return 1.0;
+                if (type === "vec2")
+                    return [1.0, 1.0];
+                if (type === "vec3")
+                    return [1.0, 1.0, 1.0];
+                if (type === "vec4")
+                    return [1.0, 1.0, 1.0, 1.0];
                 return null;
             }
             function qmlTypeForUniform(type) {
-                if (type === "float" || type === "int") return "real";
-                if (type === "vec2") return "vector2d";
-                if (type === "vec3") return "vector3d";
-                if (type === "vec4") return "vector4d";
+                if (type === "float" || type === "int")
+                    return "real";
+                if (type === "vec2")
+                    return "vector2d";
+                if (type === "vec3")
+                    return "vector3d";
+                if (type === "vec4")
+                    return "vector4d";
                 return "var";
             }
             function qmlValueForUniform(type, value) {
@@ -2727,7 +3513,11 @@ Window {
             // Build a QML ShaderEffect string with per-shader property declarations.
             function buildShaderQml(fragPath, vertPath, uniformsJson) {
                 var uniforms;
-                try { uniforms = JSON.parse(uniformsJson || "[]"); } catch(e) { uniforms = []; }
+                try {
+                    uniforms = JSON.parse(uniformsJson || "[]");
+                } catch (e) {
+                    uniforms = [];
+                }
                 var qml = "import QtQuick 2.15\nShaderEffect {\n";
                 qml += "    anchors.fill: parent\n";
                 qml += "    fragmentShader: \"" + fragPath + "\"\n";
@@ -2749,11 +3539,17 @@ Window {
             }
             // Convert comma-separated text to a QML-typed value (for live ShaderEffect update).
             function parseUniformToQml(type, text) {
-                var parts = text.toString().split(",").map(function(s) { return parseFloat(s.trim()) || 0; });
-                if (type === "float" || type === "int") return parseFloat(text) || 0;
-                if (type === "vec2") return Qt.vector2d(parts[0] || 0, parts[1] || 0);
-                if (type === "vec3") return Qt.vector3d(parts[0] || 0, parts[1] || 0, parts[2] || 0);
-                if (type === "vec4") return Qt.vector4d(parts[0] || 0, parts[1] || 0, parts[2] || 0, parts[3] || 0);
+                var parts = text.toString().split(",").map(function (s) {
+                    return parseFloat(s.trim()) || 0;
+                });
+                if (type === "float" || type === "int")
+                    return parseFloat(text) || 0;
+                if (type === "vec2")
+                    return Qt.vector2d(parts[0] || 0, parts[1] || 0);
+                if (type === "vec3")
+                    return Qt.vector3d(parts[0] || 0, parts[1] || 0, parts[2] || 0);
+                if (type === "vec4")
+                    return Qt.vector4d(parts[0] || 0, parts[1] || 0, parts[2] || 0, parts[3] || 0);
                 return null;
             }
             function isVideoPath(path) {
@@ -2764,72 +3560,81 @@ Window {
             // ------------------------------------------------------------------ scene persistence
 
             function loadSceneIntoViewport(sceneId) {
-                clearSelection()
-                var raw = storyManager.loadSceneElements(sceneId)
-                var elements
-                try { elements = JSON.parse(raw) } catch(e) { elements = [] }
-                activeContent.loadScene(elements)
-                nextStackOrder = activeContent.nextStackOrder
+                clearSelection();
+                var raw = storyManager.loadSceneElements(sceneId);
+                var elements;
+                try {
+                    elements = JSON.parse(raw);
+                } catch (e) {
+                    elements = [];
+                }
+                activeContent.loadScene(elements);
+                nextStackOrder = activeContent.nextStackOrder;
                 for (var di = 0; di < sceneSettingsView.dirTransitions.length; di++)
-                    sceneSettingsView.applyTemplateTransitions(di)
-                navigationSettings.loadNavLinks(sceneId)
+                    sceneSettingsView.applyTemplateTransitions(di);
+                navigationSettings.loadNavLinks(sceneId);
             }
 
             function collectSceneElements() {
-                selectSettings.saveCurrentInteractivity()
-                return activeContent.collectElements()
+                selectSettings.saveCurrentInteractivity();
+                return activeContent.collectElements();
             }
 
             // Serialize a ListModel of interactivity items to a JSON string.
             function serializeInteractivityModel(mdl) {
-                return activeContent.serializeInteractivityModel(mdl)
+                return activeContent.serializeInteractivityModel(mdl);
             }
 
             // Populate a ListModel from a JSON string of interactivity items.
             function loadInteractivityModel(mdl, json) {
-                activeContent.loadInteractivityModel(mdl, json)
+                activeContent.loadInteractivityModel(mdl, json);
             }
 
             function playCueVideo(videoPath) {
-                cueVideoActive       = true
-                cueVideoStagingReady = false
-                cueVideoHasJump      = false
-                cueVideoEarlyCommit  = false
-                cueVideoOverlay.visible = false
-                cueVideoOverlay.waitingForSceneSwap = false
-                cueVideoPlayer.source = videoPath
-                cueVideoPlayer.play()
+                cueVideoActive = true;
+                cueVideoStagingReady = false;
+                cueVideoHasJump = false;
+                cueVideoEarlyCommit = false;
+                cueVideoOverlay.visible = false;
+                cueVideoOverlay.waitingForSceneSwap = false;
+                cueVideoPlayer.source = videoPath;
+                cueVideoPlayer.play();
             }
 
             // Execute the pending transition — called when both video has ended and staging is ready.
             function commitCueVideoTransition() {
-                var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
+                var dirMap = {
+                    "right": 0,
+                    "left": 1,
+                    "down": 2,
+                    "up": 3
+                };
                 if (pendingTransition === "dissolve") {
-                    dissolveAnim.duration = pendingDuration
-                    dissolving = true
-                    dissolveAnim.start()
+                    dissolveAnim.duration = pendingDuration;
+                    dissolving = true;
+                    dissolveAnim.start();
                 } else if (pendingTransition === "wipe") {
-                    wipeFeather   = pendingWipeFeather
-                    wipeDirection = dirMap[pendingWipeDirection] !== undefined ? dirMap[pendingWipeDirection] : 0
-                    wipeAnim.duration = pendingDuration
-                    wiping = true
-                    wipeAnim.start()
+                    wipeFeather = pendingWipeFeather;
+                    wipeDirection = dirMap[pendingWipeDirection] !== undefined ? dirMap[pendingWipeDirection] : 0;
+                    wipeAnim.duration = pendingDuration;
+                    wiping = true;
+                    wipeAnim.start();
                 } else if (pendingTransition === "push") {
-                    slideDirection = dirMap[pendingSlideDirection] !== undefined ? dirMap[pendingSlideDirection] : 0
-                    slideAnim.duration = pendingDuration
-                    sliding = true
-                    slideAnim.start()
+                    slideDirection = dirMap[pendingSlideDirection] !== undefined ? dirMap[pendingSlideDirection] : 0;
+                    slideAnim.duration = pendingDuration;
+                    sliding = true;
+                    slideAnim.start();
                 } else if (pendingTransition === "look") {
-                    lookYaw       = pendingLookYaw
-                    lookPitch     = pendingLookPitch
-                    lookFovMM     = pendingLookFovMM
-                    lookOvershoot = pendingLookOvershoot
-                    lookShutter   = pendingLookShutter
-                    lookAnim.duration = pendingDuration
-                    looking = true
-                    lookAnim.start()
+                    lookYaw = pendingLookYaw;
+                    lookPitch = pendingLookPitch;
+                    lookFovMM = pendingLookFovMM;
+                    lookOvershoot = pendingLookOvershoot;
+                    lookShutter = pendingLookShutter;
+                    lookAnim.duration = pendingDuration;
+                    looking = true;
+                    lookAnim.start();
                 } else {
-                    performSwap()
+                    performSwap();
                 }
             }
 
@@ -2837,53 +3642,59 @@ Window {
             // transition: "cut" | "dissolve" | "wipe"   durationMs: length of animated transitions.
             // wipeFeather: 0.0–0.5   wipeDirection: "right"|"left"|"down"|"up"
             // When staging signals readyForDisplay the Connections below start the transition.
-            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection,
-                                     lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal, lookShutterVal) {
-                if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId) return
-                if (dissolving || wiping || sliding || looking) return   // don't interrupt an in-progress transition
-                selectSettings.saveCurrentInteractivity()
-                storyManager.saveSceneElements(mainWindow.currentSceneId, activeContent.collectElements())
-                pendingJumpSceneId = targetSceneId
-                pendingJumpSceneName = storyManager.getSceneName(targetSceneId)
-                pendingTransition      = transition     || "cut"
-                pendingDuration        = durationMs !== undefined ? durationMs : 500
-                pendingWipeFeather     = wipeFeather   !== undefined ? wipeFeather  : 0.0
-                pendingWipeDirection   = wipeDirection  || "right"
-                pendingSlideDirection  = pushDirection  || "right"
-                pendingLookYaw        = lookYawDeg      !== undefined ? lookYawDeg      : 90.0
-                pendingLookPitch      = lookPitchDeg    !== undefined ? lookPitchDeg    : 0.0
-                pendingLookFovMM      = lookFovMMVal    !== undefined ? lookFovMMVal    : 24.0
-                pendingLookOvershoot  = lookOvershootVal !== undefined ? lookOvershootVal : 1.0
-                pendingLookShutter    = lookShutterVal  !== undefined ? lookShutterVal  : 0.10
-                var raw = storyManager.loadSceneElements(targetSceneId)
-                var elements
-                try { elements = JSON.parse(raw) } catch(e) { elements = [] }
-                stagingContent.loadScene(elements)
+            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection, lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal, lookShutterVal) {
+                if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId)
+                    return;
+                if (dissolving || wiping || sliding || looking)
+                    // don't interrupt an in-progress transition
+                    return;
+                selectSettings.saveCurrentInteractivity();
+                storyManager.saveSceneElements(mainWindow.currentSceneId, activeContent.collectElements());
+                pendingJumpSceneId = targetSceneId;
+                pendingJumpSceneName = storyManager.getSceneName(targetSceneId);
+                pendingTransition = transition || "cut";
+                pendingDuration = durationMs !== undefined ? durationMs : 500;
+                pendingWipeFeather = wipeFeather !== undefined ? wipeFeather : 0.0;
+                pendingWipeDirection = wipeDirection || "right";
+                pendingSlideDirection = pushDirection || "right";
+                pendingLookYaw = lookYawDeg !== undefined ? lookYawDeg : 90.0;
+                pendingLookPitch = lookPitchDeg !== undefined ? lookPitchDeg : 0.0;
+                pendingLookFovMM = lookFovMMVal !== undefined ? lookFovMMVal : 24.0;
+                pendingLookOvershoot = lookOvershootVal !== undefined ? lookOvershootVal : 1.0;
+                pendingLookShutter = lookShutterVal !== undefined ? lookShutterVal : 0.10;
+                var raw = storyManager.loadSceneElements(targetSceneId);
+                var elements;
+                try {
+                    elements = JSON.parse(raw);
+                } catch (e) {
+                    elements = [];
+                }
+                stagingContent.loadScene(elements);
             }
 
             // Swap foreground/staging layers — called after a cut, or at end of dissolve/wipe.
             function performSwap() {
                 // Clean up shader transition state before flip so opacity bindings reset cleanly.
                 if (wiping) {
-                    wiping       = false
-                    wipeProgress = 0.0
+                    wiping = false;
+                    wipeProgress = 0.0;
                 }
                 if (sliding) {
-                    sliding       = false
-                    slideProgress = 0.0
+                    sliding = false;
+                    slideProgress = 0.0;
                 }
                 if (looking) {
-                    looking      = false
-                    lookProgress = 0.0
+                    looking = false;
+                    lookProgress = 0.0;
                 }
-                navigationSettings.saveNavLinks(mainWindow.currentSceneId)
-                foregroundLayer = 1 - foregroundLayer
-                nextStackOrder = activeContent.nextStackOrder
-                mainWindow.currentSceneId = pendingJumpSceneId
-                sceneNameInput.text = pendingJumpSceneName
-                navigationSettings.loadNavLinks(pendingJumpSceneId)
-                stagingContent.clear()
-                checkOcclusion()
+                navigationSettings.saveNavLinks(mainWindow.currentSceneId);
+                foregroundLayer = 1 - foregroundLayer;
+                nextStackOrder = activeContent.nextStackOrder;
+                mainWindow.currentSceneId = pendingJumpSceneId;
+                sceneNameInput.text = pendingJumpSceneName;
+                navigationSettings.loadNavLinks(pendingJumpSceneId);
+                stagingContent.clear();
+                checkOcclusion();
             }
 
             // Dissolve animation — fades the staging layer in over pendingDuration ms.
@@ -2897,9 +3708,9 @@ Window {
                 easing.type: Easing.InOutQuad
                 onStopped: {
                     if (viewport.dissolving) {
-                        viewport.dissolving = false
-                        viewport.dissolveOpacity = 0.0
-                        viewport.performSwap()
+                        viewport.dissolving = false;
+                        viewport.dissolveOpacity = 0.0;
+                        viewport.performSwap();
                     }
                 }
             }
@@ -2915,7 +3726,7 @@ Window {
                 easing.type: Easing.Linear
                 onStopped: {
                     if (viewport.wiping) {
-                        viewport.performSwap()
+                        viewport.performSwap();
                     }
                 }
             }
@@ -2930,7 +3741,7 @@ Window {
                 easing.type: Easing.InOutQuad
                 onStopped: {
                     if (viewport.sliding) {
-                        viewport.performSwap()
+                        viewport.performSwap();
                     }
                 }
             }
@@ -2945,7 +3756,7 @@ Window {
                 easing.type: Easing.Linear
                 onStopped: {
                     if (viewport.looking) {
-                        viewport.performSwap()
+                        viewport.performSwap();
                     }
                 }
             }
@@ -2955,10 +3766,13 @@ Window {
             // viewport never changes — no flash. Saves to DB and updates the scene card model.
             // Calls onDone() when finished (or immediately if sceneId === -1).
             function captureAndSaveThumbnail(sceneId, onDone) {
-                if (sceneId === -1) { onDone(); return; }
+                if (sceneId === -1) {
+                    onDone();
+                    return;
+                }
                 var tempPath = "/tmp/understory_thumb_" + sceneId + ".png";
                 viewport.capturingThumbnail = true;
-                thumbnailCaptureSurface.grabToImage(function(result) {
+                thumbnailCaptureSurface.grabToImage(function (result) {
                     result.saveToFile(tempPath);
                     storyManager.saveThumbnail(sceneId, tempPath);
                     storyManager.saveStoryThumbnail(tempPath);
@@ -2975,11 +3789,17 @@ Window {
 
             // Convert comma-separated text to a serialisable array/scalar (for storing in model).
             function parseUniformToArray(type, text) {
-                var parts = text.toString().split(",").map(function(s) { return parseFloat(s.trim()) || 0; });
-                if (type === "float" || type === "int") return parseFloat(text) || 0;
-                if (type === "vec2") return [parts[0] || 0, parts[1] || 0];
-                if (type === "vec3") return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
-                if (type === "vec4") return [parts[0] || 0, parts[1] || 0, parts[2] || 0, parts[3] || 0];
+                var parts = text.toString().split(",").map(function (s) {
+                    return parseFloat(s.trim()) || 0;
+                });
+                if (type === "float" || type === "int")
+                    return parseFloat(text) || 0;
+                if (type === "vec2")
+                    return [parts[0] || 0, parts[1] || 0];
+                if (type === "vec3")
+                    return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
+                if (type === "vec4")
+                    return [parts[0] || 0, parts[1] || 0, parts[2] || 0, parts[3] || 0];
                 return null;
             }
 
@@ -3139,21 +3959,31 @@ Window {
                     viewport.imageDragging = true;
                 }
                 onPositionChanged: function (mouse) {
-                    if (!viewport.imageDragging) return;
+                    if (!viewport.imageDragging)
+                        return;
                     var aspect = imageSettings.imageAspectRatio;
                     if (aspect > 0 && !(mouse.modifiers & Qt.ShiftModifier)) {
                         var dx = mouse.x - viewport.imgX1;
                         var dy = mouse.y - viewport.imgY1;
                         var w = Math.abs(dx);
                         var h = Math.abs(dy);
-                        if (w === 0 && h === 0) return;
-                        if (h === 0 || w / h > aspect) w = h * aspect;
-                        else h = w / aspect;
+                        if (w === 0 && h === 0)
+                            return;
+                        if (h === 0 || w / h > aspect)
+                            w = h * aspect;
+                        else
+                            h = w / aspect;
                         // clamp to viewport edges, preserving aspect ratio
-                        var maxW = dx >= 0 ? viewport.width  - viewport.imgX1 : viewport.imgX1;
+                        var maxW = dx >= 0 ? viewport.width - viewport.imgX1 : viewport.imgX1;
                         var maxH = dy >= 0 ? viewport.height - viewport.imgY1 : viewport.imgY1;
-                        if (w > maxW) { w = maxW; h = w / aspect; }
-                        if (h > maxH) { h = maxH; w = h * aspect; }
+                        if (w > maxW) {
+                            w = maxW;
+                            h = w / aspect;
+                        }
+                        if (h > maxH) {
+                            h = maxH;
+                            w = h * aspect;
+                        }
                         viewport.imgX2 = viewport.snapX(viewport.imgX1 + (dx >= 0 ? w : -w));
                         viewport.imgY2 = viewport.snapY(viewport.imgY1 + (dy >= 0 ? h : -h));
                     } else {
@@ -3162,7 +3992,8 @@ Window {
                     }
                 }
                 onReleased: {
-                    if (!viewport.imageDragging) return;
+                    if (!viewport.imageDragging)
+                        return;
                     viewport.imageDragging = false;
                     var w = Math.abs(viewport.imgX2 - viewport.imgX1);
                     var h = Math.abs(viewport.imgY2 - viewport.imgY1);
@@ -3202,21 +4033,31 @@ Window {
                     viewport.videoDragging = true;
                 }
                 onPositionChanged: {
-                    if (!viewport.videoDragging) return;
+                    if (!viewport.videoDragging)
+                        return;
                     var aspect = videoSettings.videoAspectRatio;
                     if (aspect > 0) {
                         var dx = mouseX - viewport.vidX1;
                         var dy = mouseY - viewport.vidY1;
                         var w = Math.abs(dx);
                         var h = Math.abs(dy);
-                        if (w === 0 && h === 0) return;
-                        if (h === 0 || w / h > aspect) w = h * aspect;
-                        else h = w / aspect;
+                        if (w === 0 && h === 0)
+                            return;
+                        if (h === 0 || w / h > aspect)
+                            w = h * aspect;
+                        else
+                            h = w / aspect;
                         // clamp to viewport edges, preserving aspect ratio
-                        var maxW = dx >= 0 ? viewport.width  - viewport.vidX1 : viewport.vidX1;
+                        var maxW = dx >= 0 ? viewport.width - viewport.vidX1 : viewport.vidX1;
                         var maxH = dy >= 0 ? viewport.height - viewport.vidY1 : viewport.vidY1;
-                        if (w > maxW) { w = maxW; h = w / aspect; }
-                        if (h > maxH) { h = maxH; w = h * aspect; }
+                        if (w > maxW) {
+                            w = maxW;
+                            h = w / aspect;
+                        }
+                        if (h > maxH) {
+                            h = maxH;
+                            w = h * aspect;
+                        }
                         viewport.vidX2 = viewport.snapX(viewport.vidX1 + (dx >= 0 ? w : -w));
                         viewport.vidY2 = viewport.snapY(viewport.vidY1 + (dy >= 0 ? h : -h));
                     } else {
@@ -3225,7 +4066,8 @@ Window {
                     }
                 }
                 onReleased: {
-                    if (!viewport.videoDragging) return;
+                    if (!viewport.videoDragging)
+                        return;
                     viewport.videoDragging = false;
                     var w = Math.abs(viewport.vidX2 - viewport.vidX1);
                     var h = Math.abs(viewport.vidY2 - viewport.vidY1);
@@ -3261,7 +4103,8 @@ Window {
                     viewport.shaderDragging = true;
                 }
                 onPositionChanged: function (mouse) {
-                    if (!viewport.shaderDragging) return;
+                    if (!viewport.shaderDragging)
+                        return;
                     if (mouse.modifiers & Qt.ShiftModifier) {
                         // Shift: constrain to square
                         var dx = mouse.x - viewport.shaderX1;
@@ -3275,7 +4118,8 @@ Window {
                     }
                 }
                 onReleased: {
-                    if (!viewport.shaderDragging) return;
+                    if (!viewport.shaderDragging)
+                        return;
                     viewport.shaderDragging = false;
                     var w = Math.abs(viewport.shaderX2 - viewport.shaderX1);
                     var h = Math.abs(viewport.shaderY2 - viewport.shaderY1);
@@ -3291,8 +4135,10 @@ Window {
                             shaderPickerDialog.open();
                         } else {
                             viewport.shadersModel.append({
-                                x1: bounds.x1, y1: bounds.y1,
-                                x2: bounds.x2, y2: bounds.y2,
+                                x1: bounds.x1,
+                                y1: bounds.y1,
+                                x2: bounds.x2,
+                                y2: bounds.y2,
                                 fragPath: newshaderSettings.fragFilePath,
                                 vertPath: newshaderSettings.vertFilePath,
                                 name: newshaderSettings.propName,
@@ -3320,58 +4166,59 @@ Window {
                 // During wipe both layers are captured into FBO textures by ShaderEffectSource,
                 // so both are hidden (opacity 0) and the wipeEffect ShaderEffect at z:15 is shown.
                 z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking) && viewport.foregroundLayer !== 0) ? 11 : 10
-                viewportRef:   viewport
+                viewportRef: viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 0
                 // Foreground: fully opaque.  Staging during dissolve: fades 0→1.
                 // During wipe/slide/look: both layers stay at opacity 1 so FBO textures have full color,
                 // but hideSource:true on the ShaderEffectSources hides them from the scene.
                 // Staging at rest: opacity 0 (keeps video frames decoding silently).
-                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 :
-                         viewport.foregroundLayer === 0 ? 1.0 :
-                         viewport.dissolving ? viewport.dissolveOpacity : 0.0
+                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 0 ? 1.0 : viewport.dissolving ? viewport.dissolveOpacity : 0.0
 
                 Connections {
                     target: sceneLayerA
                     function onReadyForDisplay() {
                         if (viewport.foregroundLayer !== 0) {
                             if (viewport.cueVideoActive) {
-                                viewport.cueVideoStagingReady = true
-                                return
+                                viewport.cueVideoStagingReady = true;
+                                return;
                             }
                             if (viewport.cueVideoHasJump) {
-                                viewport.commitCueVideoTransition()
-                                return
+                                viewport.commitCueVideoTransition();
+                                return;
                             }
-                            var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
+                            var dirMap = {
+                                "right": 0,
+                                "left": 1,
+                                "down": 2,
+                                "up": 3
+                            };
                             if (viewport.pendingTransition === "dissolve") {
-                                dissolveAnim.duration = viewport.pendingDuration
-                                viewport.dissolving = true
-                                dissolveAnim.start()
+                                dissolveAnim.duration = viewport.pendingDuration;
+                                viewport.dissolving = true;
+                                dissolveAnim.start();
                             } else if (viewport.pendingTransition === "wipe") {
-                                viewport.wipeFeather   = viewport.pendingWipeFeather
-                                viewport.wipeDirection = dirMap[viewport.pendingWipeDirection] !== undefined
-                                                         ? dirMap[viewport.pendingWipeDirection] : 0
-                                wipeAnim.duration = viewport.pendingDuration
-                                viewport.wiping = true
-                                wipeAnim.start()
+                                viewport.wipeFeather = viewport.pendingWipeFeather;
+                                viewport.wipeDirection = dirMap[viewport.pendingWipeDirection] !== undefined ? dirMap[viewport.pendingWipeDirection] : 0;
+                                wipeAnim.duration = viewport.pendingDuration;
+                                viewport.wiping = true;
+                                wipeAnim.start();
                             } else if (viewport.pendingTransition === "push") {
-                                viewport.slideDirection = dirMap[viewport.pendingSlideDirection] !== undefined
-                                                          ? dirMap[viewport.pendingSlideDirection] : 0
-                                slideAnim.duration = viewport.pendingDuration
-                                viewport.sliding = true
-                                slideAnim.start()
+                                viewport.slideDirection = dirMap[viewport.pendingSlideDirection] !== undefined ? dirMap[viewport.pendingSlideDirection] : 0;
+                                slideAnim.duration = viewport.pendingDuration;
+                                viewport.sliding = true;
+                                slideAnim.start();
                             } else if (viewport.pendingTransition === "look") {
-                                viewport.lookYaw       = viewport.pendingLookYaw
-                                viewport.lookPitch     = viewport.pendingLookPitch
-                                viewport.lookFovMM     = viewport.pendingLookFovMM
-                                viewport.lookOvershoot = viewport.pendingLookOvershoot
-                                viewport.lookShutter   = viewport.pendingLookShutter
-                                lookAnim.duration = viewport.pendingDuration
-                                viewport.looking = true
-                                lookAnim.start()
+                                viewport.lookYaw = viewport.pendingLookYaw;
+                                viewport.lookPitch = viewport.pendingLookPitch;
+                                viewport.lookFovMM = viewport.pendingLookFovMM;
+                                viewport.lookOvershoot = viewport.pendingLookOvershoot;
+                                viewport.lookShutter = viewport.pendingLookShutter;
+                                lookAnim.duration = viewport.pendingDuration;
+                                viewport.looking = true;
+                                lookAnim.start();
                             } else {
-                                viewport.performSwap()
+                                viewport.performSwap();
                             }
                         }
                     }
@@ -3382,54 +4229,55 @@ Window {
                 id: sceneLayerB
                 anchors.fill: parent
                 z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking) && viewport.foregroundLayer !== 1) ? 11 : 10
-                viewportRef:   viewport
+                viewportRef: viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 1
-                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 :
-                         viewport.foregroundLayer === 1 ? 1.0 :
-                         viewport.dissolving ? viewport.dissolveOpacity : 0.0
+                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 1 ? 1.0 : viewport.dissolving ? viewport.dissolveOpacity : 0.0
 
                 Connections {
                     target: sceneLayerB
                     function onReadyForDisplay() {
                         if (viewport.foregroundLayer !== 1) {
                             if (viewport.cueVideoActive) {
-                                viewport.cueVideoStagingReady = true
-                                return
+                                viewport.cueVideoStagingReady = true;
+                                return;
                             }
                             if (viewport.cueVideoHasJump) {
-                                viewport.commitCueVideoTransition()
-                                return
+                                viewport.commitCueVideoTransition();
+                                return;
                             }
-                            var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
+                            var dirMap = {
+                                "right": 0,
+                                "left": 1,
+                                "down": 2,
+                                "up": 3
+                            };
                             if (viewport.pendingTransition === "dissolve") {
-                                dissolveAnim.duration = viewport.pendingDuration
-                                viewport.dissolving = true
-                                dissolveAnim.start()
+                                dissolveAnim.duration = viewport.pendingDuration;
+                                viewport.dissolving = true;
+                                dissolveAnim.start();
                             } else if (viewport.pendingTransition === "wipe") {
-                                viewport.wipeFeather   = viewport.pendingWipeFeather
-                                viewport.wipeDirection = dirMap[viewport.pendingWipeDirection] !== undefined
-                                                         ? dirMap[viewport.pendingWipeDirection] : 0
-                                wipeAnim.duration = viewport.pendingDuration
-                                viewport.wiping = true
-                                wipeAnim.start()
+                                viewport.wipeFeather = viewport.pendingWipeFeather;
+                                viewport.wipeDirection = dirMap[viewport.pendingWipeDirection] !== undefined ? dirMap[viewport.pendingWipeDirection] : 0;
+                                wipeAnim.duration = viewport.pendingDuration;
+                                viewport.wiping = true;
+                                wipeAnim.start();
                             } else if (viewport.pendingTransition === "push") {
-                                viewport.slideDirection = dirMap[viewport.pendingSlideDirection] !== undefined
-                                                          ? dirMap[viewport.pendingSlideDirection] : 0
-                                slideAnim.duration = viewport.pendingDuration
-                                viewport.sliding = true
-                                slideAnim.start()
+                                viewport.slideDirection = dirMap[viewport.pendingSlideDirection] !== undefined ? dirMap[viewport.pendingSlideDirection] : 0;
+                                slideAnim.duration = viewport.pendingDuration;
+                                viewport.sliding = true;
+                                slideAnim.start();
                             } else if (viewport.pendingTransition === "look") {
-                                viewport.lookYaw       = viewport.pendingLookYaw
-                                viewport.lookPitch     = viewport.pendingLookPitch
-                                viewport.lookFovMM     = viewport.pendingLookFovMM
-                                viewport.lookOvershoot = viewport.pendingLookOvershoot
-                                viewport.lookShutter   = viewport.pendingLookShutter
-                                lookAnim.duration = viewport.pendingDuration
-                                viewport.looking = true
-                                lookAnim.start()
+                                viewport.lookYaw = viewport.pendingLookYaw;
+                                viewport.lookPitch = viewport.pendingLookPitch;
+                                viewport.lookFovMM = viewport.pendingLookFovMM;
+                                viewport.lookOvershoot = viewport.pendingLookOvershoot;
+                                viewport.lookShutter = viewport.pendingLookShutter;
+                                lookAnim.duration = viewport.pendingDuration;
+                                viewport.looking = true;
+                                lookAnim.start();
                             } else {
-                                viewport.performSwap()
+                                viewport.performSwap();
                             }
                         }
                     }
@@ -3465,12 +4313,12 @@ Window {
 
                 // sourceIn (binding 1, alphabetically first)  = incoming/new scene (staging)
                 // sourceOut (binding 2, alphabetically second) = outgoing/old scene (foreground)
-                property var sourceIn:  viewport.foregroundLayer === 0 ? texB : texA
+                property var sourceIn: viewport.foregroundLayer === 0 ? texB : texA
                 property var sourceOut: viewport.foregroundLayer === 0 ? texA : texB
 
-                property real progress:  viewport.wipeProgress
-                property real feather:   viewport.wipeFeather
-                property int  direction: viewport.wipeDirection
+                property real progress: viewport.wipeProgress
+                property real feather: viewport.wipeFeather
+                property int direction: viewport.wipeDirection
             }
 
             // Slide (push) transition overlay — composites texA/texB via slide.frag.qsb.
@@ -3481,11 +4329,11 @@ Window {
                 visible: viewport.sliding
                 fragmentShader: "slide.frag.qsb"
 
-                property var sourceIn:  viewport.foregroundLayer === 0 ? texB : texA
+                property var sourceIn: viewport.foregroundLayer === 0 ? texB : texA
                 property var sourceOut: viewport.foregroundLayer === 0 ? texA : texB
 
-                property real progress:  viewport.slideProgress
-                property int  direction: viewport.slideDirection
+                property real progress: viewport.slideProgress
+                property int direction: viewport.slideDirection
             }
 
             // Look transition overlay — sphere-projected camera whip via look.frag.qsb.
@@ -3496,15 +4344,15 @@ Window {
                 visible: viewport.looking
                 fragmentShader: "look.frag.qsb"
 
-                property var sourceIn:  viewport.foregroundLayer === 0 ? texB : texA
+                property var sourceIn: viewport.foregroundLayer === 0 ? texB : texA
                 property var sourceOut: viewport.foregroundLayer === 0 ? texA : texB
 
-                property real progress:  viewport.lookProgress
-                property real yaw:       viewport.lookYaw
-                property real pitch:     viewport.lookPitch
-                property real fovMM:     viewport.lookFovMM
+                property real progress: viewport.lookProgress
+                property real yaw: viewport.lookYaw
+                property real pitch: viewport.lookPitch
+                property real fovMM: viewport.lookFovMM
                 property real overshoot: viewport.lookOvershoot
-                property real shutter:   viewport.lookShutter
+                property real shutter: viewport.lookShutter
             }
 
             // In-progress rubber-band (only visible while dragging)
@@ -3554,7 +4402,7 @@ Window {
                 visible: viewport.boxSelecting && !viewport.capturingThumbnail
                 x: Math.max(0, Math.min(viewport.boxSelectX1, viewport.boxSelectX2))
                 y: Math.max(0, Math.min(viewport.boxSelectY1, viewport.boxSelectY2))
-                width: Math.max(0, Math.min(viewport.width,  Math.max(viewport.boxSelectX1, viewport.boxSelectX2)) - Math.max(0, Math.min(viewport.boxSelectX1, viewport.boxSelectX2)))
+                width: Math.max(0, Math.min(viewport.width, Math.max(viewport.boxSelectX1, viewport.boxSelectX2)) - Math.max(0, Math.min(viewport.boxSelectX1, viewport.boxSelectX2)))
                 height: Math.max(0, Math.min(viewport.height, Math.max(viewport.boxSelectY1, viewport.boxSelectY2)) - Math.max(0, Math.min(viewport.boxSelectY1, viewport.boxSelectY2)))
                 color: Qt.rgba(0.5, 0.7, 1.0, 0.08)
                 border.color: Qt.rgba(0.5, 0.7, 1.0, 0.9)
@@ -4186,7 +5034,6 @@ Window {
                 onAccepted: newshaderSettings.vertFilePath = selectedFile.toString()
             }
 
-
             FileDialog {
                 id: selectTextureDialog
                 title: "Select texture image or video"
@@ -4195,16 +5042,25 @@ Window {
                 onAccepted: {
                     var path = selectedFile.toString();
                     var name = pendingUniformName;
-                    if (name === "" || !selectSettings.hasActiveShader) return;
+                    if (name === "" || !selectSettings.hasActiveShader)
+                        return;
                     var idx = viewport.selectedShaders[0];
                     var uniforms;
-                    try { uniforms = JSON.parse(viewport.shadersModel.get(idx).uniformsJson || "[]"); } catch(e) { uniforms = []; }
+                    try {
+                        uniforms = JSON.parse(viewport.shadersModel.get(idx).uniformsJson || "[]");
+                    } catch (e) {
+                        uniforms = [];
+                    }
                     for (var i = 0; i < uniforms.length; i++) {
-                        if (uniforms[i].name === name) { uniforms[i].value = path; break; }
+                        if (uniforms[i].name === name) {
+                            uniforms[i].value = path;
+                            break;
+                        }
                     }
                     viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(uniforms));
                     var del = activeContent.shaderDelegateAt(idx);
-                    if (del) del.applyTextureSource(name, path);
+                    if (del)
+                        del.applyTextureSource(name, path);
                     selectSettings.refreshShaderUniforms();
                 }
             }
@@ -4216,7 +5072,8 @@ Window {
                 property string pendingUniformName: ""
                 property int pendingUniformIndex: -1
                 onAccepted: {
-                    if (pendingUniformIndex < 0) return;
+                    if (pendingUniformIndex < 0)
+                        return;
                     uniformFieldsModel.setProperty(pendingUniformIndex, "uText", selectedFile.toString());
                 }
             }
@@ -4237,8 +5094,10 @@ Window {
                     if (viewport.pendingShaderBounds && newshaderSettings.fragFilePath !== "") {
                         var b = viewport.pendingShaderBounds;
                         viewport.shadersModel.append({
-                            x1: b.x1, y1: b.y1,
-                            x2: b.x2, y2: b.y2,
+                            x1: b.x1,
+                            y1: b.y1,
+                            x2: b.x2,
+                            y2: b.y2,
                             fragPath: newshaderSettings.fragFilePath,
                             vertPath: newshaderSettings.vertFilePath,
                             name: newshaderSettings.propName,
@@ -4320,8 +5179,10 @@ Window {
                         var x1 = Math.max(0, Math.min(viewport.dropX - defaultW / 2, viewport.width - defaultW));
                         var y1 = Math.max(0, Math.min(viewport.dropY - defaultH / 2, viewport.height - defaultH));
                         viewport.imagesModel.append({
-                            x1: x1, y1: y1,
-                            x2: x1 + defaultW, y2: y1 + defaultH,
+                            x1: x1,
+                            y1: y1,
+                            x2: x1 + defaultW,
+                            y2: y1 + defaultH,
                             filePath: viewport.dropPendingImagePath,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false
@@ -4352,8 +5213,10 @@ Window {
                         var x1 = Math.max(0, Math.min(viewport.dropX - defaultW / 2, viewport.width - defaultW));
                         var y1 = Math.max(0, Math.min(viewport.dropY - defaultH / 2, viewport.height - defaultH));
                         viewport.videosModel.append({
-                            x1: x1, y1: y1,
-                            x2: x1 + defaultW, y2: y1 + defaultH,
+                            x1: x1,
+                            y1: y1,
+                            x2: x1 + defaultW,
+                            y2: y1 + defaultH,
                             filePath: viewport.dropPendingVideoPath,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false
@@ -4376,11 +5239,16 @@ Window {
                     anchors.fill: parent
                     color: "white"
                     opacity: parent.containsDrag ? 0.06 : 0
-                    Behavior on opacity { NumberAnimation { duration: 80 } }
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 80
+                        }
+                    }
                 }
 
                 onDropped: drop => {
-                    if (!drop.hasUrls) return;
+                    if (!drop.hasUrls)
+                        return;
                     var url = drop.urls[0].toString();
                     var lower = url.toLowerCase();
                     var imageExts = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg"];
@@ -4408,18 +5276,18 @@ Window {
                 cursorShape: viewport.textEditing ? Qt.IBeamCursor : ((sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1) ? Qt.BlankCursor : Qt.ArrowCursor)
                 z: 999
                 onPositionChanged: {
-                    viewport.hoveredAreaIndex  = viewport.findHoveredArea(mouseX, mouseY)
-                    viewport.hoveredTbIndex    = viewport.findHoveredTb(mouseX, mouseY)
-                    viewport.hoveredImageIndex = viewport.findHoveredImage(mouseX, mouseY)
-                    viewport.hoveredVideoIndex = viewport.findHoveredVideo(mouseX, mouseY)
-                    viewport.hoveredShaderIndex = viewport.findHoveredShader(mouseX, mouseY)
+                    viewport.hoveredAreaIndex = viewport.findHoveredArea(mouseX, mouseY);
+                    viewport.hoveredTbIndex = viewport.findHoveredTb(mouseX, mouseY);
+                    viewport.hoveredImageIndex = viewport.findHoveredImage(mouseX, mouseY);
+                    viewport.hoveredVideoIndex = viewport.findHoveredVideo(mouseX, mouseY);
+                    viewport.hoveredShaderIndex = viewport.findHoveredShader(mouseX, mouseY);
                 }
                 onExited: {
-                    viewport.hoveredAreaIndex  = -1
-                    viewport.hoveredTbIndex    = -1
-                    viewport.hoveredImageIndex = -1
-                    viewport.hoveredVideoIndex = -1
-                    viewport.hoveredShaderIndex = -1
+                    viewport.hoveredAreaIndex = -1;
+                    viewport.hoveredTbIndex = -1;
+                    viewport.hoveredImageIndex = -1;
+                    viewport.hoveredVideoIndex = -1;
+                    viewport.hoveredShaderIndex = -1;
                 }
             }
 
@@ -4429,36 +5297,46 @@ Window {
                 width: 36
                 height: 36
                 source: {
-                    if (viewport.elementDragging) return "icons/pinch.svg"
-                    if (sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) return "icons/select.svg"
+                    if (viewport.elementDragging)
+                        return "icons/pinch.svg";
+                    if (sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen)
+                        return "icons/select.svg";
                     if (viewport.effectiveTool === "simulate") {
-                        var slot = "select", cpath = ""
+                        var slot = "select", cpath = "";
                         if (viewport.hoveredAreaIndex >= 0) {
-                            var hm = viewport.areasModel.get(viewport.hoveredAreaIndex)
-                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                            var hm = viewport.areasModel.get(viewport.hoveredAreaIndex);
+                            slot = hm.cursor || "select";
+                            cpath = hm.cursorPath || "";
                         } else if (viewport.hoveredTbIndex >= 0) {
-                            var hm = viewport.textBoxesModel.get(viewport.hoveredTbIndex)
-                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                            var hm = viewport.textBoxesModel.get(viewport.hoveredTbIndex);
+                            slot = hm.cursor || "select";
+                            cpath = hm.cursorPath || "";
                         } else if (viewport.hoveredImageIndex >= 0) {
-                            var hm = viewport.imagesModel.get(viewport.hoveredImageIndex)
-                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                            var hm = viewport.imagesModel.get(viewport.hoveredImageIndex);
+                            slot = hm.cursor || "select";
+                            cpath = hm.cursorPath || "";
                         } else if (viewport.hoveredVideoIndex >= 0) {
-                            var hm = viewport.videosModel.get(viewport.hoveredVideoIndex)
-                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                            var hm = viewport.videosModel.get(viewport.hoveredVideoIndex);
+                            slot = hm.cursor || "select";
+                            cpath = hm.cursorPath || "";
                         } else if (viewport.hoveredShaderIndex >= 0) {
-                            var hm = viewport.shadersModel.get(viewport.hoveredShaderIndex)
-                            slot = hm.cursor || "select"; cpath = hm.cursorPath || ""
+                            var hm = viewport.shadersModel.get(viewport.hoveredShaderIndex);
+                            slot = hm.cursor || "select";
+                            cpath = hm.cursorPath || "";
                         }
-                        if (slot === "custom") return cpath || ""
-                        var labels = ["select","highlight","drag","left","up","down","right"]
-                        var slotIdx = labels.indexOf(slot)
-                        if (slotIdx < 0) return ""
-                        var mode = sceneSettingsView.selectedCursor
-                        if (mode === "custom") return sceneSettingsView.cursorCustomPaths[slotIdx] || ""
-                        return "icons/" + sceneSettingsView.cursorOptions[mode === "angel" ? 0 : 1].icons[slotIdx]
+                        if (slot === "custom")
+                            return cpath || "";
+                        var labels = ["select", "highlight", "drag", "left", "up", "down", "right"];
+                        var slotIdx = labels.indexOf(slot);
+                        if (slotIdx < 0)
+                            return "";
+                        var mode = sceneSettingsView.selectedCursor;
+                        if (mode === "custom")
+                            return sceneSettingsView.cursorCustomPaths[slotIdx] || "";
+                        return "icons/" + sceneSettingsView.cursorOptions[mode === "angel" ? 0 : 1].icons[slotIdx];
                     }
-                    var tools = ["select","relayer","destroy","newarea","newtext","newimage","newvideo","newshader"]
-                    return tools.indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : ""
+                    var tools = ["select", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"];
+                    return tools.indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : "";
                 }
                 visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1)
                 fillMode: Image.PreserveAspectFit
@@ -4569,9 +5447,7 @@ Window {
                                     }
                                     Image {
                                         anchors.fill: parent
-                                        source: (!isLast && model.thumbnailRev > 0)
-                                            ? ("image://thumbnails/" + model.sceneId + "?rev=" + model.thumbnailRev)
-                                            : ""
+                                        source: (!isLast && model.thumbnailRev > 0) ? ("image://thumbnails/" + model.sceneId + "?rev=" + model.thumbnailRev) : ""
                                         fillMode: Image.PreserveAspectCrop
                                         cache: false
                                     }
@@ -4583,7 +5459,11 @@ Window {
                                     color: "black"
                                     radius: 30
                                     opacity: hovered && !isLast ? 0.25 : 0.0
-                                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                                    Behavior on opacity {
+                                        NumberAnimation {
+                                            duration: 120
+                                        }
+                                    }
                                 }
 
                                 MouseArea {
@@ -4599,75 +5479,79 @@ Window {
                                     onExited: hovered = false
 
                                     onPressed: {
-                                        pressPos = Qt.point(mouseX, mouseY)
-                                        dragStarted = false
+                                        pressPos = Qt.point(mouseX, mouseY);
+                                        dragStarted = false;
                                     }
 
                                     onPositionChanged: {
                                         if (pressed && sceneEditorButtons.navigationOpen && !isLast) {
-                                            var dx = mouseX - pressPos.x
-                                            var dy = mouseY - pressPos.y
+                                            var dx = mouseX - pressPos.x;
+                                            var dy = mouseY - pressPos.y;
                                             if (Math.sqrt(dx * dx + dy * dy) > 8) {
                                                 if (!dragStarted) {
-                                                    dragStarted = true
-                                                    navDragGhost.draggedSceneId = model.sceneId
-                                                    navDragGhost.draggedSceneName = model.sceneName || ""
-                                                    navDragGhost.draggedThumbnailRev = model.thumbnailRev || 0
+                                                    dragStarted = true;
+                                                    navDragGhost.draggedSceneId = model.sceneId;
+                                                    navDragGhost.draggedSceneName = model.sceneName || "";
+                                                    navDragGhost.draggedThumbnailRev = model.thumbnailRev || 0;
                                                 }
-                                                var pos = mapToItem(sceneEditor, mouseX, mouseY)
-                                                navDragGhost.x = pos.x - navDragGhost.width / 2
-                                                navDragGhost.y = pos.y - navDragGhost.height / 2
-                                                navDragGhost.visible = true
+                                                var pos = mapToItem(sceneEditor, mouseX, mouseY);
+                                                navDragGhost.x = pos.x - navDragGhost.width / 2;
+                                                navDragGhost.y = pos.y - navDragGhost.height / 2;
+                                                navDragGhost.visible = true;
                                             }
                                         }
                                     }
 
                                     onReleased: {
                                         if (dragStarted) {
-                                            navDragGhost.Drag.drop()
-                                            navDragGhost.visible = false
+                                            navDragGhost.Drag.drop();
+                                            navDragGhost.visible = false;
                                             // dragStarted intentionally NOT reset here so onClicked can detect it
                                         }
                                     }
 
                                     onClicked: {
                                         if (dragStarted) {
-                                            dragStarted = false
-                                            return
+                                            dragStarted = false;
+                                            return;
                                         }
                                         if (isLast) {
                                             var newId = storyManager.createScene("new scene");
                                             if (newId !== -1) {
-                                                scenesRectModel.insert(scenesRectModel.count - 1,
-                                                    { sceneId: newId, sceneName: "new scene", thumbnailRev: 0 });
+                                                scenesRectModel.insert(scenesRectModel.count - 1, {
+                                                    sceneId: newId,
+                                                    sceneName: "new scene",
+                                                    thumbnailRev: 0
+                                                });
                                                 if (mainWindow.currentSceneId !== -1) {
                                                     storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
                                                     storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
                                                 }
                                                 nodeWorkspace.saveToDb();
                                                 mainWindow.currentSceneId = newId;
-                                                viewport.activeContent.clear(); viewport.nextStackOrder = 0;
+                                                viewport.activeContent.clear();
+                                                viewport.nextStackOrder = 0;
                                                 sceneNameInput.text = "new scene";
                                                 sceneEditorButtons.navigationOpen = false;
                                                 sceneEditorButtons.interactivityPickerOpen = false;
                                             }
                                         } else if (sceneEditorButtons.interactivityPickerOpen) {
-                                            var pickedId = model.sceneId
-                                            var pickedName = model.sceneName || storyManager.getSceneName(pickedId)
-                                            var idx = sceneEditorButtons.interactivityPickerTargetIdx
+                                            var pickedId = model.sceneId;
+                                            var pickedName = model.sceneName || storyManager.getSceneName(pickedId);
+                                            var idx = sceneEditorButtons.interactivityPickerTargetIdx;
                                             if (sceneEditorButtons.interactivityPickerModel) {
-                                                sceneEditorButtons.interactivityPickerModel.setProperty(idx, "itemTargetSceneId", pickedId)
-                                                sceneEditorButtons.interactivityPickerModel.setProperty(idx, "itemTargetSceneName", pickedName)
+                                                sceneEditorButtons.interactivityPickerModel.setProperty(idx, "itemTargetSceneId", pickedId);
+                                                sceneEditorButtons.interactivityPickerModel.setProperty(idx, "itemTargetSceneName", pickedName);
                                             }
-                                            sceneEditorButtons.interactivityPickerOpen = false
-                                            sceneEditorButtons.interactivityPickerTargetIdx = -1
-                                            sceneEditorButtons.interactivityPickerModel = null
+                                            sceneEditorButtons.interactivityPickerOpen = false;
+                                            sceneEditorButtons.interactivityPickerTargetIdx = -1;
+                                            sceneEditorButtons.interactivityPickerModel = null;
                                         } else {
                                             var targetId = scenesRectModel.get(index).sceneId;
                                             if (targetId !== mainWindow.currentSceneId) {
                                                 if (mainWindow.currentSceneId !== -1) {
                                                     navigationSettings.saveNavLinks(mainWindow.currentSceneId);
-                                                    viewport.captureAndSaveThumbnail(mainWindow.currentSceneId, function() {
+                                                    viewport.captureAndSaveThumbnail(mainWindow.currentSceneId, function () {
                                                         storyManager.updateSceneName(mainWindow.currentSceneId, sceneNameInput.text);
                                                         storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements());
                                                         nodeWorkspace.saveToDb();
@@ -4779,13 +5663,13 @@ Window {
                     running: viewport.cueVideoHasJump && viewport.cueVideoStagingReady
 
                     onTriggered: {
-                        var remaining = cueVideoPlayer.duration - cueVideoPlayer.position
+                        var remaining = cueVideoPlayer.duration - cueVideoPlayer.position;
                         if (cueVideoPlayer.duration > 0 && remaining >= 0 && remaining <= 100) {
-                            stop()
-                            viewport.cueVideoEarlyCommit = true
-                            viewport.cueVideoHasJump    = false
-                            viewport.cueVideoActive     = false
-                            viewport.performSwap()
+                            stop();
+                            viewport.cueVideoEarlyCommit = true;
+                            viewport.cueVideoHasJump = false;
+                            viewport.cueVideoActive = false;
+                            viewport.performSwap();
                             // Overlay stays visible for the final frames; EndOfMedia hides it.
                         }
                     }
@@ -4796,42 +5680,44 @@ Window {
                     target: viewport
                     enabled: cueVideoOverlay.waitingForSceneSwap
                     function onForegroundLayerChanged() {
-                        cueVideoOverlay.waitingForSceneSwap = false
-                        cueVideoOverlay.visible = false
-                        cueVideoPlayer.source = ""
+                        cueVideoOverlay.waitingForSceneSwap = false;
+                        cueVideoOverlay.visible = false;
+                        cueVideoPlayer.source = "";
                     }
                 }
 
                 MediaPlayer {
                     id: cueVideoPlayer
                     videoOutput: cueVideoOutput
-                    audioOutput: AudioOutput { volume: 1.0 }
+                    audioOutput: AudioOutput {
+                        volume: 1.0
+                    }
 
                     onMediaStatusChanged: {
                         // Show overlay once the first frame is decoded so Scene A stays
                         // visible right up until the video's first real pixel appears.
                         if (mediaStatus === MediaPlayer.BufferedMedia) {
-                            cueVideoOverlay.visible = true
+                            cueVideoOverlay.visible = true;
                         } else if (mediaStatus === MediaPlayer.EndOfMedia) {
-                            viewport.cueVideoActive = false
+                            viewport.cueVideoActive = false;
                             if (viewport.cueVideoEarlyCommit) {
                                 // Normal path: Scene B already in foreground from the early swap.
                                 // Just lift the overlay to reveal it.
-                                viewport.cueVideoEarlyCommit = false
-                                cueVideoOverlay.visible = false
-                                cueVideoPlayer.source = ""
+                                viewport.cueVideoEarlyCommit = false;
+                                cueVideoOverlay.visible = false;
+                                cueVideoPlayer.source = "";
                             } else if (viewport.cueVideoHasJump) {
                                 // Slow-scene fallback: staging wasn't ready in time.
                                 // Keep overlay up and wait for the layer swap to complete.
-                                cueVideoOverlay.waitingForSceneSwap = true
+                                cueVideoOverlay.waitingForSceneSwap = true;
                                 if (viewport.cueVideoStagingReady) {
-                                    viewport.cueVideoHasJump = false
-                                    viewport.commitCueVideoTransition()
+                                    viewport.cueVideoHasJump = false;
+                                    viewport.commitCueVideoTransition();
                                 }
                                 // else: readyForDisplay handler calls commitCueVideoTransition
                             } else {
-                                cueVideoOverlay.visible = false
-                                cueVideoPlayer.source = ""
+                                cueVideoOverlay.visible = false;
+                                cueVideoPlayer.source = "";
                             }
                         }
                     }
@@ -5050,7 +5936,10 @@ Window {
                 property int interactivityPickerTargetIdx: -1
                 property var interactivityPickerModel: null
 
-                onNavigationOpenChanged: { if (!navigationOpen) navOverlayOpen = false }
+                onNavigationOpenChanged: {
+                    if (!navigationOpen)
+                        navOverlayOpen = false;
+                }
 
                 Repeater {
                     model: ["conditions", "variables", "story map", "close scene"]
@@ -5118,7 +6007,7 @@ Window {
                                 } else if (modelData === "close scene") {
                                     // Capture thumbnail, save scene state, then initiate transition
                                     var savedSceneId = mainWindow.currentSceneId;
-                                    viewport.captureAndSaveThumbnail(savedSceneId, function() {
+                                    viewport.captureAndSaveThumbnail(savedSceneId, function () {
                                         if (savedSceneId !== -1) {
                                             storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
                                             storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
@@ -5169,7 +6058,9 @@ Window {
                 color: "transparent"
                 clip: true
                 layer.enabled: true
-                layer.effect: OpacityMask { maskSource: toolSettingsAreaMask }
+                layer.effect: OpacityMask {
+                    maskSource: toolSettingsAreaMask
+                }
                 border.color: "white"
                 border.width: sceneEditorButtons.navigationOpen ? 0 : 2
                 anchors.top: toolPalette.bottom
@@ -5187,7 +6078,6 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
-
                     Row {
                         id: areaSettingsHeadingRow
                         anchors.top: parent.top
@@ -5204,10 +6094,7 @@ Window {
                             color: "white"
                             anchors.verticalCenter: parent.verticalCenter
                         }
-
                     }
-
-
 
                     ScrollView {
                         id: areaPropsScroll
@@ -5232,105 +6119,6 @@ Window {
                             property real propH: 150
                             property bool propLock: false
                             property string propName: ""
-
-                            Text {
-                                text: "information"
-                                font.pixelSize: 11
-                                font.capitalization: Font.AllUppercase
-                                font.letterSpacing: 1
-                                color: "white"
-                                width: parent.width
-                                bottomPadding: 6
-                            }
-
-                            // Row 1: name (full width)
-                            RowLayout {
-                                width: areaSpatialProps.width; height: 26; spacing: 4
-                                Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    Layout.fillWidth: true; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: areaSpatialProps.propName
-                                        Keys.onReturnPressed: focus = false
-                                        Keys.onEscapePressed: focus = false
-                                        onEditingFinished: areaSpatialProps.propName = text
-                                    }
-                                }
-                            }
-
-                            // Row 2: x | y
-                            Row {
-                                width: areaSpatialProps.width; height: 26; spacing: 6
-                                RowLayout {
-                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                    Text { text: "x"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
-                                    Rectangle {
-                                        Layout.fillWidth: true; height: 26
-                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                        TextInput {
-                                            anchors.fill: parent; anchors.margins: 3
-                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                            text: areaSpatialProps.propX.toFixed(0)
-                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                            onEditingFinished: areaSpatialProps.propX = parseFloat(text) || 0
-                                        }
-                                    }
-                                }
-                                RowLayout {
-                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                    Text { text: "width"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
-                                    Rectangle {
-                                        Layout.fillWidth: true; height: 26
-                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                        TextInput {
-                                            anchors.fill: parent; anchors.margins: 3
-                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                            text: areaSpatialProps.propW.toFixed(0)
-                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                            onEditingFinished: areaSpatialProps.propW = parseFloat(text) || 0
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Row 3: y | height
-                            Row {
-                                width: areaSpatialProps.width; height: 26; spacing: 6
-                                RowLayout {
-                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                    Text { text: "y"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
-                                    Rectangle {
-                                        Layout.fillWidth: true; height: 26
-                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                        TextInput {
-                                            anchors.fill: parent; anchors.margins: 3
-                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                            text: areaSpatialProps.propY.toFixed(0)
-                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                            onEditingFinished: areaSpatialProps.propY = parseFloat(text) || 0
-                                        }
-                                    }
-                                }
-                                RowLayout {
-                                    width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                    Text { text: "height"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
-                                    Rectangle {
-                                        Layout.fillWidth: true; height: 26
-                                        color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                        TextInput {
-                                            anchors.fill: parent; anchors.margins: 3
-                                            color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                            text: areaSpatialProps.propH.toFixed(0)
-                                            Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                            onEditingFinished: areaSpatialProps.propH = parseFloat(text) || 0
-                                        }
-                                    }
-                                }
-                            }
-
                         }
                     }
                 }
@@ -5376,14 +6164,26 @@ Window {
                             color: "white"
                             anchors.verticalCenter: parent.verticalCenter
                         }
+                    }
 
+                    Text {
+                        id: imageSourceLabel
+                        text: "source"
+                        font.pixelSize: 11
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 1
+                        color: "white"
+                        anchors.top: imageSettingsHeadingRow.bottom
+                        anchors.topMargin: 12
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
                     }
 
                     // Image drop zone — fixed, not scrollable
                     Rectangle {
                         id: imageDropZone
-                        anchors.top: imageSettingsHeadingRow.bottom
-                        anchors.topMargin: 12
+                        anchors.top: imageSourceLabel.bottom
+                        anchors.topMargin: 6
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
@@ -5453,7 +6253,6 @@ Window {
                             property real propH: 150
                             property bool propLock: false
                             property string propName: ""
-
                         }
                     }
                 }
@@ -5472,7 +6271,7 @@ Window {
                     MediaPlayer {
                         id: videoProbe
                         source: videoSettings.selectedFilePath
-                        onMediaStatusChanged: (status) => {
+                        onMediaStatusChanged: status => {
                             if (status === MediaPlayer.LoadedMedia || status === MediaPlayer.BufferedMedia) {
                                 var res = metaData.value(MediaMetaData.Resolution);
                                 if (res && res.width > 0 && res.height > 0)
@@ -5499,14 +6298,26 @@ Window {
                             color: "white"
                             anchors.verticalCenter: parent.verticalCenter
                         }
+                    }
 
+                    Text {
+                        id: videoSourceLabel
+                        text: "source"
+                        font.pixelSize: 11
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 1
+                        color: "white"
+                        anchors.top: videoSettingsHeadingRow.bottom
+                        anchors.topMargin: 12
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
                     }
 
                     // Video drop zone — fixed, not scrollable
                     Rectangle {
                         id: videoDropZone
-                        anchors.top: videoSettingsHeadingRow.bottom
-                        anchors.topMargin: 12
+                        anchors.top: videoSourceLabel.bottom
+                        anchors.topMargin: 6
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
@@ -5576,7 +6387,6 @@ Window {
                             property real propH: 150
                             property bool propLock: false
                             property string propName: ""
-
                         }
                     }
                 }
@@ -5625,7 +6435,6 @@ Window {
                             color: "white"
                             anchors.verticalCenter: parent.verticalCenter
                         }
-
                     }
 
                     ScrollView {
@@ -5644,414 +6453,310 @@ Window {
                             width: textPropsScroll.availableWidth - 14
                             spacing: 8
 
-                    Column {
-                        id: textFormattingCol
-                        width: parent.width
-                        spacing: 8
+                            Column {
+                                id: textFormattingCol
+                                width: parent.width
+                                spacing: 8
 
-                        // Font family
-                        ComboBox {
-                            id: familyCombo
-                            width: parent.width
-                            height: 26
-                            model: textSettings.fontFamilies
-                            currentIndex: textSettings.txtFamilyIndex
-                            onCurrentIndexChanged: textSettings.txtFamilyIndex = currentIndex
+                                // Font family
+                                ComboBox {
+                                    id: familyCombo
+                                    width: parent.width
+                                    height: 26
+                                    model: textSettings.fontFamilies
+                                    currentIndex: textSettings.txtFamilyIndex
+                                    onCurrentIndexChanged: textSettings.txtFamilyIndex = currentIndex
 
-                            contentItem: Text {
-                                leftPadding: 6
-                                rightPadding: 24
-                                text: familyCombo.displayText
-                                font.pixelSize: 11
-                                color: "white"
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
-                            indicator: Text {
-                                x: familyCombo.width - width - 6
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: "▾"
-                                font.pixelSize: 10
-                                color: "white"
-                            }
-                            background: Rectangle {
-                                radius: 4
-                                color: "transparent"
-                                border.color: "white"
-                                border.width: 1
-                            }
-                            popup: Popup {
-                                y: familyCombo.height + 2
-                                width: familyCombo.width
-                                height: Math.min(familyListView.contentHeight, 180)
-                                padding: 1
-                                background: Rectangle {
-                                    color: "#162020"
-                                    border.color: "white"
-                                    border.width: 1
-                                    radius: 4
-                                }
-                                contentItem: ListView {
-                                    id: familyListView
-                                    clip: true
-                                    model: familyCombo.delegateModel
-                                    currentIndex: familyCombo.currentIndex
-                                    ScrollBar.vertical: ScrollBar {}
-                                }
-                            }
-                            delegate: ItemDelegate {
-                                width: familyCombo.width
-                                height: 22
-                                padding: 0
-                                highlighted: familyCombo.highlightedIndex === index
-                                contentItem: Text {
-                                    text: modelData
-                                    font.pixelSize: 11
-                                    color: "white"
-                                    verticalAlignment: Text.AlignVCenter
-                                    leftPadding: 6
-                                }
-                                background: Rectangle {
-                                    color: familyCombo.highlightedIndex === index ? "#477B78" : "transparent"
-                                }
-                            }
-                        }
-
-                        // Weight + size
-                        RowLayout {
-                            width: parent.width
-                            spacing: 6
-
-                            ComboBox {
-                                id: weightCombo
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 26
-                                model: textSettings.weightNames
-                                currentIndex: textSettings.txtWeightIndex
-                                onCurrentIndexChanged: textSettings.txtWeightIndex = currentIndex
-
-                                contentItem: Text {
-                                    leftPadding: 6
-                                    rightPadding: 24
-                                    text: weightCombo.displayText
-                                    font.pixelSize: 11
-                                    color: "white"
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                indicator: Text {
-                                    x: weightCombo.width - width - 6
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: "▾"
-                                    font.pixelSize: 10
-                                    color: "white"
-                                }
-                                background: Rectangle {
-                                    radius: 4
-                                    color: nodeCombo.hovered ? "#3a4a4a" : "transparent"
-                                    border.color: "white"
-                                    border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 100 } }
-                                }
-                                popup: Popup {
-                                    y: weightCombo.height + 2
-                                    width: weightCombo.width
-                                    height: Math.min(weightListView.contentHeight, 220)
-                                    padding: 1
-                                    background: Rectangle {
-                                        color: "#162020"
-                                        border.color: "white"
-                                        border.width: 1
-                                        radius: 4
-                                    }
-                                    contentItem: ListView {
-                                        id: weightListView
-                                        clip: true
-                                        model: weightCombo.delegateModel
-                                        currentIndex: weightCombo.currentIndex
-                                    }
-                                }
-                                delegate: ItemDelegate {
-                                    width: weightCombo.width
-                                    height: 22
-                                    padding: 0
-                                    highlighted: weightCombo.highlightedIndex === index
                                     contentItem: Text {
-                                        text: modelData
+                                        leftPadding: 6
+                                        rightPadding: 24
+                                        text: familyCombo.displayText
                                         font.pixelSize: 11
                                         color: "white"
                                         verticalAlignment: Text.AlignVCenter
-                                        leftPadding: 6
+                                        elide: Text.ElideRight
+                                    }
+                                    indicator: Text {
+                                        x: familyCombo.width - width - 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "▾"
+                                        font.pixelSize: 10
+                                        color: "white"
                                     }
                                     background: Rectangle {
-                                        color: weightCombo.highlightedIndex === index ? "#477B78" : "transparent"
+                                        radius: 4
+                                        color: "transparent"
+                                        border.color: "white"
+                                        border.width: 1
                                     }
-                                }
-                            }
-
-                            // Size (px)
-                            Rectangle {
-                                Layout.preferredWidth: 52
-                                Layout.preferredHeight: 26
-                                color: "transparent"
-                                border.color: "white"
-                                border.width: 1
-                                radius: 4
-
-                                TextInput {
-                                    anchors.fill: parent
-                                    anchors.margins: 9
-                                    color: "white"
-                                    font.pixelSize: 11
-                                    horizontalAlignment: TextInput.AlignHCenter
-                                    text: textSettings.txtSize.toString()
-                                    validator: IntValidator {
-                                        bottom: 6
-                                        top: 999
+                                    popup: Popup {
+                                        y: familyCombo.height + 2
+                                        width: familyCombo.width
+                                        height: Math.min(familyListView.contentHeight, 180)
+                                        padding: 1
+                                        background: Rectangle {
+                                            color: "#162020"
+                                            border.color: "white"
+                                            border.width: 1
+                                            radius: 4
+                                        }
+                                        contentItem: ListView {
+                                            id: familyListView
+                                            clip: true
+                                            model: familyCombo.delegateModel
+                                            currentIndex: familyCombo.currentIndex
+                                            ScrollBar.vertical: ScrollBar {}
+                                        }
                                     }
-                                    selectByMouse: true
-                                    Keys.onReturnPressed: focus = false
-                                    Keys.onEscapePressed: focus = false
-                                    onEditingFinished: textSettings.txtSize = parseInt(text) || 16
-                                }
-                            }
-                        }
-
-                        // Bold / Italic / Underline + color
-                        RowLayout {
-                            width: parent.width
-                            spacing: 6
-
-                            Rectangle {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                radius: 4
-                                property bool on: textSettings.txtBold
-                                color: on ? "white" : "transparent"
-                                border.color: "white"
-                                border.width: 1
-                                Behavior on color {
-                                    ColorAnimation {
-                                        duration: 100
-                                    }
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    anchors.verticalCenterOffset: 0
-                                    anchors.horizontalCenterOffset: -0.5
-                                    text: "B"
-                                    font.pixelSize: 13
-                                    font.bold: true
-                                    color: parent.on ? "darkslategrey" : "white"
-                                    Behavior on color {
-                                        ColorAnimation {
-                                            duration: 100
+                                    delegate: ItemDelegate {
+                                        width: familyCombo.width
+                                        height: 22
+                                        padding: 0
+                                        highlighted: familyCombo.highlightedIndex === index
+                                        contentItem: Text {
+                                            text: modelData
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            verticalAlignment: Text.AlignVCenter
+                                            leftPadding: 6
+                                        }
+                                        background: Rectangle {
+                                            color: familyCombo.highlightedIndex === index ? "#477B78" : "transparent"
                                         }
                                     }
                                 }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: textSettings.txtBold = !textSettings.txtBold
-                                }
-                            }
 
-                            Rectangle {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                radius: 4
-                                property bool on: textSettings.txtItalic
-                                color: on ? "white" : "transparent"
-                                border.color: "white"
-                                border.width: 1
-                                Behavior on color {
-                                    ColorAnimation {
-                                        duration: 100
+                                // Weight + size
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 6
+
+                                    ComboBox {
+                                        id: weightCombo
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 26
+                                        model: textSettings.weightNames
+                                        currentIndex: textSettings.txtWeightIndex
+                                        onCurrentIndexChanged: textSettings.txtWeightIndex = currentIndex
+
+                                        contentItem: Text {
+                                            leftPadding: 6
+                                            rightPadding: 24
+                                            text: weightCombo.displayText
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        indicator: Text {
+                                            x: weightCombo.width - width - 6
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "▾"
+                                            font.pixelSize: 10
+                                            color: "white"
+                                        }
+                                        background: Rectangle {
+                                            radius: 4
+                                            color: nodeCombo.hovered ? "#3a4a4a" : "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        popup: Popup {
+                                            y: weightCombo.height + 2
+                                            width: weightCombo.width
+                                            height: Math.min(weightListView.contentHeight, 220)
+                                            padding: 1
+                                            background: Rectangle {
+                                                color: "#162020"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+                                            }
+                                            contentItem: ListView {
+                                                id: weightListView
+                                                clip: true
+                                                model: weightCombo.delegateModel
+                                                currentIndex: weightCombo.currentIndex
+                                            }
+                                        }
+                                        delegate: ItemDelegate {
+                                            width: weightCombo.width
+                                            height: 22
+                                            padding: 0
+                                            highlighted: weightCombo.highlightedIndex === index
+                                            contentItem: Text {
+                                                text: modelData
+                                                font.pixelSize: 11
+                                                color: "white"
+                                                verticalAlignment: Text.AlignVCenter
+                                                leftPadding: 6
+                                            }
+                                            background: Rectangle {
+                                                color: weightCombo.highlightedIndex === index ? "#477B78" : "transparent"
+                                            }
+                                        }
                                     }
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    anchors.verticalCenterOffset: 0
-                                    anchors.horizontalCenterOffset: -0.5
-                                    text: "I"
-                                    font.pixelSize: 13
-                                    font.italic: true
-                                    color: parent.on ? "darkslategrey" : "white"
-                                    Behavior on color {
-                                        ColorAnimation {
-                                            duration: 100
+
+                                    // Size (px)
+                                    Rectangle {
+                                        Layout.preferredWidth: 52
+                                        Layout.preferredHeight: 26
+                                        color: "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        radius: 4
+
+                                        TextInput {
+                                            anchors.fill: parent
+                                            anchors.margins: 9
+                                            color: "white"
+                                            font.pixelSize: 11
+                                            horizontalAlignment: TextInput.AlignHCenter
+                                            text: textSettings.txtSize.toString()
+                                            validator: IntValidator {
+                                                bottom: 6
+                                                top: 999
+                                            }
+                                            selectByMouse: true
+                                            Keys.onReturnPressed: focus = false
+                                            Keys.onEscapePressed: focus = false
+                                            onEditingFinished: textSettings.txtSize = parseInt(text) || 16
                                         }
                                     }
                                 }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: textSettings.txtItalic = !textSettings.txtItalic
-                                }
-                            }
 
-                            Rectangle {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                radius: 4
-                                property bool on: textSettings.txtUnderline
-                                color: on ? "white" : "transparent"
-                                border.color: "white"
-                                border.width: 1
-                                Behavior on color {
-                                    ColorAnimation {
-                                        duration: 100
+                                // Bold / Italic / Underline + color
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 6
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        radius: 4
+                                        property bool on: textSettings.txtBold
+                                        color: on ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            anchors.verticalCenterOffset: 0
+                                            anchors.horizontalCenterOffset: -0.5
+                                            text: "B"
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            color: parent.on ? "darkslategrey" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: textSettings.txtBold = !textSettings.txtBold
+                                        }
                                     }
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    anchors.verticalCenterOffset: 0
-                                    anchors.horizontalCenterOffset: -0.5
-                                    text: "U"
-                                    font.pixelSize: 13
-                                    font.underline: true
-                                    color: parent.on ? "darkslategrey" : "white"
-                                    Behavior on color {
-                                        ColorAnimation {
-                                            duration: 100
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        radius: 4
+                                        property bool on: textSettings.txtItalic
+                                        color: on ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            anchors.verticalCenterOffset: 0
+                                            anchors.horizontalCenterOffset: -0.5
+                                            text: "I"
+                                            font.pixelSize: 13
+                                            font.italic: true
+                                            color: parent.on ? "darkslategrey" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: textSettings.txtItalic = !textSettings.txtItalic
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        radius: 4
+                                        property bool on: textSettings.txtUnderline
+                                        color: on ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            anchors.verticalCenterOffset: 0
+                                            anchors.horizontalCenterOffset: -0.5
+                                            text: "U"
+                                            font.pixelSize: 13
+                                            font.underline: true
+                                            color: parent.on ? "darkslategrey" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: textSettings.txtUnderline = !textSettings.txtUnderline
+                                        }
+                                    }
+
+                                    Item {
+                                        Layout.fillWidth: true
+                                    }
+
+                                    // Color swatch
+                                    Rectangle {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        radius: 4
+                                        color: textSettings.txtColor
+                                        border.color: "white"
+                                        border.width: 1
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: txtColorDialog.open()
                                         }
                                     }
                                 }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: textSettings.txtUnderline = !textSettings.txtUnderline
-                                }
                             }
 
-                            Item {
-                                Layout.fillWidth: true
+                            QtObject {
+                                id: textSpatialProps
+                                property string propName: ""
                             }
-
-                            // Color swatch
-                            Rectangle {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                radius: 4
-                                color: textSettings.txtColor
-                                border.color: "white"
-                                border.width: 1
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: txtColorDialog.open()
-                                }
-                            }
-                        }
-                    }
-
-                    Text {
-                        text: "information"
-                        font.pixelSize: 11
-                        font.capitalization: Font.AllUppercase
-                        font.letterSpacing: 1
-                        color: "white"
-                        width: parent.width
-                        bottomPadding: 6
-                    }
-
-                    Column {
-                        id: textSpatialProps
-                        width: parent.width
-                        spacing: 4
-
-                        property real propX: 0
-                        property real propY: 0
-                        property real propW: 200
-                        property real propH: 150
-                        property bool propLock: false
-                        property string propName: ""
-
-                        // Row 1: name (full width)
-                        RowLayout {
-                            width: textSpatialProps.width; height: 26; spacing: 4
-                            Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
-                            Rectangle {
-                                Layout.fillWidth: true; height: 26
-                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                TextInput {
-                                    anchors.fill: parent; anchors.margins: 3
-                                    color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                    text: textSpatialProps.propName
-                                    Keys.onReturnPressed: focus = false
-                                    Keys.onEscapePressed: focus = false
-                                    onEditingFinished: textSpatialProps.propName = text
-                                }
-                            }
-                        }
-
-                        // Row 2: x | y
-                        Row {
-                            width: textSpatialProps.width; height: 26; spacing: 6
-                            RowLayout {
-                                width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                Text { text: "x"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    Layout.fillWidth: true; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: textSpatialProps.propX.toFixed(0)
-                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                        onEditingFinished: textSpatialProps.propX = parseFloat(text) || 0
-                                    }
-                                }
-                            }
-                            RowLayout {
-                                width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                Text { text: "width"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    Layout.fillWidth: true; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: textSpatialProps.propW.toFixed(0)
-                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                        onEditingFinished: textSpatialProps.propW = parseFloat(text) || 0
-                                    }
-                                }
-                            }
-                        }
-
-                        // Row 3: y | height
-                        Row {
-                            width: textSpatialProps.width; height: 26; spacing: 6
-                            RowLayout {
-                                width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                Text { text: "y"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    Layout.fillWidth: true; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: textSpatialProps.propY.toFixed(0)
-                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                        onEditingFinished: textSpatialProps.propY = parseFloat(text) || 0
-                                    }
-                                }
-                            }
-                            RowLayout {
-                                width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                Text { text: "height"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
-                                Rectangle {
-                                    Layout.fillWidth: true; height: 26
-                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                    TextInput {
-                                        anchors.fill: parent; anchors.margins: 3
-                                        color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
-                                        text: textSpatialProps.propH.toFixed(0)
-                                        Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                        onEditingFinished: textSpatialProps.propH = parseFloat(text) || 0
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Item { width: 1; height: 8 }
                         }  // close outer Column
                     }  // close ScrollView
 
@@ -6070,7 +6775,6 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
-
                     readonly property bool hasActiveArea: (viewport.selectionRevision >= 0) && viewport.selectedAreas.length === 1 && viewport.selectionCount === 1
                     readonly property bool hasActiveTb: (viewport.selectionRevision >= 0) && viewport.selectedTbs.length === 1 && viewport.selectionCount === 1
                     readonly property bool hasActiveImage: (viewport.selectionRevision >= 0) && viewport.selectedImages.length === 1 && viewport.selectionCount === 1
@@ -6082,43 +6786,54 @@ Window {
                     property int syncedIdx: -1
 
                     function saveCurrentInteractivity() {
-                        if (syncedIdx < 0) return
-                        var json = viewport.serializeInteractivityModel(selectInteractivityModel)
-                        if      (syncedType === "area"   && syncedIdx < viewport.areasModel.count)      viewport.areasModel.setProperty(syncedIdx,      "interactivityJson", json)
-                        else if (syncedType === "tb"     && syncedIdx < viewport.textBoxesModel.count)   viewport.textBoxesModel.setProperty(syncedIdx,   "interactivityJson", json)
-                        else if (syncedType === "image"  && syncedIdx < viewport.imagesModel.count)      viewport.imagesModel.setProperty(syncedIdx,      "interactivityJson", json)
-                        else if (syncedType === "video"  && syncedIdx < viewport.videosModel.count)      viewport.videosModel.setProperty(syncedIdx,      "interactivityJson", json)
-                        else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count)     viewport.shadersModel.setProperty(syncedIdx,     "interactivityJson", json)
+                        if (syncedIdx < 0)
+                            return;
+                        var json = viewport.serializeInteractivityModel(selectInteractivityModel);
+                        if (syncedType === "area" && syncedIdx < viewport.areasModel.count)
+                            viewport.areasModel.setProperty(syncedIdx, "interactivityJson", json);
+                        else if (syncedType === "tb" && syncedIdx < viewport.textBoxesModel.count)
+                            viewport.textBoxesModel.setProperty(syncedIdx, "interactivityJson", json);
+                        else if (syncedType === "image" && syncedIdx < viewport.imagesModel.count)
+                            viewport.imagesModel.setProperty(syncedIdx, "interactivityJson", json);
+                        else if (syncedType === "video" && syncedIdx < viewport.videosModel.count)
+                            viewport.videosModel.setProperty(syncedIdx, "interactivityJson", json);
+                        else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count)
+                            viewport.shadersModel.setProperty(syncedIdx, "interactivityJson", json);
                     }
 
                     // Load/save interactivity whenever the selection changes.
                     Connections {
                         target: viewport
                         function onSelectionRevisionChanged() {
-                            selectSettings.saveCurrentInteractivity()
-                            selectInteractivityModel.clear()
-                            selectSettings.syncedType = ""
-                            selectSettings.syncedIdx = -1
+                            selectSettings.saveCurrentInteractivity();
+                            selectInteractivityModel.clear();
+                            selectSettings.syncedType = "";
+                            selectSettings.syncedIdx = -1;
                             if (selectSettings.hasActiveArea) {
-                                var idx = viewport.selectedAreas[0]
-                                selectSettings.syncedType = "area"; selectSettings.syncedIdx = idx
-                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.areasModel.get(idx).interactivityJson)
+                                var idx = viewport.selectedAreas[0];
+                                selectSettings.syncedType = "area";
+                                selectSettings.syncedIdx = idx;
+                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.areasModel.get(idx).interactivityJson);
                             } else if (selectSettings.hasActiveTb) {
-                                var idx = viewport.selectedTbs[0]
-                                selectSettings.syncedType = "tb"; selectSettings.syncedIdx = idx
-                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.textBoxesModel.get(idx).interactivityJson)
+                                var idx = viewport.selectedTbs[0];
+                                selectSettings.syncedType = "tb";
+                                selectSettings.syncedIdx = idx;
+                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.textBoxesModel.get(idx).interactivityJson);
                             } else if (selectSettings.hasActiveImage) {
-                                var idx = viewport.selectedImages[0]
-                                selectSettings.syncedType = "image"; selectSettings.syncedIdx = idx
-                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.imagesModel.get(idx).interactivityJson)
+                                var idx = viewport.selectedImages[0];
+                                selectSettings.syncedType = "image";
+                                selectSettings.syncedIdx = idx;
+                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.imagesModel.get(idx).interactivityJson);
                             } else if (selectSettings.hasActiveVideo) {
-                                var idx = viewport.selectedVideos[0]
-                                selectSettings.syncedType = "video"; selectSettings.syncedIdx = idx
-                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.videosModel.get(idx).interactivityJson)
+                                var idx = viewport.selectedVideos[0];
+                                selectSettings.syncedType = "video";
+                                selectSettings.syncedIdx = idx;
+                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.videosModel.get(idx).interactivityJson);
                             } else if (selectSettings.hasActiveShader) {
-                                var idx = viewport.selectedShaders[0]
-                                selectSettings.syncedType = "shader"; selectSettings.syncedIdx = idx
-                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.shadersModel.get(idx).interactivityJson)
+                                var idx = viewport.selectedShaders[0];
+                                selectSettings.syncedType = "shader";
+                                selectSettings.syncedIdx = idx;
+                                viewport.loadInteractivityModel(selectInteractivityModel, viewport.shadersModel.get(idx).interactivityJson);
                             }
                         }
                     }
@@ -6127,7 +6842,7 @@ Window {
                     Connections {
                         target: buttonGrid
                         function onSelectedToolChanged() {
-                            selectSettings.saveCurrentInteractivity()
+                            selectSettings.saveCurrentInteractivity();
                         }
                     }
 
@@ -6138,15 +6853,23 @@ Window {
                             var idx = viewport.selectedShaders[0];
                             var data = viewport.shadersModel.get(idx);
                             var all;
-                            try { all = JSON.parse(data.uniformsJson || "[]"); } catch(e) { all = []; }
-                            shaderUniforms = all.filter(function(u) { return u.name !== "time"; });
+                            try {
+                                all = JSON.parse(data.uniformsJson || "[]");
+                            } catch (e) {
+                                all = [];
+                            }
+                            shaderUniforms = all.filter(function (u) {
+                                return u.name !== "time";
+                            });
                         } else {
                             shaderUniforms = [];
                         }
                     }
                     Connections {
                         target: viewport
-                        function onSelectionRevisionChanged() { selectSettings.refreshShaderUniforms(); }
+                        function onSelectionRevisionChanged() {
+                            selectSettings.refreshShaderUniforms();
+                        }
                     }
 
                     // Spatial state for the currently selected element
@@ -6162,11 +6885,16 @@ Window {
 
                     function syncSpatialFromModel() {
                         var m = null;
-                        if (hasActiveArea)        m = viewport.areasModel.get(viewport.selectedAreas[0]);
-                        else if (hasActiveTb)     m = viewport.textBoxesModel.get(viewport.selectedTbs[0]);
-                        else if (hasActiveImage)  m = viewport.imagesModel.get(viewport.selectedImages[0]);
-                        else if (hasActiveVideo)  m = viewport.videosModel.get(viewport.selectedVideos[0]);
-                        else if (hasActiveShader) m = viewport.shadersModel.get(viewport.selectedShaders[0]);
+                        if (hasActiveArea)
+                            m = viewport.areasModel.get(viewport.selectedAreas[0]);
+                        else if (hasActiveTb)
+                            m = viewport.textBoxesModel.get(viewport.selectedTbs[0]);
+                        else if (hasActiveImage)
+                            m = viewport.imagesModel.get(viewport.selectedImages[0]);
+                        else if (hasActiveVideo)
+                            m = viewport.videosModel.get(viewport.selectedVideos[0]);
+                        else if (hasActiveShader)
+                            m = viewport.shadersModel.get(viewport.selectedShaders[0]);
                         if (m) {
                             selX = Math.min(m.x1, m.x2);
                             selY = Math.min(m.y1, m.y2);
@@ -6181,14 +6909,26 @@ Window {
                     }
 
                     function writeLockToModel() {
-                        var idx = -1; var mod = null
-                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = viewport.areasModel }
-                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = viewport.textBoxesModel }
-                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = viewport.imagesModel }
-                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = viewport.videosModel }
-                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = viewport.shadersModel }
+                        var idx = -1;
+                        var mod = null;
+                        if (hasActiveArea) {
+                            idx = viewport.selectedAreas[0];
+                            mod = viewport.areasModel;
+                        } else if (hasActiveTb) {
+                            idx = viewport.selectedTbs[0];
+                            mod = viewport.textBoxesModel;
+                        } else if (hasActiveImage) {
+                            idx = viewport.selectedImages[0];
+                            mod = viewport.imagesModel;
+                        } else if (hasActiveVideo) {
+                            idx = viewport.selectedVideos[0];
+                            mod = viewport.videosModel;
+                        } else if (hasActiveShader) {
+                            idx = viewport.selectedShaders[0];
+                            mod = viewport.shadersModel;
+                        }
                         if (mod !== null && idx >= 0)
-                            mod.setProperty(idx, "locked", selLock)
+                            mod.setProperty(idx, "locked", selLock);
                     }
 
                     onSelLockChanged: writeLockToModel()
@@ -6196,11 +6936,22 @@ Window {
                     function writeSpatialToModel() {
                         var idx = -1;
                         var mod = null;
-                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = viewport.areasModel; }
-                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = viewport.textBoxesModel; }
-                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = viewport.imagesModel; }
-                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = viewport.videosModel; }
-                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = viewport.shadersModel; }
+                        if (hasActiveArea) {
+                            idx = viewport.selectedAreas[0];
+                            mod = viewport.areasModel;
+                        } else if (hasActiveTb) {
+                            idx = viewport.selectedTbs[0];
+                            mod = viewport.textBoxesModel;
+                        } else if (hasActiveImage) {
+                            idx = viewport.selectedImages[0];
+                            mod = viewport.imagesModel;
+                        } else if (hasActiveVideo) {
+                            idx = viewport.selectedVideos[0];
+                            mod = viewport.videosModel;
+                        } else if (hasActiveShader) {
+                            idx = viewport.selectedShaders[0];
+                            mod = viewport.shadersModel;
+                        }
                         if (mod !== null && idx >= 0) {
                             mod.setProperty(idx, "x1", selX);
                             mod.setProperty(idx, "y1", selY);
@@ -6211,30 +6962,54 @@ Window {
                     }
 
                     function writeCursorToModel() {
-                        var idx = -1; var mod = null
-                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = viewport.areasModel }
-                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = viewport.textBoxesModel }
-                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = viewport.imagesModel }
-                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = viewport.videosModel }
-                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = viewport.shadersModel }
+                        var idx = -1;
+                        var mod = null;
+                        if (hasActiveArea) {
+                            idx = viewport.selectedAreas[0];
+                            mod = viewport.areasModel;
+                        } else if (hasActiveTb) {
+                            idx = viewport.selectedTbs[0];
+                            mod = viewport.textBoxesModel;
+                        } else if (hasActiveImage) {
+                            idx = viewport.selectedImages[0];
+                            mod = viewport.imagesModel;
+                        } else if (hasActiveVideo) {
+                            idx = viewport.selectedVideos[0];
+                            mod = viewport.videosModel;
+                        } else if (hasActiveShader) {
+                            idx = viewport.selectedShaders[0];
+                            mod = viewport.shadersModel;
+                        }
                         if (mod !== null && idx >= 0) {
-                            mod.setProperty(idx, "cursor", selCursor)
-                            mod.setProperty(idx, "cursorPath", selCursorPath)
+                            mod.setProperty(idx, "cursor", selCursor);
+                            mod.setProperty(idx, "cursorPath", selCursorPath);
                         }
                     }
 
-                    onSelCursorChanged:     writeCursorToModel()
+                    onSelCursorChanged: writeCursorToModel()
                     onSelCursorPathChanged: writeCursorToModel()
 
                     function writeTemplateToModel() {
-                        var idx = -1; var mod = null
-                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = viewport.areasModel }
-                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = viewport.textBoxesModel }
-                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = viewport.imagesModel }
-                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = viewport.videosModel }
-                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = viewport.shadersModel }
+                        var idx = -1;
+                        var mod = null;
+                        if (hasActiveArea) {
+                            idx = viewport.selectedAreas[0];
+                            mod = viewport.areasModel;
+                        } else if (hasActiveTb) {
+                            idx = viewport.selectedTbs[0];
+                            mod = viewport.textBoxesModel;
+                        } else if (hasActiveImage) {
+                            idx = viewport.selectedImages[0];
+                            mod = viewport.imagesModel;
+                        } else if (hasActiveVideo) {
+                            idx = viewport.selectedVideos[0];
+                            mod = viewport.videosModel;
+                        } else if (hasActiveShader) {
+                            idx = viewport.selectedShaders[0];
+                            mod = viewport.shadersModel;
+                        }
                         if (mod !== null && idx >= 0)
-                            mod.setProperty(idx, "template", selTemplate)
+                            mod.setProperty(idx, "template", selTemplate);
                     }
 
                     onSelTemplateChanged: writeTemplateToModel()
@@ -6242,20 +7017,38 @@ Window {
                     function writeNameToModel(n) {
                         var idx = -1;
                         var mod = null;
-                        if (hasActiveArea)        { idx = viewport.selectedAreas[0];   mod = viewport.areasModel; }
-                        else if (hasActiveTb)     { idx = viewport.selectedTbs[0];     mod = viewport.textBoxesModel; }
-                        else if (hasActiveImage)  { idx = viewport.selectedImages[0];  mod = viewport.imagesModel; }
-                        else if (hasActiveVideo)  { idx = viewport.selectedVideos[0];  mod = viewport.videosModel; }
-                        else if (hasActiveShader) { idx = viewport.selectedShaders[0]; mod = viewport.shadersModel; }
+                        if (hasActiveArea) {
+                            idx = viewport.selectedAreas[0];
+                            mod = viewport.areasModel;
+                        } else if (hasActiveTb) {
+                            idx = viewport.selectedTbs[0];
+                            mod = viewport.textBoxesModel;
+                        } else if (hasActiveImage) {
+                            idx = viewport.selectedImages[0];
+                            mod = viewport.imagesModel;
+                        } else if (hasActiveVideo) {
+                            idx = viewport.selectedVideos[0];
+                            mod = viewport.videosModel;
+                        } else if (hasActiveShader) {
+                            idx = viewport.selectedShaders[0];
+                            mod = viewport.shadersModel;
+                        }
                         if (mod !== null && idx >= 0)
                             mod.setProperty(idx, "name", n);
                     }
 
                     Connections {
                         target: viewport
-                        function onSelectionRevisionChanged() { selectSettings.syncSpatialFromModel(); }
-                        function onPosRevisionChanged()       { selectSettings.syncSpatialFromModel(); }
-                        function onElementDraggingChanged()   { if (!viewport.elementDragging) selectSettings.syncSpatialFromModel(); }
+                        function onSelectionRevisionChanged() {
+                            selectSettings.syncSpatialFromModel();
+                        }
+                        function onPosRevisionChanged() {
+                            selectSettings.syncSpatialFromModel();
+                        }
+                        function onElementDraggingChanged() {
+                            if (!viewport.elementDragging)
+                                selectSettings.syncSpatialFromModel();
+                        }
                     }
 
                     // Local state for editing the active text box's formatting
@@ -6319,23 +7112,35 @@ Window {
 
                         Rectangle {
                             visible: selectSettings.hasActiveArea || selectSettings.hasActiveTb || selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
-                            width: 22; height: 22
+                            width: 22
+                            height: 22
                             anchors.verticalCenter: parent.verticalCenter
                             radius: 4
                             color: selectSettings.selLock ? "white" : "transparent"
-                            border.color: "white"; border.width: 1
-                            Behavior on color { ColorAnimation { duration: 100 } }
+                            border.color: "white"
+                            border.width: 1
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 100
+                                }
+                            }
                             Image {
                                 id: lockIconSel
-                                anchors.fill: parent; anchors.margins: 4
+                                anchors.fill: parent
+                                anchors.margins: 4
                                 source: "icons/lock.svg"
                                 fillMode: Image.PreserveAspectFit
                                 visible: false
                             }
                             ColorOverlay {
-                                anchors.fill: lockIconSel; source: lockIconSel
+                                anchors.fill: lockIconSel
+                                source: lockIconSel
                                 color: selectSettings.selLock ? "#477B78" : "white"
-                                Behavior on color { ColorAnimation { duration: 100 } }
+                                Behavior on color {
+                                    ColorAnimation {
+                                        duration: 100
+                                    }
+                                }
                             }
                             MouseArea {
                                 anchors.fill: parent
@@ -6344,7 +7149,9 @@ Window {
                         }
                     }
 
-                    ListModel { id: selectInteractivityModel }
+                    ListModel {
+                        id: selectInteractivityModel
+                    }
 
                     ScrollView {
                         id: selectPropsScroll
@@ -6369,415 +7176,542 @@ Window {
                                 spacing: 8
                                 enabled: !selectSettings.selLock
                                 opacity: selectSettings.selLock ? 0.4 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                        // Font family
-                        ComboBox {
-                            id: selFamilyCombo
-                            width: parent.width
-                            height: 26
-                            model: selectSettings.fontFamilies
-                            currentIndex: selectSettings.tbFamilyIndex
-                            onCurrentIndexChanged: {
-                                selectSettings.tbFamilyIndex = currentIndex;
-                                selectSettings.applyTbFormatting();
-                            }
-                            contentItem: Text {
-                                leftPadding: 6
-                                rightPadding: 24
-                                text: selFamilyCombo.displayText
-                                font.pixelSize: 11
-                                color: "white"
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
-                            indicator: Text {
-                                x: selFamilyCombo.width - width - 6
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: "▾"
-                                font.pixelSize: 10
-                                color: "white"
-                            }
-                            background: Rectangle {
-                                radius: 4
-                                color: "transparent"
-                                border.color: "white"
-                                border.width: 1
-                            }
-                            popup: Popup {
-                                y: selFamilyCombo.height + 2
-                                width: selFamilyCombo.width
-                                height: Math.min(selFamilyListView.contentHeight, 180)
-                                padding: 1
-                                background: Rectangle {
-                                    color: "#162020"
-                                    border.color: "white"
-                                    border.width: 1
-                                    radius: 4
-                                }
-                                contentItem: ListView {
-                                    id: selFamilyListView
-                                    clip: true
-                                    model: selFamilyCombo.delegateModel
-                                    currentIndex: selFamilyCombo.currentIndex
-                                    ScrollBar.vertical: ScrollBar {}
-                                }
-                            }
-                            delegate: ItemDelegate {
-                                width: selFamilyCombo.width
-                                height: 22
-                                padding: 0
-                                highlighted: selFamilyCombo.highlightedIndex === index
-                                contentItem: Text {
-                                    text: modelData
-                                    font.pixelSize: 11
-                                    color: "white"
-                                    verticalAlignment: Text.AlignVCenter
-                                    leftPadding: 6
-                                }
-                                background: Rectangle {
-                                    color: selFamilyCombo.highlightedIndex === index ? "#477B78" : "transparent"
-                                }
-                            }
-                        }
-
-                        // Weight + size
-                        RowLayout {
-                            width: parent.width
-                            spacing: 6
-
-                            ComboBox {
-                                id: selWeightCombo
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 26
-                                model: textSettings.weightNames
-                                currentIndex: selectSettings.tbWeightIndex
-                                onCurrentIndexChanged: {
-                                    selectSettings.tbWeightIndex = currentIndex;
-                                    selectSettings.applyTbFormatting();
-                                }
-                                contentItem: Text {
-                                    leftPadding: 6
-                                    rightPadding: 24
-                                    text: selWeightCombo.displayText
-                                    font.pixelSize: 11
-                                    color: "white"
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                                indicator: Text {
-                                    x: selWeightCombo.width - width - 6
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: "▾"
-                                    font.pixelSize: 10
-                                    color: "white"
-                                }
-                                background: Rectangle {
-                                    radius: 4
-                                    color: nodeCombo.hovered ? "#3a4a4a" : "transparent"
-                                    border.color: "white"
-                                    border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 100 } }
-                                }
-                                popup: Popup {
-                                    y: selWeightCombo.height + 2
-                                    width: selWeightCombo.width
-                                    height: Math.min(selWeightListView.contentHeight, 220)
-                                    padding: 1
-                                    background: Rectangle {
-                                        color: "#162020"
-                                        border.color: "white"
-                                        border.width: 1
-                                        radius: 4
-                                    }
-                                    contentItem: ListView {
-                                        id: selWeightListView
-                                        clip: true
-                                        model: selWeightCombo.delegateModel
-                                        currentIndex: selWeightCombo.currentIndex
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: 150
                                     }
                                 }
-                                delegate: ItemDelegate {
-                                    width: selWeightCombo.width
-                                    height: 22
-                                    padding: 0
-                                    highlighted: selWeightCombo.highlightedIndex === index
+
+                                // Font family
+                                ComboBox {
+                                    id: selFamilyCombo
+                                    width: parent.width
+                                    height: 26
+                                    model: selectSettings.fontFamilies
+                                    currentIndex: selectSettings.tbFamilyIndex
+                                    onCurrentIndexChanged: {
+                                        selectSettings.tbFamilyIndex = currentIndex;
+                                        selectSettings.applyTbFormatting();
+                                    }
                                     contentItem: Text {
-                                        text: modelData
+                                        leftPadding: 6
+                                        rightPadding: 24
+                                        text: selFamilyCombo.displayText
                                         font.pixelSize: 11
                                         color: "white"
                                         verticalAlignment: Text.AlignVCenter
-                                        leftPadding: 6
+                                        elide: Text.ElideRight
+                                    }
+                                    indicator: Text {
+                                        x: selFamilyCombo.width - width - 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "▾"
+                                        font.pixelSize: 10
+                                        color: "white"
                                     }
                                     background: Rectangle {
-                                        color: selWeightCombo.highlightedIndex === index ? "#477B78" : "transparent"
+                                        radius: 4
+                                        color: "transparent"
+                                        border.color: "white"
+                                        border.width: 1
                                     }
-                                }
-                            }
-
-                            Rectangle {
-                                Layout.preferredWidth: 52
-                                Layout.preferredHeight: 26
-                                color: "transparent"
-                                border.color: "white"
-                                border.width: 1
-                                radius: 4
-                                TextInput {
-                                    anchors.fill: parent
-                                    anchors.margins: 9
-                                    color: "white"
-                                    font.pixelSize: 11
-                                    horizontalAlignment: TextInput.AlignHCenter
-                                    readOnly: selectSettings.selLock
-                                    text: selectSettings.tbSize.toString()
-                                    validator: IntValidator {
-                                        bottom: 6
-                                        top: 999
+                                    popup: Popup {
+                                        y: selFamilyCombo.height + 2
+                                        width: selFamilyCombo.width
+                                        height: Math.min(selFamilyListView.contentHeight, 180)
+                                        padding: 1
+                                        background: Rectangle {
+                                            color: "#162020"
+                                            border.color: "white"
+                                            border.width: 1
+                                            radius: 4
+                                        }
+                                        contentItem: ListView {
+                                            id: selFamilyListView
+                                            clip: true
+                                            model: selFamilyCombo.delegateModel
+                                            currentIndex: selFamilyCombo.currentIndex
+                                            ScrollBar.vertical: ScrollBar {}
+                                        }
                                     }
-                                    selectByMouse: true
-                                    Keys.onReturnPressed: focus = false
-                                    Keys.onEscapePressed: focus = false
-                                    onEditingFinished: {
-                                        selectSettings.tbSize = parseInt(text) || 16;
-                                        selectSettings.applyTbFormatting();
-                                    }
-                                }
-                            }
-                        }
-
-                        // Bold / Italic / Underline + color
-                        RowLayout {
-                            width: parent.width
-                            spacing: 6
-
-                            Rectangle {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                radius: 4
-                                property bool on: selectSettings.tbBold
-                                color: on ? "white" : "transparent"
-                                border.color: "white"
-                                border.width: 1
-                                Behavior on color {
-                                    ColorAnimation {
-                                        duration: 100
-                                    }
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    anchors.verticalCenterOffset: 0
-                                    anchors.horizontalCenterOffset: -0.5
-                                    text: "B"
-                                    font.pixelSize: 13
-                                    font.bold: true
-                                    color: parent.on ? "darkslategrey" : "white"
-                                    Behavior on color {
-                                        ColorAnimation {
-                                            duration: 100
+                                    delegate: ItemDelegate {
+                                        width: selFamilyCombo.width
+                                        height: 22
+                                        padding: 0
+                                        highlighted: selFamilyCombo.highlightedIndex === index
+                                        contentItem: Text {
+                                            text: modelData
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            verticalAlignment: Text.AlignVCenter
+                                            leftPadding: 6
+                                        }
+                                        background: Rectangle {
+                                            color: selFamilyCombo.highlightedIndex === index ? "#477B78" : "transparent"
                                         }
                                     }
                                 }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: {
-                                        selectSettings.tbBold = !selectSettings.tbBold;
-                                        selectSettings.applyTbFormatting();
-                                    }
-                                }
-                            }
 
-                            Rectangle {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                radius: 4
-                                property bool on: selectSettings.tbItalic
-                                color: on ? "white" : "transparent"
-                                border.color: "white"
-                                border.width: 1
-                                Behavior on color {
-                                    ColorAnimation {
-                                        duration: 100
+                                // Weight + size
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 6
+
+                                    ComboBox {
+                                        id: selWeightCombo
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 26
+                                        model: textSettings.weightNames
+                                        currentIndex: selectSettings.tbWeightIndex
+                                        onCurrentIndexChanged: {
+                                            selectSettings.tbWeightIndex = currentIndex;
+                                            selectSettings.applyTbFormatting();
+                                        }
+                                        contentItem: Text {
+                                            leftPadding: 6
+                                            rightPadding: 24
+                                            text: selWeightCombo.displayText
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        indicator: Text {
+                                            x: selWeightCombo.width - width - 6
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "▾"
+                                            font.pixelSize: 10
+                                            color: "white"
+                                        }
+                                        background: Rectangle {
+                                            radius: 4
+                                            color: nodeCombo.hovered ? "#3a4a4a" : "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        popup: Popup {
+                                            y: selWeightCombo.height + 2
+                                            width: selWeightCombo.width
+                                            height: Math.min(selWeightListView.contentHeight, 220)
+                                            padding: 1
+                                            background: Rectangle {
+                                                color: "#162020"
+                                                border.color: "white"
+                                                border.width: 1
+                                                radius: 4
+                                            }
+                                            contentItem: ListView {
+                                                id: selWeightListView
+                                                clip: true
+                                                model: selWeightCombo.delegateModel
+                                                currentIndex: selWeightCombo.currentIndex
+                                            }
+                                        }
+                                        delegate: ItemDelegate {
+                                            width: selWeightCombo.width
+                                            height: 22
+                                            padding: 0
+                                            highlighted: selWeightCombo.highlightedIndex === index
+                                            contentItem: Text {
+                                                text: modelData
+                                                font.pixelSize: 11
+                                                color: "white"
+                                                verticalAlignment: Text.AlignVCenter
+                                                leftPadding: 6
+                                            }
+                                            background: Rectangle {
+                                                color: selWeightCombo.highlightedIndex === index ? "#477B78" : "transparent"
+                                            }
+                                        }
                                     }
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    anchors.verticalCenterOffset: 0
-                                    anchors.horizontalCenterOffset: -0.5
-                                    text: "I"
-                                    font.pixelSize: 13
-                                    font.italic: true
-                                    color: parent.on ? "darkslategrey" : "white"
-                                    Behavior on color {
-                                        ColorAnimation {
-                                            duration: 100
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 52
+                                        Layout.preferredHeight: 26
+                                        color: "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        radius: 4
+                                        TextInput {
+                                            anchors.fill: parent
+                                            anchors.margins: 9
+                                            color: "white"
+                                            font.pixelSize: 11
+                                            horizontalAlignment: TextInput.AlignHCenter
+                                            readOnly: selectSettings.selLock
+                                            text: selectSettings.tbSize.toString()
+                                            validator: IntValidator {
+                                                bottom: 6
+                                                top: 999
+                                            }
+                                            selectByMouse: true
+                                            Keys.onReturnPressed: focus = false
+                                            Keys.onEscapePressed: focus = false
+                                            onEditingFinished: {
+                                                selectSettings.tbSize = parseInt(text) || 16;
+                                                selectSettings.applyTbFormatting();
+                                            }
                                         }
                                     }
                                 }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: {
-                                        selectSettings.tbItalic = !selectSettings.tbItalic;
-                                        selectSettings.applyTbFormatting();
-                                    }
-                                }
-                            }
 
-                            Rectangle {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                radius: 4
-                                property bool on: selectSettings.tbUnderline
-                                color: on ? "white" : "transparent"
-                                border.color: "white"
-                                border.width: 1
-                                Behavior on color {
-                                    ColorAnimation {
-                                        duration: 100
+                                // Bold / Italic / Underline + color
+                                RowLayout {
+                                    width: parent.width
+                                    spacing: 6
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        radius: 4
+                                        property bool on: selectSettings.tbBold
+                                        color: on ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            anchors.verticalCenterOffset: 0
+                                            anchors.horizontalCenterOffset: -0.5
+                                            text: "B"
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            color: parent.on ? "darkslategrey" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: {
+                                                selectSettings.tbBold = !selectSettings.tbBold;
+                                                selectSettings.applyTbFormatting();
+                                            }
+                                        }
                                     }
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    anchors.verticalCenterOffset: 0
-                                    anchors.horizontalCenterOffset: -0.5
-                                    text: "U"
-                                    font.pixelSize: 13
-                                    font.underline: true
-                                    color: parent.on ? "darkslategrey" : "white"
-                                    Behavior on color {
-                                        ColorAnimation {
-                                            duration: 100
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        radius: 4
+                                        property bool on: selectSettings.tbItalic
+                                        color: on ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            anchors.verticalCenterOffset: 0
+                                            anchors.horizontalCenterOffset: -0.5
+                                            text: "I"
+                                            font.pixelSize: 13
+                                            font.italic: true
+                                            color: parent.on ? "darkslategrey" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: {
+                                                selectSettings.tbItalic = !selectSettings.tbItalic;
+                                                selectSettings.applyTbFormatting();
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        radius: 4
+                                        property bool on: selectSettings.tbUnderline
+                                        color: on ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            anchors.verticalCenterOffset: 0
+                                            anchors.horizontalCenterOffset: -0.5
+                                            text: "U"
+                                            font.pixelSize: 13
+                                            font.underline: true
+                                            color: parent.on ? "darkslategrey" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: {
+                                                selectSettings.tbUnderline = !selectSettings.tbUnderline;
+                                                selectSettings.applyTbFormatting();
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        Layout.fillWidth: true
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        radius: 4
+                                        color: selectSettings.tbColor
+                                        border.color: "white"
+                                        border.width: 1
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: selTxtColorDialog.open()
                                         }
                                     }
                                 }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: {
-                                        selectSettings.tbUnderline = !selectSettings.tbUnderline;
-                                        selectSettings.applyTbFormatting();
-                                    }
-                                }
-                            }
-
-                            Item {
-                                Layout.fillWidth: true
-                            }
-
-                            Rectangle {
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                radius: 4
-                                color: selectSettings.tbColor
-                                border.color: "white"
-                                border.width: 1
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: selTxtColorDialog.open()
-                                }
-                            }
-                        }
-                    }
-
-                            // Image swap — visible when a single image is selected
-                            Rectangle {
-                                visible: selectSettings.hasActiveImage
-                                width: parent.width
-                                height: 26
-                                color: "black"
-                                radius: 4
-                                enabled: !selectSettings.selLock
-                                opacity: selectSettings.selLock ? 0.4 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                            Image {
-                                id: selImageDropIcon
-                                anchors.centerIn: parent
-                                width: 20; height: 20
-                                source: "icons/dropimage.svg"
-                                fillMode: Image.PreserveAspectFit
-                                visible: false
-                            }
-                            ColorOverlay {
-                                anchors.fill: selImageDropIcon
-                                source: selImageDropIcon
-                                color: "#666"
-                                opacity: selectSettings.hasActiveImage && viewport.imagesModel.get(viewport.selectedImages[0]).filePath !== "" ? 0.3 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 100 } }
                             }
 
                             Text {
-                                anchors.fill: parent; anchors.margins: 4
-                                visible: selectSettings.hasActiveImage
-                                text: selectSettings.hasActiveImage ? viewport.imagesModel.get(viewport.selectedImages[0]).filePath.replace(/.*\//, "") : ""
+                                visible: selectSettings.hasActiveImage || selectSettings.hasActiveVideo || selectSettings.hasActiveShader
+                                text: "source"
+                                font.pixelSize: 11
+                                font.capitalization: Font.AllUppercase
+                                font.letterSpacing: 1
                                 color: "white"
-                                font.pixelSize: 10
-                                elide: Text.ElideMiddle
-                                verticalAlignment: Text.AlignVCenter
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: selectImageSwapDialog.open()
-                            }
-
-                            DropArea {
-                                anchors.fill: parent
-                                onDropped: drop => {
-                                    if (drop.hasUrls && selectSettings.hasActiveImage)
-                                        viewport.imagesModel.setProperty(viewport.selectedImages[0], "filePath", drop.urls[0].toString());
+                                width: parent.width
+                                bottomPadding: 6
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: 150
+                                    }
                                 }
                             }
+
+                            // Image swap — visible when a single image is selected
+                            RowLayout {
+                                visible: selectSettings.hasActiveImage
+                                width: parent.width
+                                height: 26
+                                spacing: 4
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: 150
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 26
+                                    color: "black"
+                                    radius: 4
+
+                                    Image {
+                                        id: selImageDropIcon
+                                        anchors.centerIn: parent
+                                        width: 20
+                                        height: 20
+                                        source: "icons/dropimage.svg"
+                                        fillMode: Image.PreserveAspectFit
+                                        visible: false
+                                    }
+                                    ColorOverlay {
+                                        anchors.fill: selImageDropIcon
+                                        source: selImageDropIcon
+                                        color: "#666"
+                                        opacity: selectSettings.hasActiveImage && viewport.imagesModel.get(viewport.selectedImages[0]).filePath !== "" ? 0.3 : 1.0
+                                        Behavior on opacity {
+                                            NumberAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.fill: parent
+                                        anchors.margins: 4
+                                        visible: selectSettings.hasActiveImage
+                                        text: selectSettings.hasActiveImage ? viewport.imagesModel.get(viewport.selectedImages[0]).filePath.replace(/.*\//, "") : ""
+                                        color: "white"
+                                        font.pixelSize: 10
+                                        elide: Text.ElideMiddle
+                                        verticalAlignment: Text.AlignVCenter
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: selectImageSwapDialog.open()
+                                    }
+
+                                    DropArea {
+                                        anchors.fill: parent
+                                        onDropped: drop => {
+                                            if (drop.hasUrls && selectSettings.hasActiveImage)
+                                                viewport.imagesModel.setProperty(viewport.selectedImages[0], "filePath", drop.urls[0].toString());
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.preferredWidth: 26
+                                    Layout.preferredHeight: 26
+                                    radius: 4
+                                    property bool hovered: false
+                                    color: hovered ? "white" : "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    Behavior on color {
+                                        ColorAnimation {
+                                            duration: 100
+                                        }
+                                    }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        anchors.horizontalCenterOffset: -0.5
+                                        text: "+"
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                        color: parent.hovered ? "darkslategrey" : "white"
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onEntered: parent.hovered = true
+                                        onExited: parent.hovered = false
+                                        onClicked: selectImageSwapDialog.open()
+                                    }
+                                }
                             }
 
                             // Video swap — visible when a single video is selected
-                            Rectangle {
+                            RowLayout {
                                 visible: selectSettings.hasActiveVideo
                                 width: parent.width
                                 height: 26
-                                color: "black"
-                                radius: 4
+                                spacing: 4
                                 enabled: !selectSettings.selLock
                                 opacity: selectSettings.selLock ? 0.4 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                            Image {
-                                id: selVideoDropIcon
-                                anchors.centerIn: parent
-                                width: 20; height: 20
-                                source: "icons/dropvideo.svg"
-                                fillMode: Image.PreserveAspectFit
-                                visible: false
-                            }
-                            ColorOverlay {
-                                anchors.fill: selVideoDropIcon
-                                source: selVideoDropIcon
-                                color: "#666"
-                                opacity: selectSettings.hasActiveVideo && viewport.videosModel.get(viewport.selectedVideos[0]).filePath !== "" ? 0.3 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 100 } }
-                            }
-
-                            Text {
-                                anchors.fill: parent; anchors.margins: 4
-                                visible: selectSettings.hasActiveVideo
-                                text: selectSettings.hasActiveVideo ? viewport.videosModel.get(viewport.selectedVideos[0]).filePath.replace(/.*\//, "") : ""
-                                color: "white"
-                                font.pixelSize: 10
-                                elide: Text.ElideMiddle
-                                verticalAlignment: Text.AlignVCenter
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: selectVideoSwapDialog.open()
-                            }
-
-                            DropArea {
-                                anchors.fill: parent
-                                onDropped: drop => {
-                                    if (drop.hasUrls && selectSettings.hasActiveVideo)
-                                        viewport.videosModel.setProperty(viewport.selectedVideos[0], "filePath", drop.urls[0].toString());
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: 150
+                                    }
                                 }
-                            }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 26
+                                    color: "black"
+                                    radius: 4
+
+                                    Image {
+                                        id: selVideoDropIcon
+                                        anchors.centerIn: parent
+                                        width: 20
+                                        height: 20
+                                        source: "icons/dropvideo.svg"
+                                        fillMode: Image.PreserveAspectFit
+                                        visible: false
+                                    }
+                                    ColorOverlay {
+                                        anchors.fill: selVideoDropIcon
+                                        source: selVideoDropIcon
+                                        color: "#666"
+                                        opacity: selectSettings.hasActiveVideo && viewport.videosModel.get(viewport.selectedVideos[0]).filePath !== "" ? 0.3 : 1.0
+                                        Behavior on opacity {
+                                            NumberAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.fill: parent
+                                        anchors.margins: 4
+                                        visible: selectSettings.hasActiveVideo
+                                        text: selectSettings.hasActiveVideo ? viewport.videosModel.get(viewport.selectedVideos[0]).filePath.replace(/.*\//, "") : ""
+                                        color: "white"
+                                        font.pixelSize: 10
+                                        elide: Text.ElideMiddle
+                                        verticalAlignment: Text.AlignVCenter
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: selectVideoSwapDialog.open()
+                                    }
+
+                                    DropArea {
+                                        anchors.fill: parent
+                                        onDropped: drop => {
+                                            if (drop.hasUrls && selectSettings.hasActiveVideo)
+                                                viewport.videosModel.setProperty(viewport.selectedVideos[0], "filePath", drop.urls[0].toString());
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.preferredWidth: 26
+                                    Layout.preferredHeight: 26
+                                    radius: 4
+                                    property bool hovered: false
+                                    color: hovered ? "white" : "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    Behavior on color {
+                                        ColorAnimation {
+                                            duration: 100
+                                        }
+                                    }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        anchors.horizontalCenterOffset: -0.5
+                                        text: "+"
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                        color: parent.hovered ? "darkslategrey" : "white"
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onEntered: parent.hovered = true
+                                        onExited: parent.hovered = false
+                                        onClicked: selectVideoSwapDialog.open()
+                                    }
+                                }
                             }
 
                             // Shader swap + uniforms — visible when a single shader is selected
@@ -6787,287 +7721,377 @@ Window {
                                 spacing: 8
                                 enabled: !selectSettings.selLock
                                 opacity: selectSettings.selLock ? 0.4 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: 150
+                                    }
+                                }
 
-                                Item {
-                                    id: shaderSwapItem
+                                RowLayout {
                                     width: parent.width
                                     height: 26
+                                    spacing: 4
 
-                        Rectangle {
-                            width: (parent.width - 8) / 2
-                            height: 26
-                            color: "black"
-                            radius: 4
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 26
+                                        color: "black"
+                                        radius: 4
 
-                            Image {
-                                id: selFragDropIcon
-                                anchors.centerIn: parent
-                                width: 20; height: 20
-                                source: "icons/dropfrag.svg"
-                                fillMode: Image.PreserveAspectFit
-                                visible: false
-                            }
-                            ColorOverlay {
-                                anchors.fill: selFragDropIcon
-                                source: selFragDropIcon
-                                color: "#666"
-                                opacity: selectSettings.hasActiveShader && viewport.shadersModel.get(viewport.selectedShaders[0]).fragPath !== "" ? 0.3 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 100 } }
-                            }
+                                        Image {
+                                            id: selFragDropIcon
+                                            anchors.centerIn: parent
+                                            width: 20
+                                            height: 20
+                                            source: "icons/dropfrag.svg"
+                                            fillMode: Image.PreserveAspectFit
+                                            visible: false
+                                        }
+                                        ColorOverlay {
+                                            anchors.fill: selFragDropIcon
+                                            source: selFragDropIcon
+                                            color: "#666"
+                                            opacity: selectSettings.hasActiveShader && viewport.shadersModel.get(viewport.selectedShaders[0]).fragPath !== "" ? 0.3 : 1.0
+                                            Behavior on opacity {
+                                                NumberAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
 
-                            Text {
-                                anchors.fill: parent; anchors.margins: 4
-                                visible: selectSettings.hasActiveShader
-                                text: selectSettings.hasActiveShader ? viewport.shadersModel.get(viewport.selectedShaders[0]).fragPath.replace(/.*\//, "") : ""
-                                color: "white"
-                                font.pixelSize: 10
-                                elide: Text.ElideMiddle
-                                verticalAlignment: Text.AlignVCenter
-                                horizontalAlignment: Text.AlignHCenter
-                            }
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.margins: 4
+                                            visible: selectSettings.hasActiveShader
+                                            text: selectSettings.hasActiveShader ? viewport.shadersModel.get(viewport.selectedShaders[0]).fragPath.replace(/.*\//, "") : ""
+                                            color: "white"
+                                            font.pixelSize: 10
+                                            elide: Text.ElideMiddle
+                                            verticalAlignment: Text.AlignVCenter
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
 
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: selectFragSwapDialog.open()
-                            }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: selectFragSwapDialog.open()
+                                        }
 
-                            DropArea {
-                                anchors.fill: parent
-                                onDropped: drop => {
-                                    if (!drop.hasUrls || !selectSettings.hasActiveShader) return;
-                                    var path = drop.urls[0].toString();
-                                    if (path.endsWith(".frag.qsb")) {
-                                        var idx = viewport.selectedShaders[0];
-                                        viewport.shadersModel.setProperty(idx, "fragPath", path);
-                                        viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(viewport.buildUniformsList(shaderInspector.inspectShader(path))));
-                                        selectSettings.refreshShaderUniforms();
-                                    } else if (path.endsWith(".frag"))
-                                        newshaderSettings.warnUncompiled();
+                                        DropArea {
+                                            anchors.fill: parent
+                                            onDropped: drop => {
+                                                if (!drop.hasUrls || !selectSettings.hasActiveShader)
+                                                    return;
+                                                var path = drop.urls[0].toString();
+                                                if (path.endsWith(".frag.qsb")) {
+                                                    var idx = viewport.selectedShaders[0];
+                                                    viewport.shadersModel.setProperty(idx, "fragPath", path);
+                                                    viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(viewport.buildUniformsList(shaderInspector.inspectShader(path))));
+                                                    selectSettings.refreshShaderUniforms();
+                                                } else if (path.endsWith(".frag"))
+                                                    newshaderSettings.warnUncompiled();
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 26
+                                        color: "black"
+                                        radius: 4
+
+                                        Image {
+                                            id: selVertDropIcon
+                                            anchors.centerIn: parent
+                                            width: 20
+                                            height: 20
+                                            source: "icons/dropvert.svg"
+                                            fillMode: Image.PreserveAspectFit
+                                            visible: false
+                                        }
+                                        ColorOverlay {
+                                            anchors.fill: selVertDropIcon
+                                            source: selVertDropIcon
+                                            color: "#666"
+                                            opacity: selectSettings.hasActiveShader && viewport.shadersModel.get(viewport.selectedShaders[0]).vertPath !== "" ? 0.3 : 1.0
+                                            Behavior on opacity {
+                                                NumberAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.margins: 4
+                                            visible: selectSettings.hasActiveShader
+                                            text: selectSettings.hasActiveShader ? viewport.shadersModel.get(viewport.selectedShaders[0]).vertPath.replace(/.*\//, "") : ""
+                                            color: "white"
+                                            font.pixelSize: 10
+                                            elide: Text.ElideMiddle
+                                            verticalAlignment: Text.AlignVCenter
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: selectVertSwapDialog.open()
+                                        }
+
+                                        DropArea {
+                                            anchors.fill: parent
+                                            onDropped: drop => {
+                                                if (!drop.hasUrls || !selectSettings.hasActiveShader)
+                                                    return;
+                                                var path = drop.urls[0].toString();
+                                                if (path.endsWith(".vert.qsb"))
+                                                    viewport.shadersModel.setProperty(viewport.selectedShaders[0], "vertPath", path);
+                                                else if (path.endsWith(".vert"))
+                                                    newshaderSettings.warnUncompiled();
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 26
+                                        Layout.preferredHeight: 26
+                                        radius: 4
+                                        property bool hovered: false
+                                        color: hovered ? "white" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        Behavior on color {
+                                            ColorAnimation {
+                                                duration: 100
+                                            }
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            anchors.horizontalCenterOffset: -0.5
+                                            text: "+"
+                                            font.pixelSize: 18
+                                            font.bold: true
+                                            color: parent.hovered ? "darkslategrey" : "white"
+                                            Behavior on color {
+                                                ColorAnimation {
+                                                    duration: 100
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onEntered: parent.hovered = true
+                                            onExited: parent.hovered = false
+                                            onClicked: selectFragSwapDialog.open()
+                                        }
+                                    }
                                 }
-                            }
-                        }
-
-                        Rectangle {
-                            x: (parent.width - 8) / 2 + 8
-                            width: (parent.width - 8) / 2
-                            height: 26
-                            color: "black"
-                            radius: 4
-
-                            Image {
-                                id: selVertDropIcon
-                                anchors.centerIn: parent
-                                width: 20; height: 20
-                                source: "icons/dropvert.svg"
-                                fillMode: Image.PreserveAspectFit
-                                visible: false
-                            }
-                            ColorOverlay {
-                                anchors.fill: selVertDropIcon
-                                source: selVertDropIcon
-                                color: "#666"
-                                opacity: selectSettings.hasActiveShader && viewport.shadersModel.get(viewport.selectedShaders[0]).vertPath !== "" ? 0.3 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 100 } }
-                            }
-
-                            Text {
-                                anchors.fill: parent; anchors.margins: 4
-                                visible: selectSettings.hasActiveShader
-                                text: selectSettings.hasActiveShader ? viewport.shadersModel.get(viewport.selectedShaders[0]).vertPath.replace(/.*\//, "") : ""
-                                color: "white"
-                                font.pixelSize: 10
-                                elide: Text.ElideMiddle
-                                verticalAlignment: Text.AlignVCenter
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: selectVertSwapDialog.open()
-                            }
-
-                            DropArea {
-                                anchors.fill: parent
-                                onDropped: drop => {
-                                    if (!drop.hasUrls || !selectSettings.hasActiveShader) return;
-                                    var path = drop.urls[0].toString();
-                                    if (path.endsWith(".vert.qsb"))
-                                        viewport.shadersModel.setProperty(viewport.selectedShaders[0], "vertPath", path);
-                                    else if (path.endsWith(".vert"))
-                                        newshaderSettings.warnUncompiled();
-                                }
-                            }
-                        }
-                    }
 
                                 // Editable uniform fields
                                 Repeater {
                                     model: selectSettings.shaderUniforms
                                     delegate: Row {
                                         width: parent.width
-                                height: 26
-                                spacing: 6
+                                        height: 26
+                                        spacing: 6
 
-                                // Capture model data into local properties for reliable access in nested items.
-                                property string uName: modelData.name
-                                property string uType: modelData.type
-                                property var uValue: modelData.value
+                                        // Capture model data into local properties for reliable access in nested items.
+                                        property string uName: modelData.name
+                                        property string uType: modelData.type
+                                        property var uValue: modelData.value
 
-                                readonly property bool isScalar: uType === "float" || uType === "int"
+                                        readonly property bool isScalar: uType === "float" || uType === "int"
 
-                                Text {
-                                    text: uName
-                                    width: 108
-                                    color: "white"
-                                    font.pixelSize: 11
-                                    height: parent.height
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-
-                                Slider {
-                                    id: selectUniformSlider
-                                    visible: isScalar
-                                    width: parent.width - 175
-                                    height: parent.height
-                                    from: 0; to: 1
-                                    stepSize: 0
-                                    Component.onCompleted: {
-                                        var v = parseFloat(uValue);
-                                        if (isNaN(v) || v <= 0) value = 0;
-                                        else if (v >= 100) value = 1;
-                                        else value = Math.pow(v / 100.0, 0.2);
-                                    }
-                                    onMoved: {
-                                        var expanded = parseFloat((Math.pow(value, 5) * 100.0).toFixed(4));
-                                        var name = uName;
-                                        var idx = viewport.selectedShaders[0];
-                                        var uniforms;
-                                        try { uniforms = JSON.parse(viewport.shadersModel.get(idx).uniformsJson || "[]"); } catch(e) { uniforms = []; }
-                                        for (var i = 0; i < uniforms.length; i++) {
-                                            if (uniforms[i].name === name) { uniforms[i].value = expanded; break; }
+                                        Text {
+                                            text: uName
+                                            width: 108
+                                            color: "white"
+                                            font.pixelSize: 11
+                                            height: parent.height
+                                            verticalAlignment: Text.AlignVCenter
+                                            elide: Text.ElideRight
                                         }
-                                        viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(uniforms));
-                                        var del = viewport.activeContent.shaderDelegateAt(idx);
-                                        if (del && del.dynamicShaderEffect)
-                                            del.dynamicShaderEffect[name] = expanded;
-                                        selectNumericField.text = expanded.toString();
-                                    }
-                                    background: Rectangle {
-                                        x: selectUniformSlider.leftPadding
-                                        y: selectUniformSlider.topPadding + selectUniformSlider.availableHeight / 2 - height / 2
-                                        implicitWidth: 200; implicitHeight: 4
-                                        width: selectUniformSlider.availableWidth; height: 4
-                                        radius: 2; color: "#333"
-                                        Rectangle {
-                                            width: selectUniformSlider.visualPosition * parent.width
-                                            height: parent.height; color: "#5DA9A4"; radius: 2
-                                        }
-                                    }
-                                    handle: Rectangle {
-                                        x: selectUniformSlider.leftPadding + selectUniformSlider.visualPosition * (selectUniformSlider.availableWidth - width)
-                                        y: selectUniformSlider.topPadding + selectUniformSlider.availableHeight / 2 - height / 2
-                                        implicitWidth: 12; implicitHeight: 12; radius: 6
-                                        color: selectUniformSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                    }
-                                }
 
-                                Rectangle {
-                                    width: isScalar ? 55 : (parent.width - 114)
-                                    height: 26
-                                    color: uType === "sampler2D" ? "black" : "transparent"
-                                    border.color: "white"
-                                    border.width: 1
-                                    radius: 4
-
-                                    // Texture label (sampler2D)
-                                    Text {
-                                        visible: uType === "sampler2D"
-                                        anchors.centerIn: parent
-                                        width: parent.width - 10
-                                        text: (uValue && uValue !== "") ? uValue.toString().replace(/.*\//, "") : "drop image or video"
-                                        color: (uValue && uValue !== "") ? "white" : "#555"
-                                        font.pixelSize: 11
-                                        elide: Text.ElideLeft
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        enabled: uType === "sampler2D"
-                                        onClicked: {
-                                            selectTextureDialog.pendingUniformName = uName;
-                                            selectTextureDialog.open();
-                                        }
-                                    }
-
-                                    DropArea {
-                                        anchors.fill: parent
-                                        enabled: uType === "sampler2D"
-                                        onDropped: drop => {
-                                            if (!drop.hasUrls || !selectSettings.hasActiveShader) return;
-                                            var path = drop.urls[0].toString();
-                                            var name = uName;
-                                            var idx = viewport.selectedShaders[0];
-                                            var uniforms;
-                                            try { uniforms = JSON.parse(viewport.shadersModel.get(idx).uniformsJson || "[]"); } catch(e) { uniforms = []; }
-                                            for (var i = 0; i < uniforms.length; i++) {
-                                                if (uniforms[i].name === name) { uniforms[i].value = path; break; }
+                                        Slider {
+                                            id: selectUniformSlider
+                                            visible: isScalar
+                                            width: parent.width - 175
+                                            height: parent.height
+                                            from: 0
+                                            to: 1
+                                            stepSize: 0
+                                            Component.onCompleted: {
+                                                var v = parseFloat(uValue);
+                                                if (isNaN(v) || v <= 0)
+                                                    value = 0;
+                                                else if (v >= 100)
+                                                    value = 1;
+                                                else
+                                                    value = Math.pow(v / 100.0, 0.2);
                                             }
-                                            viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(uniforms));
-                                            var del = viewport.activeContent.shaderDelegateAt(idx);
-                                            if (del) del.applyTextureSource(name, path);
-                                            selectSettings.refreshShaderUniforms();
-                                        }
-                                    }
-
-                                    // Numeric input (float/vec)
-                                    TextInput {
-                                        id: selectNumericField
-                                        visible: uType !== "sampler2D"
-                                        anchors.fill: parent
-                                        anchors.margins: 3
-                                        color: "white"
-                                        font.pixelSize: 11
-                                        clip: true
-                                        selectByMouse: true
-                                        text: {
-                                            if (uValue === null || uValue === undefined) return "1";
-                                            if (Array.isArray(uValue)) return uValue.map(function(n) { return parseFloat(Number(n).toFixed(4)); }).join(", ");
-                                            var v = Number(uValue);
-                                            return isNaN(v) ? uValue.toString() : parseFloat(v.toFixed(4)).toString();
-                                        }
-                                        Keys.onReturnPressed: focus = false
-                                        Keys.onEscapePressed: focus = false
-                                        onEditingFinished: {
-                                            var name = uName;
-                                            var type = uType;
-                                            var idx = viewport.selectedShaders[0];
-                                            // Sync slider position for scalar types
-                                            if (isScalar) {
-                                                var v = parseFloat(text);
-                                                if (!isNaN(v)) {
-                                                    var pos = v >= 100 ? 1.0 : (v <= 0 ? 0.0 : Math.pow(v / 100.0, 0.2));
-                                                    selectUniformSlider.value = pos;
+                                            onMoved: {
+                                                var expanded = parseFloat((Math.pow(value, 5) * 100.0).toFixed(4));
+                                                var name = uName;
+                                                var idx = viewport.selectedShaders[0];
+                                                var uniforms;
+                                                try {
+                                                    uniforms = JSON.parse(viewport.shadersModel.get(idx).uniformsJson || "[]");
+                                                } catch (e) {
+                                                    uniforms = [];
+                                                }
+                                                for (var i = 0; i < uniforms.length; i++) {
+                                                    if (uniforms[i].name === name) {
+                                                        uniforms[i].value = expanded;
+                                                        break;
+                                                    }
+                                                }
+                                                viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(uniforms));
+                                                var del = viewport.activeContent.shaderDelegateAt(idx);
+                                                if (del && del.dynamicShaderEffect)
+                                                    del.dynamicShaderEffect[name] = expanded;
+                                                selectNumericField.text = expanded.toString();
+                                            }
+                                            background: Rectangle {
+                                                x: selectUniformSlider.leftPadding
+                                                y: selectUniformSlider.topPadding + selectUniformSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200
+                                                implicitHeight: 4
+                                                width: selectUniformSlider.availableWidth
+                                                height: 4
+                                                radius: 2
+                                                color: "#333"
+                                                Rectangle {
+                                                    width: selectUniformSlider.visualPosition * parent.width
+                                                    height: parent.height
+                                                    color: "#5DA9A4"
+                                                    radius: 2
                                                 }
                                             }
-                                            var qmlVal = viewport.parseUniformToQml(type, text);
-                                            var arrVal = viewport.parseUniformToArray(type, text);
-                                            var uniforms;
-                                            try { uniforms = JSON.parse(viewport.shadersModel.get(idx).uniformsJson || "[]"); } catch(e) { uniforms = []; }
-                                            for (var i = 0; i < uniforms.length; i++) {
-                                                if (uniforms[i].name === name) { uniforms[i].value = arrVal; break; }
+                                            handle: Rectangle {
+                                                x: selectUniformSlider.leftPadding + selectUniformSlider.visualPosition * (selectUniformSlider.availableWidth - width)
+                                                y: selectUniformSlider.topPadding + selectUniformSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12
+                                                implicitHeight: 12
+                                                radius: 6
+                                                color: selectUniformSlider.pressed ? "#80cfff" : "#5DA9A4"
                                             }
-                                            viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(uniforms));
-                                            var del = viewport.activeContent.shaderDelegateAt(idx);
-                                            if (del && del.dynamicShaderEffect)
-                                                del.dynamicShaderEffect[name] = qmlVal;
+                                        }
+
+                                        Rectangle {
+                                            width: isScalar ? 55 : (parent.width - 114)
+                                            height: 26
+                                            color: uType === "sampler2D" ? "black" : "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            radius: 4
+
+                                            // Texture label (sampler2D)
+                                            Text {
+                                                visible: uType === "sampler2D"
+                                                anchors.centerIn: parent
+                                                width: parent.width - 10
+                                                text: (uValue && uValue !== "") ? uValue.toString().replace(/.*\//, "") : "drop image or video"
+                                                color: (uValue && uValue !== "") ? "white" : "#555"
+                                                font.pixelSize: 11
+                                                elide: Text.ElideLeft
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: uType === "sampler2D"
+                                                onClicked: {
+                                                    selectTextureDialog.pendingUniformName = uName;
+                                                    selectTextureDialog.open();
+                                                }
+                                            }
+
+                                            DropArea {
+                                                anchors.fill: parent
+                                                enabled: uType === "sampler2D"
+                                                onDropped: drop => {
+                                                    if (!drop.hasUrls || !selectSettings.hasActiveShader)
+                                                        return;
+                                                    var path = drop.urls[0].toString();
+                                                    var name = uName;
+                                                    var idx = viewport.selectedShaders[0];
+                                                    var uniforms;
+                                                    try {
+                                                        uniforms = JSON.parse(viewport.shadersModel.get(idx).uniformsJson || "[]");
+                                                    } catch (e) {
+                                                        uniforms = [];
+                                                    }
+                                                    for (var i = 0; i < uniforms.length; i++) {
+                                                        if (uniforms[i].name === name) {
+                                                            uniforms[i].value = path;
+                                                            break;
+                                                        }
+                                                    }
+                                                    viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(uniforms));
+                                                    var del = viewport.activeContent.shaderDelegateAt(idx);
+                                                    if (del)
+                                                        del.applyTextureSource(name, path);
+                                                    selectSettings.refreshShaderUniforms();
+                                                }
+                                            }
+
+                                            // Numeric input (float/vec)
+                                            TextInput {
+                                                id: selectNumericField
+                                                visible: uType !== "sampler2D"
+                                                anchors.fill: parent
+                                                anchors.margins: 3
+                                                color: "white"
+                                                font.pixelSize: 11
+                                                clip: true
+                                                selectByMouse: true
+                                                text: {
+                                                    if (uValue === null || uValue === undefined)
+                                                        return "1";
+                                                    if (Array.isArray(uValue))
+                                                        return uValue.map(function (n) {
+                                                            return parseFloat(Number(n).toFixed(4));
+                                                        }).join(", ");
+                                                    var v = Number(uValue);
+                                                    return isNaN(v) ? uValue.toString() : parseFloat(v.toFixed(4)).toString();
+                                                }
+                                                Keys.onReturnPressed: focus = false
+                                                Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var name = uName;
+                                                    var type = uType;
+                                                    var idx = viewport.selectedShaders[0];
+                                                    // Sync slider position for scalar types
+                                                    if (isScalar) {
+                                                        var v = parseFloat(text);
+                                                        if (!isNaN(v)) {
+                                                            var pos = v >= 100 ? 1.0 : (v <= 0 ? 0.0 : Math.pow(v / 100.0, 0.2));
+                                                            selectUniformSlider.value = pos;
+                                                        }
+                                                    }
+                                                    var qmlVal = viewport.parseUniformToQml(type, text);
+                                                    var arrVal = viewport.parseUniformToArray(type, text);
+                                                    var uniforms;
+                                                    try {
+                                                        uniforms = JSON.parse(viewport.shadersModel.get(idx).uniformsJson || "[]");
+                                                    } catch (e) {
+                                                        uniforms = [];
+                                                    }
+                                                    for (var i = 0; i < uniforms.length; i++) {
+                                                        if (uniforms[i].name === name) {
+                                                            uniforms[i].value = arrVal;
+                                                            break;
+                                                        }
+                                                    }
+                                                    viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(uniforms));
+                                                    var del = viewport.activeContent.shaderDelegateAt(idx);
+                                                    if (del && del.dynamicShaderEffect)
+                                                        del.dynamicShaderEffect[name] = qmlVal;
+                                                }
+                                            }
                                         }
                                     }
-                                }
-                            }
-                            }  // close Repeater
+                                }  // close Repeater
                             }  // close shader Column
 
                             // Spatial props — always visible when something is selected
@@ -7077,7 +8101,11 @@ Window {
                                 spacing: 4
                                 enabled: !selectSettings.selLock
                                 opacity: selectSettings.selLock ? 0.4 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: 150
+                                    }
+                                }
 
                                 Text {
                                     text: "information"
@@ -7091,16 +8119,35 @@ Window {
 
                                 // Row 1: name | type
                                 Row {
-                                    width: parent.width; height: 26; spacing: 6
+                                    width: parent.width
+                                    height: 26
+                                    spacing: 6
                                     RowLayout {
-                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                        Text { text: "name"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        width: (parent.width - 6) / 2
+                                        height: 26
+                                        spacing: 4
+                                        Text {
+                                            text: "name"
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            Layout.preferredWidth: 38
+                                            height: 26
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                         Rectangle {
-                                            Layout.fillWidth: true; height: 26
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            Layout.fillWidth: true
+                                            height: 26
+                                            color: "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            radius: 4
                                             TextInput {
-                                                anchors.fill: parent; anchors.margins: 3
-                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                anchors.fill: parent
+                                                anchors.margins: 3
+                                                color: "white"
+                                                font.pixelSize: 11
+                                                clip: true
+                                                selectByMouse: true
                                                 readOnly: selectSettings.selLock
                                                 text: selectSettings.selName
                                                 Keys.onReturnPressed: focus = false
@@ -7113,27 +8160,42 @@ Window {
                                         }
                                     }
                                     RowLayout {
-                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                        Text { text: "type"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        width: (parent.width - 6) / 2
+                                        height: 26
+                                        spacing: 4
+                                        Text {
+                                            text: "type"
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            Layout.preferredWidth: 44
+                                            height: 26
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                         ComboBox {
                                             id: templateCombo
                                             Layout.fillWidth: true
                                             height: 26
                                             model: ["none", "default", "north", "south", "east", "west"]
                                             currentIndex: {
-                                                var idx = model.indexOf(selectSettings.selTemplate)
-                                                return idx >= 0 ? idx : 0
+                                                var idx = model.indexOf(selectSettings.selTemplate);
+                                                return idx >= 0 ? idx : 0;
                                             }
                                             onActivated: {
-                                                var t = model[currentIndex]
-                                                selectSettings.selTemplate = t
-                                                if      (t === "north") selectSettings.selCursor = "up"
-                                                else if (t === "south") selectSettings.selCursor = "down"
-                                                else if (t === "east")  selectSettings.selCursor = "right"
-                                                else if (t === "west")  selectSettings.selCursor = "left"
+                                                var t = model[currentIndex];
+                                                selectSettings.selTemplate = t;
+                                                if (t === "north")
+                                                    selectSettings.selCursor = "up";
+                                                else if (t === "south")
+                                                    selectSettings.selCursor = "down";
+                                                else if (t === "east")
+                                                    selectSettings.selCursor = "right";
+                                                else if (t === "west")
+                                                    selectSettings.selCursor = "left";
                                             }
 
-                                            HoverHandler { id: templateHover }
+                                            HoverHandler {
+                                                id: templateHover
+                                            }
 
                                             contentItem: Text {
                                                 leftPadding: 6
@@ -7156,20 +8218,29 @@ Window {
                                                 color: "transparent"
                                                 border.color: templateHover.hovered ? "#80cfff" : "white"
                                                 border.width: 1
-                                                Behavior on border.color { ColorAnimation { duration: 100 } }
+                                                Behavior on border.color {
+                                                    ColorAnimation {
+                                                        duration: 100
+                                                    }
+                                                }
                                             }
 
                                             popup: Popup {
                                                 y: templateCombo.height + 2
                                                 width: templateCombo.width
                                                 padding: 1
-                                                background: Rectangle { color: "#162020"; radius: 4; border.color: "#333"; border.width: 1 }
+                                                background: Rectangle {
+                                                    color: "#162020"
+                                                    radius: 4
+                                                    border.color: "#333"
+                                                    border.width: 1
+                                                }
                                                 contentItem: ListView {
                                                     clip: true
                                                     implicitHeight: Math.min(contentHeight, 300)
                                                     model: templateCombo.popup.visible ? templateCombo.delegateModel : null
                                                     currentIndex: templateCombo.highlightedIndex
-                                                    ScrollIndicator.vertical: ScrollIndicator { }
+                                                    ScrollIndicator.vertical: ScrollIndicator {}
                                                 }
                                             }
 
@@ -7193,36 +8264,80 @@ Window {
 
                                 // Row 2: x | y
                                 Row {
-                                    width: parent.width; height: 26; spacing: 6
+                                    width: parent.width
+                                    height: 26
+                                    spacing: 6
                                     RowLayout {
-                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                        Text { text: "x"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        width: (parent.width - 6) / 2
+                                        height: 26
+                                        spacing: 4
+                                        Text {
+                                            text: "x"
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            Layout.preferredWidth: 38
+                                            height: 26
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                         Rectangle {
-                                            Layout.fillWidth: true; height: 26
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            Layout.fillWidth: true
+                                            height: 26
+                                            color: "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            radius: 4
                                             TextInput {
-                                                anchors.fill: parent; anchors.margins: 3
-                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                anchors.fill: parent
+                                                anchors.margins: 3
+                                                color: "white"
+                                                font.pixelSize: 11
+                                                clip: true
+                                                selectByMouse: true
                                                 readOnly: selectSettings.selLock
                                                 text: selectSettings.selX.toFixed(0)
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: { selectSettings.selX = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
+                                                Keys.onReturnPressed: focus = false
+                                                Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    selectSettings.selX = parseFloat(text) || 0;
+                                                    selectSettings.writeSpatialToModel();
+                                                }
                                             }
                                         }
                                     }
                                     RowLayout {
-                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                        Text { text: "width"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        width: (parent.width - 6) / 2
+                                        height: 26
+                                        spacing: 4
+                                        Text {
+                                            text: "width"
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            Layout.preferredWidth: 44
+                                            height: 26
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                         Rectangle {
-                                            Layout.fillWidth: true; height: 26
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            Layout.fillWidth: true
+                                            height: 26
+                                            color: "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            radius: 4
                                             TextInput {
-                                                anchors.fill: parent; anchors.margins: 3
-                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                anchors.fill: parent
+                                                anchors.margins: 3
+                                                color: "white"
+                                                font.pixelSize: 11
+                                                clip: true
+                                                selectByMouse: true
                                                 readOnly: selectSettings.selLock
                                                 text: selectSettings.selW.toFixed(0)
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: { selectSettings.selW = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
+                                                Keys.onReturnPressed: focus = false
+                                                Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    selectSettings.selW = parseFloat(text) || 0;
+                                                    selectSettings.writeSpatialToModel();
+                                                }
                                             }
                                         }
                                     }
@@ -7230,41 +8345,84 @@ Window {
 
                                 // Row 3: y | height
                                 Row {
-                                    width: parent.width; height: 26; spacing: 6
+                                    width: parent.width
+                                    height: 26
+                                    spacing: 6
                                     RowLayout {
-                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                        Text { text: "y"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 38; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        width: (parent.width - 6) / 2
+                                        height: 26
+                                        spacing: 4
+                                        Text {
+                                            text: "y"
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            Layout.preferredWidth: 38
+                                            height: 26
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                         Rectangle {
-                                            Layout.fillWidth: true; height: 26
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            Layout.fillWidth: true
+                                            height: 26
+                                            color: "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            radius: 4
                                             TextInput {
-                                                anchors.fill: parent; anchors.margins: 3
-                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                anchors.fill: parent
+                                                anchors.margins: 3
+                                                color: "white"
+                                                font.pixelSize: 11
+                                                clip: true
+                                                selectByMouse: true
                                                 readOnly: selectSettings.selLock
                                                 text: selectSettings.selY.toFixed(0)
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: { selectSettings.selY = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
+                                                Keys.onReturnPressed: focus = false
+                                                Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    selectSettings.selY = parseFloat(text) || 0;
+                                                    selectSettings.writeSpatialToModel();
+                                                }
                                             }
                                         }
                                     }
                                     RowLayout {
-                                        width: (parent.width - 6) / 2; height: 26; spacing: 4
-                                        Text { text: "height"; font.pixelSize: 11; color: "white"; Layout.preferredWidth: 44; height: 26; verticalAlignment: Text.AlignVCenter }
+                                        width: (parent.width - 6) / 2
+                                        height: 26
+                                        spacing: 4
+                                        Text {
+                                            text: "height"
+                                            font.pixelSize: 11
+                                            color: "white"
+                                            Layout.preferredWidth: 44
+                                            height: 26
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                         Rectangle {
-                                            Layout.fillWidth: true; height: 26
-                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            Layout.fillWidth: true
+                                            height: 26
+                                            color: "transparent"
+                                            border.color: "white"
+                                            border.width: 1
+                                            radius: 4
                                             TextInput {
-                                                anchors.fill: parent; anchors.margins: 3
-                                                color: "white"; font.pixelSize: 11; clip: true; selectByMouse: true
+                                                anchors.fill: parent
+                                                anchors.margins: 3
+                                                color: "white"
+                                                font.pixelSize: 11
+                                                clip: true
+                                                selectByMouse: true
                                                 readOnly: selectSettings.selLock
                                                 text: selectSettings.selH.toFixed(0)
-                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                onEditingFinished: { selectSettings.selH = parseFloat(text) || 0; selectSettings.writeSpatialToModel(); }
+                                                Keys.onReturnPressed: focus = false
+                                                Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    selectSettings.selH = parseFloat(text) || 0;
+                                                    selectSettings.writeSpatialToModel();
+                                                }
                                             }
                                         }
                                     }
                                 }
-
                             }
 
                             Column {
@@ -7273,15 +8431,25 @@ Window {
                                 spacing: 4
                                 enabled: !selectSettings.selLock
                                 opacity: selectSettings.selLock ? 0.4 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: 150
+                                    }
+                                }
 
                                 // cursor field — toggle buttons
                                 Row {
-                                    width: parent.width; height: 26; spacing: 4
+                                    width: parent.width
+                                    height: 26
+                                    spacing: 4
 
                                     Text {
-                                        text: "cursor"; width: 38; color: "white"; font.pixelSize: 11
-                                        height: parent.height; verticalAlignment: Text.AlignVCenter
+                                        text: "cursor"
+                                        width: 38
+                                        color: "white"
+                                        font.pixelSize: 11
+                                        height: parent.height
+                                        verticalAlignment: Text.AlignVCenter
                                     }
 
                                     RowLayout {
@@ -7291,14 +8459,46 @@ Window {
 
                                         Repeater {
                                             model: [
-                                                {key: "select",    lbl: "select",    icon: ""},
-                                                {key: "highlight", lbl: "highlight", icon: ""},
-                                                {key: "drag",      lbl: "drag",      icon: ""},
-                                                {key: "left",      lbl: "",          icon: "left.svg"},
-                                                {key: "up",        lbl: "",          icon: "up.svg"},
-                                                {key: "down",      lbl: "",          icon: "down.svg"},
-                                                {key: "right",     lbl: "",          icon: "right.svg"},
-                                                {key: "custom",    lbl: "custom",    icon: ""}
+                                                {
+                                                    key: "select",
+                                                    lbl: "select",
+                                                    icon: ""
+                                                },
+                                                {
+                                                    key: "highlight",
+                                                    lbl: "highlight",
+                                                    icon: ""
+                                                },
+                                                {
+                                                    key: "drag",
+                                                    lbl: "drag",
+                                                    icon: ""
+                                                },
+                                                {
+                                                    key: "left",
+                                                    lbl: "",
+                                                    icon: "left.svg"
+                                                },
+                                                {
+                                                    key: "up",
+                                                    lbl: "",
+                                                    icon: "up.svg"
+                                                },
+                                                {
+                                                    key: "down",
+                                                    lbl: "",
+                                                    icon: "down.svg"
+                                                },
+                                                {
+                                                    key: "right",
+                                                    lbl: "",
+                                                    icon: "right.svg"
+                                                },
+                                                {
+                                                    key: "custom",
+                                                    lbl: "custom",
+                                                    icon: ""
+                                                }
                                             ]
                                             delegate: Rectangle {
                                                 property bool isActive: selectSettings.selCursor === modelData.key
@@ -7307,8 +8507,13 @@ Window {
                                                 height: 26
                                                 radius: 4
                                                 color: isActive ? "white" : "transparent"
-                                                border.color: "white"; border.width: 1
-                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                border.color: "white"
+                                                border.width: 1
+                                                Behavior on color {
+                                                    ColorAnimation {
+                                                        duration: 100
+                                                    }
+                                                }
 
                                                 Text {
                                                     visible: modelData.lbl !== ""
@@ -7316,7 +8521,11 @@ Window {
                                                     text: modelData.lbl
                                                     font.pixelSize: 9
                                                     color: parent.isActive ? "#477B78" : "white"
-                                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                                    Behavior on color {
+                                                        ColorAnimation {
+                                                            duration: 100
+                                                        }
+                                                    }
                                                 }
 
                                                 Item {
@@ -7334,7 +8543,11 @@ Window {
                                                         anchors.fill: cursorFieldIcon
                                                         source: cursorFieldIcon
                                                         color: parent.parent.isActive ? "#477B78" : "white"
-                                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                                        Behavior on color {
+                                                            ColorAnimation {
+                                                                duration: 100
+                                                            }
+                                                        }
                                                     }
                                                 }
 
@@ -7350,13 +8563,20 @@ Window {
                                 // cursor field — custom drop zone (own row, indented to align with controls)
                                 Row {
                                     visible: selectSettings.selCursor === "custom"
-                                    width: parent.width; height: 26; spacing: 4
+                                    width: parent.width
+                                    height: 26
+                                    spacing: 4
 
-                                    Item { width: 38; height: 26 }
+                                    Item {
+                                        width: 38
+                                        height: 26
+                                    }
 
                                     Rectangle {
-                                        width: parent.width - 42; height: 26
-                                        color: "black"; radius: 4
+                                        width: parent.width - 42
+                                        height: 26
+                                        color: "black"
+                                        radius: 4
 
                                         Image {
                                             anchors.fill: parent
@@ -7376,7 +8596,7 @@ Window {
                                             anchors.fill: parent
                                             onDropped: drop => {
                                                 if (drop.hasUrls)
-                                                    selectSettings.selCursorPath = drop.urls[0].toString()
+                                                    selectSettings.selCursorPath = drop.urls[0].toString();
                                             }
                                         }
                                     }
@@ -7392,7 +8612,10 @@ Window {
                                 networksModel: nodeWorkspace.networksModel
                             }
 
-                            Item { width: 1; height: 16 }
+                            Item {
+                                width: 1
+                                height: 16
+                            }
                         }  // close outer Column
                     }  // close outer ScrollView
 
@@ -7425,7 +8648,9 @@ Window {
                     property bool propLock: false
                     property string propName: ""
 
-                    ListModel { id: uniformFieldsModel }  // one entry per non-time uniform shown in UI
+                    ListModel {
+                        id: uniformFieldsModel
+                    }  // one entry per non-time uniform shown in UI
 
                     // Call inspectShader when frag path is set and populate the uniform fields model.
                     onFragFilePathChanged: {
@@ -7434,10 +8659,15 @@ Window {
                             rawUniforms = shaderInspector.inspectShader(fragFilePath);
                             for (var i = 0; i < rawUniforms.length; i++) {
                                 var u = rawUniforms[i];
-                                if (u.name === "time") continue;
+                                if (u.name === "time")
+                                    continue;
                                 var def = u.type === "sampler2D" ? "" : viewport.uniformDefault(u.type);
                                 var defText = (def === null || def === "") ? "" : (Array.isArray(def) ? def.join(", ") : def.toString());
-                                uniformFieldsModel.append({uName: u.name, uType: u.type, uText: defText});
+                                uniformFieldsModel.append({
+                                    uName: u.name,
+                                    uType: u.type,
+                                    uText: defText
+                                });
                             }
                         } else {
                             rawUniforms = [];
@@ -7450,18 +8680,33 @@ Window {
                         for (var k = 0; k < rawUniforms.length; k++) {
                             var u = rawUniforms[k];
                             if (u.name === "time") {
-                                list.push({name: "time", type: "float", value: 0.0});
+                                list.push({
+                                    name: "time",
+                                    type: "float",
+                                    value: 0.0
+                                });
                             } else {
                                 var fieldIdx = 0;
                                 for (var fi = 0; fi < uniformFieldsModel.count; fi++) {
-                                    if (uniformFieldsModel.get(fi).uName === u.name) { fieldIdx = fi; break; }
+                                    if (uniformFieldsModel.get(fi).uName === u.name) {
+                                        fieldIdx = fi;
+                                        break;
+                                    }
                                 }
                                 var field = uniformFieldsModel.count > 0 ? uniformFieldsModel.get(fieldIdx) : null;
                                 var txt = field ? field.uText : "";
                                 if (u.type === "sampler2D") {
-                                    list.push({name: u.name, type: u.type, value: txt});
+                                    list.push({
+                                        name: u.name,
+                                        type: u.type,
+                                        value: txt
+                                    });
                                 } else {
-                                    list.push({name: u.name, type: u.type, value: viewport.parseUniformToArray(u.type, txt || "1")});
+                                    list.push({
+                                        name: u.name,
+                                        type: u.type,
+                                        value: viewport.parseUniformToArray(u.type, txt || "1")
+                                    });
                                 }
                             }
                         }
@@ -7495,7 +8740,6 @@ Window {
                             color: "white"
                             anchors.verticalCenter: parent.verticalCenter
                         }
-
                     }
 
                     Text {
@@ -7510,10 +8754,23 @@ Window {
                         anchors.rightMargin: 20
                     }
 
-                    Row {
-                        id: shaderDropZonesRow
+                    Text {
+                        id: shaderSourceLabel
+                        text: "source"
+                        font.pixelSize: 11
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 1
+                        color: "white"
                         anchors.top: newshaderSettingsHeadingRow.bottom
                         anchors.topMargin: 12
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                    }
+
+                    Row {
+                        id: shaderDropZonesRow
+                        anchors.top: shaderSourceLabel.bottom
+                        anchors.topMargin: 6
                         anchors.left: parent.left
                         anchors.leftMargin: 14
                         anchors.right: parent.right
@@ -7557,7 +8814,8 @@ Window {
                             DropArea {
                                 anchors.fill: parent
                                 onDropped: drop => {
-                                    if (!drop.hasUrls) return;
+                                    if (!drop.hasUrls)
+                                        return;
                                     var path = drop.urls[0].toString();
                                     if (path.endsWith(".frag.qsb")) {
                                         newshaderSettings.fragFilePath = path;
@@ -7605,7 +8863,8 @@ Window {
                             DropArea {
                                 anchors.fill: parent
                                 onDropped: drop => {
-                                    if (!drop.hasUrls) return;
+                                    if (!drop.hasUrls)
+                                        return;
                                     var path = drop.urls[0].toString();
                                     if (path.endsWith(".vert.qsb")) {
                                         newshaderSettings.vertFilePath = path;
@@ -7634,135 +8893,150 @@ Window {
                             width: newShaderUniformsScroll.availableWidth - 14
                             spacing: 5
 
-                        Repeater {
-                            model: uniformFieldsModel
-                            delegate: Row {
-                                width: parent.width
-                                height: 26
-                                spacing: 6
-
-                                // Capture model roles into local properties for reliable access in nested items.
-                                property string uName: model.uName
-                                property string uType: model.uType
-                                property string uText: model.uText
-                                property int uIndex: index
-
-                                readonly property bool isScalar: uType === "float" || uType === "int"
-
-                                Text {
-                                    text: uName
-                                    width: 108
-                                    color: "white"
-                                    font.pixelSize: 11
-                                    height: parent.height
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-
-                                Slider {
-                                    id: newShaderUniformSlider
-                                    visible: isScalar
-                                    width: parent.width - 175
-                                    height: parent.height
-                                    from: 0; to: 1
-                                    stepSize: 0
-                                    Component.onCompleted: {
-                                        var v = parseFloat(uText);
-                                        if (isNaN(v) || v <= 0) value = 0;
-                                        else if (v >= 100) value = 1;
-                                        else value = Math.pow(v / 100.0, 0.2);
-                                    }
-                                    onMoved: {
-                                        var expanded = parseFloat((Math.pow(value, 5) * 100.0).toFixed(4));
-                                        uniformFieldsModel.setProperty(uIndex, "uText", expanded.toString());
-                                        newShaderNumericField.text = expanded.toString();
-                                    }
-                                    background: Rectangle {
-                                        x: newShaderUniformSlider.leftPadding
-                                        y: newShaderUniformSlider.topPadding + newShaderUniformSlider.availableHeight / 2 - height / 2
-                                        implicitWidth: 200; implicitHeight: 4
-                                        width: newShaderUniformSlider.availableWidth; height: 4
-                                        radius: 2; color: "#333"
-                                        Rectangle {
-                                            width: newShaderUniformSlider.visualPosition * parent.width
-                                            height: parent.height; color: "#5DA9A4"; radius: 2
-                                        }
-                                    }
-                                    handle: Rectangle {
-                                        x: newShaderUniformSlider.leftPadding + newShaderUniformSlider.visualPosition * (newShaderUniformSlider.availableWidth - width)
-                                        y: newShaderUniformSlider.topPadding + newShaderUniformSlider.availableHeight / 2 - height / 2
-                                        implicitWidth: 12; implicitHeight: 12; radius: 6
-                                        color: newShaderUniformSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                    }
-                                }
-
-                                Rectangle {
-                                    width: isScalar ? 55 : (parent.width - 114)
+                            Repeater {
+                                model: uniformFieldsModel
+                                delegate: Row {
+                                    width: parent.width
                                     height: 26
-                                    color: uType === "sampler2D" ? "black" : "transparent"
-                                    border.color: "white"
-                                    border.width: 1
-                                    radius: 4
+                                    spacing: 6
 
-                                    // Texture label (sampler2D)
+                                    // Capture model roles into local properties for reliable access in nested items.
+                                    property string uName: model.uName
+                                    property string uType: model.uType
+                                    property string uText: model.uText
+                                    property int uIndex: index
+
+                                    readonly property bool isScalar: uType === "float" || uType === "int"
+
                                     Text {
-                                        visible: uType === "sampler2D"
-                                        anchors.centerIn: parent
-                                        width: parent.width - 10
-                                        text: uText !== "" ? uText.replace(/.*\//, "") : "drop image or video"
-                                        color: uText !== "" ? "white" : "#555"
-                                        font.pixelSize: 11
-                                        elide: Text.ElideLeft
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        enabled: uType === "sampler2D"
-                                        onClicked: {
-                                            newShaderTextureDialog.pendingUniformName = uName;
-                                            newShaderTextureDialog.pendingUniformIndex = uIndex;
-                                            newShaderTextureDialog.open();
-                                        }
-                                    }
-
-                                    DropArea {
-                                        anchors.fill: parent
-                                        enabled: uType === "sampler2D"
-                                        onDropped: drop => {
-                                            if (!drop.hasUrls) return;
-                                            uniformFieldsModel.setProperty(uIndex, "uText", drop.urls[0].toString());
-                                        }
-                                    }
-
-                                    // Numeric input (float/vec)
-                                    TextInput {
-                                        id: newShaderNumericField
-                                        visible: uType !== "sampler2D"
-                                        anchors.fill: parent
-                                        anchors.margins: 3
+                                        text: uName
+                                        width: 108
                                         color: "white"
                                         font.pixelSize: 11
-                                        clip: true
-                                        selectByMouse: true
-                                        text: uText
-                                        Keys.onReturnPressed: focus = false
-                                        Keys.onEscapePressed: focus = false
-                                        onEditingFinished: {
-                                            if (isScalar) {
-                                                var v = parseFloat(text);
-                                                if (!isNaN(v)) {
-                                                    var pos = v >= 100 ? 1.0 : (v <= 0 ? 0.0 : Math.pow(v / 100.0, 0.2));
-                                                    newShaderUniformSlider.value = pos;
-                                                }
+                                        height: parent.height
+                                        verticalAlignment: Text.AlignVCenter
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Slider {
+                                        id: newShaderUniformSlider
+                                        visible: isScalar
+                                        width: parent.width - 175
+                                        height: parent.height
+                                        from: 0
+                                        to: 1
+                                        stepSize: 0
+                                        Component.onCompleted: {
+                                            var v = parseFloat(uText);
+                                            if (isNaN(v) || v <= 0)
+                                                value = 0;
+                                            else if (v >= 100)
+                                                value = 1;
+                                            else
+                                                value = Math.pow(v / 100.0, 0.2);
+                                        }
+                                        onMoved: {
+                                            var expanded = parseFloat((Math.pow(value, 5) * 100.0).toFixed(4));
+                                            uniformFieldsModel.setProperty(uIndex, "uText", expanded.toString());
+                                            newShaderNumericField.text = expanded.toString();
+                                        }
+                                        background: Rectangle {
+                                            x: newShaderUniformSlider.leftPadding
+                                            y: newShaderUniformSlider.topPadding + newShaderUniformSlider.availableHeight / 2 - height / 2
+                                            implicitWidth: 200
+                                            implicitHeight: 4
+                                            width: newShaderUniformSlider.availableWidth
+                                            height: 4
+                                            radius: 2
+                                            color: "#333"
+                                            Rectangle {
+                                                width: newShaderUniformSlider.visualPosition * parent.width
+                                                height: parent.height
+                                                color: "#5DA9A4"
+                                                radius: 2
                                             }
-                                            uniformFieldsModel.setProperty(uIndex, "uText", text);
+                                        }
+                                        handle: Rectangle {
+                                            x: newShaderUniformSlider.leftPadding + newShaderUniformSlider.visualPosition * (newShaderUniformSlider.availableWidth - width)
+                                            y: newShaderUniformSlider.topPadding + newShaderUniformSlider.availableHeight / 2 - height / 2
+                                            implicitWidth: 12
+                                            implicitHeight: 12
+                                            radius: 6
+                                            color: newShaderUniformSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: isScalar ? 55 : (parent.width - 114)
+                                        height: 26
+                                        color: uType === "sampler2D" ? "black" : "transparent"
+                                        border.color: "white"
+                                        border.width: 1
+                                        radius: 4
+
+                                        // Texture label (sampler2D)
+                                        Text {
+                                            visible: uType === "sampler2D"
+                                            anchors.centerIn: parent
+                                            width: parent.width - 10
+                                            text: uText !== "" ? uText.replace(/.*\//, "") : "drop image or video"
+                                            color: uText !== "" ? "white" : "#555"
+                                            font.pixelSize: 11
+                                            elide: Text.ElideLeft
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: uType === "sampler2D"
+                                            onClicked: {
+                                                newShaderTextureDialog.pendingUniformName = uName;
+                                                newShaderTextureDialog.pendingUniformIndex = uIndex;
+                                                newShaderTextureDialog.open();
+                                            }
+                                        }
+
+                                        DropArea {
+                                            anchors.fill: parent
+                                            enabled: uType === "sampler2D"
+                                            onDropped: drop => {
+                                                if (!drop.hasUrls)
+                                                    return;
+                                                uniformFieldsModel.setProperty(uIndex, "uText", drop.urls[0].toString());
+                                            }
+                                        }
+
+                                        // Numeric input (float/vec)
+                                        TextInput {
+                                            id: newShaderNumericField
+                                            visible: uType !== "sampler2D"
+                                            anchors.fill: parent
+                                            anchors.margins: 3
+                                            color: "white"
+                                            font.pixelSize: 11
+                                            clip: true
+                                            selectByMouse: true
+                                            text: uText
+                                            Keys.onReturnPressed: focus = false
+                                            Keys.onEscapePressed: focus = false
+                                            onEditingFinished: {
+                                                if (isScalar) {
+                                                    var v = parseFloat(text);
+                                                    if (!isNaN(v)) {
+                                                        var pos = v >= 100 ? 1.0 : (v <= 0 ? 0.0 : Math.pow(v / 100.0, 0.2));
+                                                        newShaderUniformSlider.value = pos;
+                                                    }
+                                                }
+                                                uniformFieldsModel.setProperty(uIndex, "uText", text);
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                        Item { width: 1; height: 16 }
+                            Item {
+                                width: 1
+                                height: 16
+                            }
                         }  // Column
                     }  // ScrollView
                 }
@@ -7842,46 +9116,79 @@ Window {
                     property real deleteProgress: 0.0
 
                     function cancelNavDelete() {
-                        deleteTarget = ""
-                        deleteProgress = 0.0
+                        deleteTarget = "";
+                        deleteProgress = 0.0;
                     }
 
                     function saveNavLinks(sceneId) {
-                        if (sceneId < 0 || !storyManager.isOpen) return
+                        if (sceneId < 0 || !storyManager.isOpen)
+                            return;
                         var data = {
-                            n: { id: nSettingsArea.linkedSceneId, name: nSettingsArea.linkedSceneName, rev: nSettingsArea.linkedThumbnailRev },
-                            s: { id: sSettingsArea.linkedSceneId, name: sSettingsArea.linkedSceneName, rev: sSettingsArea.linkedThumbnailRev },
-                            e: { id: eSettingsArea.linkedSceneId, name: eSettingsArea.linkedSceneName, rev: eSettingsArea.linkedThumbnailRev },
-                            w: { id: wSettingsArea.linkedSceneId, name: wSettingsArea.linkedSceneName, rev: wSettingsArea.linkedThumbnailRev }
-                        }
-                        storyManager.setEditorState("nav_links_" + sceneId, JSON.stringify(data))
+                            n: {
+                                id: nSettingsArea.linkedSceneId,
+                                name: nSettingsArea.linkedSceneName,
+                                rev: nSettingsArea.linkedThumbnailRev
+                            },
+                            s: {
+                                id: sSettingsArea.linkedSceneId,
+                                name: sSettingsArea.linkedSceneName,
+                                rev: sSettingsArea.linkedThumbnailRev
+                            },
+                            e: {
+                                id: eSettingsArea.linkedSceneId,
+                                name: eSettingsArea.linkedSceneName,
+                                rev: eSettingsArea.linkedThumbnailRev
+                            },
+                            w: {
+                                id: wSettingsArea.linkedSceneId,
+                                name: wSettingsArea.linkedSceneName,
+                                rev: wSettingsArea.linkedThumbnailRev
+                            }
+                        };
+                        storyManager.setEditorState("nav_links_" + sceneId, JSON.stringify(data));
                     }
 
                     function loadNavLinks(sceneId) {
-                        var clear = function() {
-                            nSettingsArea.linkedSceneId = -1; nSettingsArea.linkedSceneName = ""; nSettingsArea.linkedThumbnailRev = 0
-                            sSettingsArea.linkedSceneId = -1; sSettingsArea.linkedSceneName = ""; sSettingsArea.linkedThumbnailRev = 0
-                            eSettingsArea.linkedSceneId = -1; eSettingsArea.linkedSceneName = ""; eSettingsArea.linkedThumbnailRev = 0
-                            wSettingsArea.linkedSceneId = -1; wSettingsArea.linkedSceneName = ""; wSettingsArea.linkedThumbnailRev = 0
+                        var clear = function () {
+                            nSettingsArea.linkedSceneId = -1;
+                            nSettingsArea.linkedSceneName = "";
+                            nSettingsArea.linkedThumbnailRev = 0;
+                            sSettingsArea.linkedSceneId = -1;
+                            sSettingsArea.linkedSceneName = "";
+                            sSettingsArea.linkedThumbnailRev = 0;
+                            eSettingsArea.linkedSceneId = -1;
+                            eSettingsArea.linkedSceneName = "";
+                            eSettingsArea.linkedThumbnailRev = 0;
+                            wSettingsArea.linkedSceneId = -1;
+                            wSettingsArea.linkedSceneName = "";
+                            wSettingsArea.linkedThumbnailRev = 0;
+                        };
+                        if (sceneId < 0 || !storyManager.isOpen) {
+                            clear();
+                            return;
                         }
-                        if (sceneId < 0 || !storyManager.isOpen) { clear(); return }
-                        var json = storyManager.getEditorState("nav_links_" + sceneId)
-                        if (json === "") { clear(); return }
+                        var json = storyManager.getEditorState("nav_links_" + sceneId);
+                        if (json === "") {
+                            clear();
+                            return;
+                        }
                         try {
-                            var d = JSON.parse(json)
-                            nSettingsArea.linkedSceneId = d.n.id !== undefined ? d.n.id : -1
-                            nSettingsArea.linkedSceneName = d.n.name || ""
-                            nSettingsArea.linkedThumbnailRev = d.n.rev || 0
-                            sSettingsArea.linkedSceneId = d.s.id !== undefined ? d.s.id : -1
-                            sSettingsArea.linkedSceneName = d.s.name || ""
-                            sSettingsArea.linkedThumbnailRev = d.s.rev || 0
-                            eSettingsArea.linkedSceneId = d.e.id !== undefined ? d.e.id : -1
-                            eSettingsArea.linkedSceneName = d.e.name || ""
-                            eSettingsArea.linkedThumbnailRev = d.e.rev || 0
-                            wSettingsArea.linkedSceneId = d.w.id !== undefined ? d.w.id : -1
-                            wSettingsArea.linkedSceneName = d.w.name || ""
-                            wSettingsArea.linkedThumbnailRev = d.w.rev || 0
-                        } catch(e) { clear() }
+                            var d = JSON.parse(json);
+                            nSettingsArea.linkedSceneId = d.n.id !== undefined ? d.n.id : -1;
+                            nSettingsArea.linkedSceneName = d.n.name || "";
+                            nSettingsArea.linkedThumbnailRev = d.n.rev || 0;
+                            sSettingsArea.linkedSceneId = d.s.id !== undefined ? d.s.id : -1;
+                            sSettingsArea.linkedSceneName = d.s.name || "";
+                            sSettingsArea.linkedThumbnailRev = d.s.rev || 0;
+                            eSettingsArea.linkedSceneId = d.e.id !== undefined ? d.e.id : -1;
+                            eSettingsArea.linkedSceneName = d.e.name || "";
+                            eSettingsArea.linkedThumbnailRev = d.e.rev || 0;
+                            wSettingsArea.linkedSceneId = d.w.id !== undefined ? d.w.id : -1;
+                            wSettingsArea.linkedSceneName = d.w.name || "";
+                            wSettingsArea.linkedThumbnailRev = d.w.rev || 0;
+                        } catch (e) {
+                            clear();
+                        }
                     }
 
                     Timer {
@@ -7889,14 +9196,27 @@ Window {
                         repeat: true
                         running: navigationSettings.deleteTarget !== ""
                         onTriggered: {
-                            navigationSettings.deleteProgress += 16.0 / 600.0
+                            navigationSettings.deleteProgress += 16.0 / 600.0;
                             if (navigationSettings.deleteProgress >= 1.0) {
-                                var t = navigationSettings.deleteTarget
-                                navigationSettings.cancelNavDelete()
-                                if (t === "n") { nSettingsArea.linkedSceneId = -1; nSettingsArea.linkedSceneName = ""; nSettingsArea.linkedThumbnailRev = 0 }
-                                else if (t === "s") { sSettingsArea.linkedSceneId = -1; sSettingsArea.linkedSceneName = ""; sSettingsArea.linkedThumbnailRev = 0 }
-                                else if (t === "e") { eSettingsArea.linkedSceneId = -1; eSettingsArea.linkedSceneName = ""; eSettingsArea.linkedThumbnailRev = 0 }
-                                else if (t === "w") { wSettingsArea.linkedSceneId = -1; wSettingsArea.linkedSceneName = ""; wSettingsArea.linkedThumbnailRev = 0 }
+                                var t = navigationSettings.deleteTarget;
+                                navigationSettings.cancelNavDelete();
+                                if (t === "n") {
+                                    nSettingsArea.linkedSceneId = -1;
+                                    nSettingsArea.linkedSceneName = "";
+                                    nSettingsArea.linkedThumbnailRev = 0;
+                                } else if (t === "s") {
+                                    sSettingsArea.linkedSceneId = -1;
+                                    sSettingsArea.linkedSceneName = "";
+                                    sSettingsArea.linkedThumbnailRev = 0;
+                                } else if (t === "e") {
+                                    eSettingsArea.linkedSceneId = -1;
+                                    eSettingsArea.linkedSceneName = "";
+                                    eSettingsArea.linkedThumbnailRev = 0;
+                                } else if (t === "w") {
+                                    wSettingsArea.linkedSceneId = -1;
+                                    wSettingsArea.linkedSceneName = "";
+                                    wSettingsArea.linkedThumbnailRev = 0;
+                                }
                             }
                         }
                     }
@@ -8019,93 +9339,132 @@ Window {
                             }
 
                             function doLayoutAreas() {
-                                var vw = viewport.width
-                                var vh = viewport.height
-                                var hasN = nSettingsArea.linkedSceneId !== -1
-                                var hasS = sSettingsArea.linkedSceneId !== -1
-                                var hasE = eSettingsArea.linkedSceneId !== -1
-                                var hasW = wSettingsArea.linkedSceneId !== -1
-                                if (!hasN && !hasS && !hasE && !hasW) return
-
-                                var dt = sceneSettingsView.dirTransitions
+                                var vw = viewport.width;
+                                var vh = viewport.height;
+                                var hasN = nSettingsArea.linkedSceneId !== -1;
+                                var hasS = sSettingsArea.linkedSceneId !== -1;
+                                var hasE = eSettingsArea.linkedSceneId !== -1;
+                                var hasW = wSettingsArea.linkedSceneId !== -1;
+                                if (!hasN && !hasS && !hasE && !hasW)
+                                    return;
+                                var dt = sceneSettingsView.dirTransitions;
                                 // dirTransitions: 0=default, 1=north, 2=south, 3=east, 4=west
 
                                 function makeInteractivity(dirIdx, sceneId, sceneName) {
-                                    var td = dt[dirIdx] || dt[0]
-                                    return JSON.stringify([{
-                                        itemTrigger: "click",
-                                        itemAction: "cue",
-                                        itemCommand: "jump",
-                                        itemTransition:      td.transition   || "cut",
-                                        itemTransitionSpeed: td.transition === "look"
-                                            ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4)
-                                            : (td.speed     !== undefined ? td.speed     : 1.0),
-                                        itemWipeFeather:     td.wipeFeather  !== undefined ? td.wipeFeather  : 0.0,
-                                        itemWipeDirection:   td.wipeDir      || "right",
-                                        itemPushDirection:   td.pushDir      || "right",
-                                        itemLookYaw:         td.lookYaw      !== undefined ? td.lookYaw      : 90.0,
-                                        itemLookPitch:       td.lookPitch    !== undefined ? td.lookPitch    : 0.0,
-                                        itemLookFovMM:       td.lookFov      !== undefined ? td.lookFov      : 24.0,
-                                        itemLookOvershoot:   td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0,
-                                        itemLookShutter:     td.lookShutter  !== undefined ? td.lookShutter  : 0.10,
-                                        itemTargetSceneId:   sceneId,
-                                        itemTargetSceneName: sceneName,
-                                        itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "",
-                                        itemSoundPath: "", itemVideoPath: "", itemVideoTarget: "fill",
-                                        itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: ""
-                                    }])
+                                    var td = dt[dirIdx] || dt[0];
+                                    return JSON.stringify([
+                                        {
+                                            itemTrigger: "click",
+                                            itemAction: "cue",
+                                            itemCommand: "jump",
+                                            itemTransition: td.transition || "cut",
+                                            itemTransitionSpeed: td.transition === "look" ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4) : (td.speed !== undefined ? td.speed : 1.0),
+                                            itemWipeFeather: td.wipeFeather !== undefined ? td.wipeFeather : 0.0,
+                                            itemWipeDirection: td.wipeDir || "right",
+                                            itemPushDirection: td.pushDir || "right",
+                                            itemLookYaw: td.lookYaw !== undefined ? td.lookYaw : 90.0,
+                                            itemLookPitch: td.lookPitch !== undefined ? td.lookPitch : 0.0,
+                                            itemLookFovMM: td.lookFov !== undefined ? td.lookFov : 24.0,
+                                            itemLookOvershoot: td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0,
+                                            itemLookShutter: td.lookShutter !== undefined ? td.lookShutter : 0.10,
+                                            itemTargetSceneId: sceneId,
+                                            itemTargetSceneName: sceneName,
+                                            itemConditionVar: "",
+                                            itemConditionOp: "is",
+                                            itemConditionVal: "",
+                                            itemSoundPath: "",
+                                            itemVideoPath: "",
+                                            itemVideoTarget: "fill",
+                                            itemUpdateVar: "",
+                                            itemUpdateOp: "=",
+                                            itemUpdateVal: ""
+                                        }
+                                    ]);
                                 }
 
                                 // E: 150px wide strip on right, full height
                                 if (hasE) {
                                     viewport.areasModel.append({
-                                        x1: vw - 150, y1: 0, x2: vw, y2: vh,
-                                        name: "east", stackOrder: viewport.nextStackOrder++,
-                                        cursor: "right", cursorPath: "",
+                                        x1: vw - 150,
+                                        y1: 0,
+                                        x2: vw,
+                                        y2: vh,
+                                        name: "east",
+                                        stackOrder: viewport.nextStackOrder++,
+                                        cursor: "right",
+                                        cursorPath: "",
                                         interactivityJson: makeInteractivity(3, eSettingsArea.linkedSceneId, eSettingsArea.linkedSceneName),
-                                        template: "east", locked: false
-                                    })
+                                        template: "east",
+                                        locked: false
+                                    });
                                 }
 
                                 // W: 150px wide strip on left, full height
                                 if (hasW) {
                                     viewport.areasModel.append({
-                                        x1: 0, y1: 0, x2: 150, y2: vh,
-                                        name: "west", stackOrder: viewport.nextStackOrder++,
-                                        cursor: "left", cursorPath: "",
+                                        x1: 0,
+                                        y1: 0,
+                                        x2: 150,
+                                        y2: vh,
+                                        name: "west",
+                                        stackOrder: viewport.nextStackOrder++,
+                                        cursor: "left",
+                                        cursorPath: "",
                                         interactivityJson: makeInteractivity(4, wSettingsArea.linkedSceneId, wSettingsArea.linkedSceneName),
-                                        template: "west", locked: false
-                                    })
+                                        template: "west",
+                                        locked: false
+                                    });
                                 }
 
                                 // S: 80px tall strip at bottom, width depends on E/W presence
                                 if (hasS) {
-                                    var sx1, sx2
-                                    if (hasE && hasW)        { sx1 = 150;        sx2 = vw - 150 }
-                                    else if (hasE && !hasW)  { sx1 = 0;          sx2 = 810      }
-                                    else if (hasW && !hasE)  { sx1 = vw - 810;   sx2 = vw       }
-                                    else                     { sx1 = 0;          sx2 = vw       }
+                                    var sx1, sx2;
+                                    if (hasE && hasW) {
+                                        sx1 = 150;
+                                        sx2 = vw - 150;
+                                    } else if (hasE && !hasW) {
+                                        sx1 = 0;
+                                        sx2 = 810;
+                                    } else if (hasW && !hasE) {
+                                        sx1 = vw - 810;
+                                        sx2 = vw;
+                                    } else {
+                                        sx1 = 0;
+                                        sx2 = vw;
+                                    }
                                     viewport.areasModel.append({
-                                        x1: sx1, y1: vh - 80, x2: sx2, y2: vh,
-                                        name: "south", stackOrder: viewport.nextStackOrder++,
-                                        cursor: "down", cursorPath: "",
+                                        x1: sx1,
+                                        y1: vh - 80,
+                                        x2: sx2,
+                                        y2: vh,
+                                        name: "south",
+                                        stackOrder: viewport.nextStackOrder++,
+                                        cursor: "down",
+                                        cursorPath: "",
                                         interactivityJson: makeInteractivity(2, sSettingsArea.linkedSceneId, sSettingsArea.linkedSceneName),
-                                        template: "south", locked: false
-                                    })
+                                        template: "south",
+                                        locked: false
+                                    });
                                 }
 
                                 // N: fills remaining space above S, between W and E
                                 if (hasN) {
-                                    var nx1 = hasW ? 150 : 0
-                                    var nx2 = hasE ? vw - 150 : vw
-                                    var ny2 = hasS ? vh - 80 : vh
+                                    var nx1 = hasW ? 150 : 0;
+                                    var nx2 = hasE ? vw - 150 : vw;
+                                    var ny2 = hasS ? vh - 80 : vh;
                                     viewport.areasModel.append({
-                                        x1: nx1, y1: 0, x2: nx2, y2: ny2,
-                                        name: "north", stackOrder: viewport.nextStackOrder++,
-                                        cursor: "up", cursorPath: "",
+                                        x1: nx1,
+                                        y1: 0,
+                                        x2: nx2,
+                                        y2: ny2,
+                                        name: "north",
+                                        stackOrder: viewport.nextStackOrder++,
+                                        cursor: "up",
+                                        cursorPath: "",
                                         interactivityJson: makeInteractivity(1, nSettingsArea.linkedSceneId, nSettingsArea.linkedSceneName),
-                                        template: "north", locked: false
-                                    })
+                                        template: "north",
+                                        locked: false
+                                    });
                                 }
                             }
                         }
@@ -8143,8 +9502,7 @@ Window {
                             }
                             Image {
                                 anchors.fill: parent
-                                source: nSettingsArea.linkedSceneId !== -1 && nSettingsArea.linkedThumbnailRev > 0
-                                    ? ("image://thumbnails/" + nSettingsArea.linkedSceneId + "?rev=" + nSettingsArea.linkedThumbnailRev) : ""
+                                source: nSettingsArea.linkedSceneId !== -1 && nSettingsArea.linkedThumbnailRev > 0 ? ("image://thumbnails/" + nSettingsArea.linkedSceneId + "?rev=" + nSettingsArea.linkedThumbnailRev) : ""
                                 fillMode: Image.PreserveAspectCrop
                                 cache: false
                             }
@@ -8188,17 +9546,21 @@ Window {
                             border.color: Qt.rgba(1, 0, 0, 0.4 + navigationSettings.deleteProgress * 0.6)
                             border.width: navigationSettings.deleteTarget === "n" ? 2 : 0
                             visible: navigationSettings.deleteTarget === "n"
-                            Behavior on color { ColorAnimation { duration: 40 } }
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 40
+                                }
+                            }
                         }
 
                         DropArea {
                             anchors.fill: parent
                             keys: ["navScene"]
-                            onDropped: function(drop) {
-                                nSettingsArea.linkedSceneId = navDragGhost.draggedSceneId
-                                nSettingsArea.linkedSceneName = navDragGhost.draggedSceneName
-                                nSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev
-                                drop.accept()
+                            onDropped: function (drop) {
+                                nSettingsArea.linkedSceneId = navDragGhost.draggedSceneId;
+                                nSettingsArea.linkedSceneName = navDragGhost.draggedSceneName;
+                                nSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev;
+                                drop.accept();
                             }
                         }
 
@@ -8206,13 +9568,13 @@ Window {
                             anchors.fill: parent
                             acceptedButtons: Qt.RightButton
                             enabled: nSettingsArea.linkedSceneId !== -1
-                            onPressed: function(mouse) {
+                            onPressed: function (mouse) {
                                 if (mouse.button === Qt.RightButton)
-                                    navigationSettings.deleteTarget = "n"
+                                    navigationSettings.deleteTarget = "n";
                             }
-                            onReleased: function(mouse) {
+                            onReleased: function (mouse) {
                                 if (mouse.button === Qt.RightButton && navigationSettings.deleteTarget === "n")
-                                    navigationSettings.cancelNavDelete()
+                                    navigationSettings.cancelNavDelete();
                             }
                         }
                     }
@@ -8249,8 +9611,7 @@ Window {
                             }
                             Image {
                                 anchors.fill: parent
-                                source: sSettingsArea.linkedSceneId !== -1 && sSettingsArea.linkedThumbnailRev > 0
-                                    ? ("image://thumbnails/" + sSettingsArea.linkedSceneId + "?rev=" + sSettingsArea.linkedThumbnailRev) : ""
+                                source: sSettingsArea.linkedSceneId !== -1 && sSettingsArea.linkedThumbnailRev > 0 ? ("image://thumbnails/" + sSettingsArea.linkedSceneId + "?rev=" + sSettingsArea.linkedThumbnailRev) : ""
                                 fillMode: Image.PreserveAspectCrop
                                 cache: false
                             }
@@ -8294,17 +9655,21 @@ Window {
                             border.color: Qt.rgba(1, 0, 0, 0.4 + navigationSettings.deleteProgress * 0.6)
                             border.width: navigationSettings.deleteTarget === "s" ? 2 : 0
                             visible: navigationSettings.deleteTarget === "s"
-                            Behavior on color { ColorAnimation { duration: 40 } }
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 40
+                                }
+                            }
                         }
 
                         DropArea {
                             anchors.fill: parent
                             keys: ["navScene"]
-                            onDropped: function(drop) {
-                                sSettingsArea.linkedSceneId = navDragGhost.draggedSceneId
-                                sSettingsArea.linkedSceneName = navDragGhost.draggedSceneName
-                                sSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev
-                                drop.accept()
+                            onDropped: function (drop) {
+                                sSettingsArea.linkedSceneId = navDragGhost.draggedSceneId;
+                                sSettingsArea.linkedSceneName = navDragGhost.draggedSceneName;
+                                sSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev;
+                                drop.accept();
                             }
                         }
 
@@ -8312,13 +9677,13 @@ Window {
                             anchors.fill: parent
                             acceptedButtons: Qt.RightButton
                             enabled: sSettingsArea.linkedSceneId !== -1
-                            onPressed: function(mouse) {
+                            onPressed: function (mouse) {
                                 if (mouse.button === Qt.RightButton)
-                                    navigationSettings.deleteTarget = "s"
+                                    navigationSettings.deleteTarget = "s";
                             }
-                            onReleased: function(mouse) {
+                            onReleased: function (mouse) {
                                 if (mouse.button === Qt.RightButton && navigationSettings.deleteTarget === "s")
-                                    navigationSettings.cancelNavDelete()
+                                    navigationSettings.cancelNavDelete();
                             }
                         }
                     }
@@ -8355,8 +9720,7 @@ Window {
                             }
                             Image {
                                 anchors.fill: parent
-                                source: eSettingsArea.linkedSceneId !== -1 && eSettingsArea.linkedThumbnailRev > 0
-                                    ? ("image://thumbnails/" + eSettingsArea.linkedSceneId + "?rev=" + eSettingsArea.linkedThumbnailRev) : ""
+                                source: eSettingsArea.linkedSceneId !== -1 && eSettingsArea.linkedThumbnailRev > 0 ? ("image://thumbnails/" + eSettingsArea.linkedSceneId + "?rev=" + eSettingsArea.linkedThumbnailRev) : ""
                                 fillMode: Image.PreserveAspectCrop
                                 cache: false
                             }
@@ -8400,17 +9764,21 @@ Window {
                             border.color: Qt.rgba(1, 0, 0, 0.4 + navigationSettings.deleteProgress * 0.6)
                             border.width: navigationSettings.deleteTarget === "e" ? 2 : 0
                             visible: navigationSettings.deleteTarget === "e"
-                            Behavior on color { ColorAnimation { duration: 40 } }
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 40
+                                }
+                            }
                         }
 
                         DropArea {
                             anchors.fill: parent
                             keys: ["navScene"]
-                            onDropped: function(drop) {
-                                eSettingsArea.linkedSceneId = navDragGhost.draggedSceneId
-                                eSettingsArea.linkedSceneName = navDragGhost.draggedSceneName
-                                eSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev
-                                drop.accept()
+                            onDropped: function (drop) {
+                                eSettingsArea.linkedSceneId = navDragGhost.draggedSceneId;
+                                eSettingsArea.linkedSceneName = navDragGhost.draggedSceneName;
+                                eSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev;
+                                drop.accept();
                             }
                         }
 
@@ -8418,13 +9786,13 @@ Window {
                             anchors.fill: parent
                             acceptedButtons: Qt.RightButton
                             enabled: eSettingsArea.linkedSceneId !== -1
-                            onPressed: function(mouse) {
+                            onPressed: function (mouse) {
                                 if (mouse.button === Qt.RightButton)
-                                    navigationSettings.deleteTarget = "e"
+                                    navigationSettings.deleteTarget = "e";
                             }
-                            onReleased: function(mouse) {
+                            onReleased: function (mouse) {
                                 if (mouse.button === Qt.RightButton && navigationSettings.deleteTarget === "e")
-                                    navigationSettings.cancelNavDelete()
+                                    navigationSettings.cancelNavDelete();
                             }
                         }
                     }
@@ -8461,8 +9829,7 @@ Window {
                             }
                             Image {
                                 anchors.fill: parent
-                                source: wSettingsArea.linkedSceneId !== -1 && wSettingsArea.linkedThumbnailRev > 0
-                                    ? ("image://thumbnails/" + wSettingsArea.linkedSceneId + "?rev=" + wSettingsArea.linkedThumbnailRev) : ""
+                                source: wSettingsArea.linkedSceneId !== -1 && wSettingsArea.linkedThumbnailRev > 0 ? ("image://thumbnails/" + wSettingsArea.linkedSceneId + "?rev=" + wSettingsArea.linkedThumbnailRev) : ""
                                 fillMode: Image.PreserveAspectCrop
                                 cache: false
                             }
@@ -8506,17 +9873,21 @@ Window {
                             border.color: Qt.rgba(1, 0, 0, 0.4 + navigationSettings.deleteProgress * 0.6)
                             border.width: navigationSettings.deleteTarget === "w" ? 2 : 0
                             visible: navigationSettings.deleteTarget === "w"
-                            Behavior on color { ColorAnimation { duration: 40 } }
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: 40
+                                }
+                            }
                         }
 
                         DropArea {
                             anchors.fill: parent
                             keys: ["navScene"]
-                            onDropped: function(drop) {
-                                wSettingsArea.linkedSceneId = navDragGhost.draggedSceneId
-                                wSettingsArea.linkedSceneName = navDragGhost.draggedSceneName
-                                wSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev
-                                drop.accept()
+                            onDropped: function (drop) {
+                                wSettingsArea.linkedSceneId = navDragGhost.draggedSceneId;
+                                wSettingsArea.linkedSceneName = navDragGhost.draggedSceneName;
+                                wSettingsArea.linkedThumbnailRev = navDragGhost.draggedThumbnailRev;
+                                drop.accept();
                             }
                         }
 
@@ -8524,13 +9895,13 @@ Window {
                             anchors.fill: parent
                             acceptedButtons: Qt.RightButton
                             enabled: wSettingsArea.linkedSceneId !== -1
-                            onPressed: function(mouse) {
+                            onPressed: function (mouse) {
                                 if (mouse.button === Qt.RightButton)
-                                    navigationSettings.deleteTarget = "w"
+                                    navigationSettings.deleteTarget = "w";
                             }
-                            onReleased: function(mouse) {
+                            onReleased: function (mouse) {
                                 if (mouse.button === Qt.RightButton && navigationSettings.deleteTarget === "w")
-                                    navigationSettings.cancelNavDelete()
+                                    navigationSettings.cancelNavDelete();
                             }
                         }
                     }
@@ -8609,7 +9980,9 @@ Window {
 
                     Connections {
                         target: storyManager
-                        function onStoryOpened() { sceneScript.loadVariablesFromDb(); }
+                        function onStoryOpened() {
+                            sceneScript.loadVariablesFromDb();
+                        }
                     }
 
                     // Remove unnamed variables and persist when the user navigates away
@@ -8660,33 +10033,36 @@ Window {
                                         easing.type: Easing.Linear
                                         onFinished: {
                                             if (varDelegate.deleteProgress >= 1.0) {
-                                                var deletedName = variablesModel.get(varDelegate.delegateIndex).varName
-                                                var models = [selectInteractivityModel]
+                                                var deletedName = variablesModel.get(varDelegate.delegateIndex).varName;
+                                                var models = [selectInteractivityModel];
                                                 for (var m = 0; m < models.length; m++) {
-                                                    var mdl = models[m]
+                                                    var mdl = models[m];
                                                     for (var i = mdl.count - 1; i >= 0; i--) {
                                                         if (mdl.get(i).itemConditionVar === deletedName)
-                                                            mdl.remove(i)
+                                                            mdl.remove(i);
                                                     }
                                                     // Per-trigger: if no "if" items remain for a trigger, remove orphaned "else" items
-                                                    var triggers = ["click", "hover"]
+                                                    var triggers = ["click", "hover"];
                                                     for (var t = 0; t < triggers.length; t++) {
-                                                        var trig = triggers[t]
-                                                        var hasIf = false
+                                                        var trig = triggers[t];
+                                                        var hasIf = false;
                                                         for (var i = 0; i < mdl.count; i++) {
-                                                            var e = mdl.get(i)
-                                                            if (e.itemTrigger === trig && e.itemAction === "if") { hasIf = true; break }
+                                                            var e = mdl.get(i);
+                                                            if (e.itemTrigger === trig && e.itemAction === "if") {
+                                                                hasIf = true;
+                                                                break;
+                                                            }
                                                         }
                                                         if (!hasIf) {
                                                             for (var i = mdl.count - 1; i >= 0; i--) {
-                                                                var e = mdl.get(i)
+                                                                var e = mdl.get(i);
                                                                 if (e.itemTrigger === trig && e.itemAction === "else")
-                                                                    mdl.remove(i)
+                                                                    mdl.remove(i);
                                                             }
                                                         }
                                                     }
                                                 }
-                                                variablesModel.remove(varDelegate.delegateIndex)
+                                                variablesModel.remove(varDelegate.delegateIndex);
                                             }
                                         }
                                     }
@@ -8696,16 +10072,16 @@ Window {
                                         acceptedButtons: Qt.RightButton
                                         z: 10
                                         onPressed: mouse => {
-                                            varDelegate.deleteProgress = 0
-                                            varDeleteAnim.start()
+                                            varDelegate.deleteProgress = 0;
+                                            varDeleteAnim.start();
                                         }
                                         onReleased: mouse => {
-                                            varDeleteAnim.stop()
-                                            varDelegate.deleteProgress = 0
+                                            varDeleteAnim.stop();
+                                            varDelegate.deleteProgress = 0;
                                         }
                                         onExited: {
-                                            varDeleteAnim.stop()
-                                            varDelegate.deleteProgress = 0
+                                            varDeleteAnim.stop();
+                                            varDelegate.deleteProgress = 0;
                                         }
                                     }
 
@@ -9056,7 +10432,6 @@ Window {
                                                 }
                                             }
                                         }
-
                                     }
                                 }
                             }
@@ -9116,7 +10491,6 @@ Window {
                             }
                         }
                     }
-
                 }
 
                 Rectangle {
@@ -9127,45 +10501,77 @@ Window {
                     radius: parent.radius
                     color: "transparent"
 
-                    readonly property var toolDisplayNames: ({ "select": "select", "simulate": "simulate", "relayer": "stack", "destroy": "delete" })
+                    readonly property var toolDisplayNames: ({
+                            "select": "select",
+                            "simulate": "simulate",
+                            "relayer": "stack",
+                            "destroy": "delete"
+                        })
                     property int nodesRevision: 0
                     Connections {
                         target: nodeWorkspace.nodesModel
-                        function onCountChanged() { sceneNameSettings.nodesRevision++ }
-                        function onDataChanged() { sceneNameSettings.nodesRevision++ }
-                        function onRowsInserted() { sceneNameSettings.nodesRevision++ }
-                        function onRowsRemoved() { sceneNameSettings.nodesRevision++ }
-                        function onModelReset() { sceneNameSettings.nodesRevision++ }
+                        function onCountChanged() {
+                            sceneNameSettings.nodesRevision++;
+                        }
+                        function onDataChanged() {
+                            sceneNameSettings.nodesRevision++;
+                        }
+                        function onRowsInserted() {
+                            sceneNameSettings.nodesRevision++;
+                        }
+                        function onRowsRemoved() {
+                            sceneNameSettings.nodesRevision++;
+                        }
+                        function onModelReset() {
+                            sceneNameSettings.nodesRevision++;
+                        }
                     }
 
                     property int networksRevision: 0
                     Connections {
                         target: nodeWorkspace.networksModel
-                        function onCountChanged() { sceneNameSettings.networksRevision++ }
-                        function onDataChanged() { sceneNameSettings.networksRevision++ }
-                        function onRowsInserted() { sceneNameSettings.networksRevision++ }
-                        function onRowsRemoved() { sceneNameSettings.networksRevision++ }
-                        function onModelReset() { sceneNameSettings.networksRevision++ }
+                        function onCountChanged() {
+                            sceneNameSettings.networksRevision++;
+                        }
+                        function onDataChanged() {
+                            sceneNameSettings.networksRevision++;
+                        }
+                        function onRowsInserted() {
+                            sceneNameSettings.networksRevision++;
+                        }
+                        function onRowsRemoved() {
+                            sceneNameSettings.networksRevision++;
+                        }
+                        function onModelReset() {
+                            sceneNameSettings.networksRevision++;
+                        }
                     }
 
-                    property var networkModel: { networksRevision;
+                    property var networkModel: {
+                        networksRevision;
                         var list = [];
                         if (nodeWorkspace.networksModel) {
                             for (var i = 0; i < nodeWorkspace.networksModel.count; i++) {
                                 var net = nodeWorkspace.networksModel.get(i);
-                                list.push({ "id": net.netId, "name": net.netName, "color": net.netColor });
+                                list.push({
+                                    "id": net.netId,
+                                    "name": net.netName,
+                                    "color": net.netColor
+                                });
                             }
                         }
                         return list;
                     }
-                    
-                    property real maxNetworkNameWidth: { networksRevision;
+
+                    property real maxNetworkNameWidth: {
+                        networksRevision;
                         var maxW = 44;
                         for (var i = 0; i < networkModel.length; i++) {
                             var name = networkModel[i].name;
                             if (name) {
                                 var w = 60 + (name.length * 7);
-                                if (w > maxW) maxW = w;
+                                if (w > maxW)
+                                    maxW = w;
                             }
                         }
                         return Math.min(300, maxW);
@@ -9178,11 +10584,15 @@ Window {
                         }
                         return names;
                     }
-                    
+
                     property int selectedNetworkId: -1
-                    
-                    property var computedNodesForNetwork: { networksRevision; nodesRevision; selectedNetworkId;
-                        if (selectedNetworkId === -1 || !storyManager) return ["(none)"];
+
+                    property var computedNodesForNetwork: {
+                        networksRevision;
+                        nodesRevision;
+                        selectedNetworkId;
+                        if (selectedNetworkId === -1 || !storyManager)
+                            return ["(none)"];
                         var names = ["(none)"];
                         var nodeNames = storyManager.getNetworkNodeNames(selectedNetworkId);
                         if (nodeNames) {
@@ -9194,11 +10604,12 @@ Window {
                     }
 
                     function loadLocation() {
-                        if (mainWindow.currentSceneId === -1) return;
-                        
+                        if (mainWindow.currentSceneId === -1)
+                            return;
+
                         var netIdStr = storyManager.getEditorState("location_net_" + mainWindow.currentSceneId);
                         var nodeName = storyManager.getEditorState("location_node_" + mainWindow.currentSceneId);
-                        
+
                         // Backward compatibility
                         if (netIdStr === "" && nodeName === "") {
                             nodeName = storyManager.getEditorState("location_" + mainWindow.currentSceneId);
@@ -9214,7 +10625,7 @@ Window {
                                 }
                             }
                         }
-                        
+
                         if (netIdStr !== "") {
                             var netId = parseInt(netIdStr);
                             var foundNet = false;
@@ -9236,11 +10647,13 @@ Window {
                             if (networkModel.length > 0)
                                 sceneNameSettings.selectedNetworkId = networkModel[0].id;
                         }
-                        
+
                         // After setting network, the nodeCombo model will update.
                         var nodeIdx = nodeCombo.find(nodeName);
-                        if (nodeIdx !== -1) nodeCombo.currentIndex = nodeIdx;
-                        else nodeCombo.currentIndex = 0;
+                        if (nodeIdx !== -1)
+                            nodeCombo.currentIndex = nodeIdx;
+                        else
+                            nodeCombo.currentIndex = 0;
                     }
 
                     Text {
@@ -9361,12 +10774,16 @@ Window {
                                 Layout.preferredHeight: 28
                                 model: sceneNameSettings.networkModel
                                 textRole: "name"
-                                HoverHandler { id: networkHover }
+                                HoverHandler {
+                                    id: networkHover
+                                }
 
                                 property real calculatedWidth: {
-                                    if (currentIndex < 0 || currentIndex >= sceneNameSettings.networkModel.length) return 44;
+                                    if (currentIndex < 0 || currentIndex >= sceneNameSettings.networkModel.length)
+                                        return 44;
                                     var net = sceneNameSettings.networkModel[currentIndex];
-                                    if (!net || !net.name) return 44;
+                                    if (!net || !net.name)
+                                        return 44;
                                     return 60 + (net.name.length * 7);
                                 }
                                 Layout.preferredWidth: Math.min(250, Math.max(44, calculatedWidth))
@@ -9388,7 +10805,8 @@ Window {
                                         anchors.left: parent.left
                                         anchors.leftMargin: 8
                                         anchors.verticalCenter: parent.verticalCenter
-                                        width: 18; height: 18
+                                        width: 18
+                                        height: 18
                                         Image {
                                             id: netIconImg
                                             anchors.fill: parent
@@ -9400,7 +10818,8 @@ Window {
                                             anchors.fill: parent
                                             source: netIconImg
                                             color: {
-                                                if (networkCombo.currentIndex < 0 || networkCombo.currentIndex >= sceneNameSettings.networkModel.length) return "white";
+                                                if (networkCombo.currentIndex < 0 || networkCombo.currentIndex >= sceneNameSettings.networkModel.length)
+                                                    return "white";
                                                 var net = sceneNameSettings.networkModel[networkCombo.currentIndex];
                                                 return (net && net.color && net.color !== "#2e2e33") ? net.color : "white";
                                             }
@@ -9413,7 +10832,8 @@ Window {
                                         anchors.rightMargin: 24
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: {
-                                            if (networkCombo.currentIndex < 0 || networkCombo.currentIndex >= sceneNameSettings.networkModel.length) return "";
+                                            if (networkCombo.currentIndex < 0 || networkCombo.currentIndex >= sceneNameSettings.networkModel.length)
+                                                return "";
                                             var net = sceneNameSettings.networkModel[networkCombo.currentIndex];
                                             return (net && net.name) ? net.name : "";
                                         }
@@ -9437,7 +10857,11 @@ Window {
                                     color: "transparent"
                                     border.color: networkHover.hovered ? "#80cfff" : "white"
                                     border.width: 1
-                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+                                    Behavior on border.color {
+                                        ColorAnimation {
+                                            duration: 100
+                                        }
+                                    }
                                 }
                                 popup: Popup {
                                     y: networkCombo.height + 2
@@ -9454,7 +10878,7 @@ Window {
                                         implicitHeight: Math.min(contentHeight, 300)
                                         model: networkCombo.popup.visible ? networkCombo.delegateModel : null
                                         currentIndex: networkCombo.highlightedIndex
-                                        ScrollIndicator.vertical: ScrollIndicator { }
+                                        ScrollIndicator.vertical: ScrollIndicator {}
                                     }
                                 }
                                 delegate: ItemDelegate {
@@ -9469,7 +10893,8 @@ Window {
                                             anchors.left: parent.left
                                             anchors.leftMargin: 8
                                             anchors.verticalCenter: parent.verticalCenter
-                                            width: 18; height: 18
+                                            width: 18
+                                            height: 18
                                             Image {
                                                 id: delegateIconImg
                                                 anchors.fill: parent
@@ -9511,15 +10936,17 @@ Window {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 28
                                 model: sceneNameSettings.computedNodesForNetwork
-                                HoverHandler { id: nodeHover }
-                                
+                                HoverHandler {
+                                    id: nodeHover
+                                }
+
                                 onActivated: {
                                     if (mainWindow.currentSceneId !== -1) {
                                         storyManager.setEditorState("location_node_" + mainWindow.currentSceneId, currentText);
                                         mainWindow.updateGlobalLoopingSound();
                                     }
                                 }
-                                
+
                                 contentItem: Item {
                                     anchors.fill: parent
                                     Text {
@@ -9547,7 +10974,11 @@ Window {
                                     color: "transparent"
                                     border.color: nodeHover.hovered ? "#80cfff" : "white"
                                     border.width: 1
-                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+                                    Behavior on border.color {
+                                        ColorAnimation {
+                                            duration: 100
+                                        }
+                                    }
                                 }
                                 popup: Popup {
                                     y: nodeCombo.height + 2
@@ -9564,7 +10995,7 @@ Window {
                                         implicitHeight: Math.min(contentHeight, 300)
                                         model: nodeCombo.popup.visible ? nodeCombo.delegateModel : null
                                         currentIndex: nodeCombo.highlightedIndex
-                                        ScrollIndicator.vertical: ScrollIndicator { }
+                                        ScrollIndicator.vertical: ScrollIndicator {}
                                     }
                                 }
                                 delegate: ItemDelegate {
@@ -9600,13 +11031,12 @@ Window {
                                 sceneNameSettings.loadLocation();
                             }
                         }
-                        
+
                         // Also load when component is ready or model changes
                         Component.onCompleted: {
                             sceneNameSettings.loadLocation();
                         }
                     }
-
                 }
             }
 
@@ -9704,8 +11134,7 @@ Window {
                 }
                 Image {
                     anchors.fill: parent
-                    source: navDragGhost.draggedSceneId !== -1 && navDragGhost.draggedThumbnailRev > 0
-                        ? ("image://thumbnails/" + navDragGhost.draggedSceneId + "?rev=" + navDragGhost.draggedThumbnailRev) : ""
+                    source: navDragGhost.draggedSceneId !== -1 && navDragGhost.draggedThumbnailRev > 0 ? ("image://thumbnails/" + navDragGhost.draggedSceneId + "?rev=" + navDragGhost.draggedThumbnailRev) : ""
                     fillMode: Image.PreserveAspectCrop
                     cache: false
                 }
@@ -9891,7 +11320,7 @@ Window {
                 // (see sceneEditor2sceneMenu handler for the final load step)
                 pendingStoryPath = path;
                 var savedSceneId = mainWindow.currentSceneId;
-                viewport.captureAndSaveThumbnail(savedSceneId, function() {
+                viewport.captureAndSaveThumbnail(savedSceneId, function () {
                     if (savedSceneId !== -1) {
                         storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
                         storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
@@ -9993,7 +11422,8 @@ Window {
         }
         var sceneId = mainWindow.currentSceneId;
         var nodeName = storyManager.getEditorState("location_node_" + sceneId);
-        if (nodeName === "") nodeName = storyManager.getEditorState("location_" + sceneId);
+        if (nodeName === "")
+            nodeName = storyManager.getEditorState("location_" + sceneId);
         mainWindow.currentLocationNodeName = nodeName;
     }
 
@@ -10005,28 +11435,34 @@ Window {
                 id: loopPlayer
                 source: (model.enabled && (model.soundType || "loop") === "loop") ? model.filePath : ""
                 loops: MediaPlayer.Infinite
-                audioOutput: AudioOutput { volume: 1.0 }
+                audioOutput: AudioOutput {
+                    volume: 1.0
+                }
 
                 readonly property int orbitingNodeId: {
-                    var sIdx = index
-                    var orbits = nodeWorkspace.orbitsModel
+                    var sIdx = index;
+                    var orbits = nodeWorkspace.orbitsModel;
                     for (var i = 0; i < orbits.count; i++) {
-                        var o = orbits.get(i)
-                        if (o.circleType === "sound" && o.itemIdx === sIdx) return o.nodeId
+                        var o = orbits.get(i);
+                        if (o.circleType === "sound" && o.itemIdx === sIdx)
+                            return o.nodeId;
                     }
-                    return -1
+                    return -1;
                 }
 
                 readonly property bool shouldBePlaying: {
-                    if (orbitingNodeId === -1 || !model.enabled || (model.soundType || "loop") !== "loop" || !storyManager.isOpen || mainWindow.currentSceneId === -1) return false
-                    if (mainWindow.currentLocationNodeName === "") return false
+                    if (orbitingNodeId === -1 || !model.enabled || (model.soundType || "loop") !== "loop" || !storyManager.isOpen || mainWindow.currentSceneId === -1)
+                        return false;
+                    if (mainWindow.currentLocationNodeName === "")
+                        return false;
 
-                    var nodes = nodeWorkspace.nodesModel
+                    var nodes = nodeWorkspace.nodesModel;
                     for (var i = 0; i < nodes.count; i++) {
-                        var n = nodes.get(i)
-                        if (n.id === orbitingNodeId && n.name === mainWindow.currentLocationNodeName) return true
+                        var n = nodes.get(i);
+                        if (n.id === orbitingNodeId && n.name === mainWindow.currentLocationNodeName)
+                            return true;
                     }
-                    return false
+                    return false;
                 }
 
                 onShouldBePlayingChanged: {
@@ -10058,21 +11494,29 @@ Window {
 
     Connections {
         target: mainWindow
-        function onCurrentSceneIdChanged() { mainWindow.updateGlobalLoopingSound(); }
+        function onCurrentSceneIdChanged() {
+            mainWindow.updateGlobalLoopingSound();
+        }
     }
 
     Connections {
         target: nodeWorkspace.orbitsModel
-        function onCountChanged() { mainWindow.updateGlobalLoopingSound(); }
+        function onCountChanged() {
+            mainWindow.updateGlobalLoopingSound();
+        }
     }
 
     Connections {
         target: nodeWorkspace.soundsModel
-        function onDataChanged() { mainWindow.updateGlobalLoopingSound(); }
+        function onDataChanged() {
+            mainWindow.updateGlobalLoopingSound();
+        }
     }
 
     Connections {
         target: storyManager
-        function onStoryOpened() { mainWindow.updateGlobalLoopingSound(); }
+        function onStoryOpened() {
+            mainWindow.updateGlobalLoopingSound();
+        }
     }
 }
