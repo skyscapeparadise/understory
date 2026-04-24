@@ -196,6 +196,7 @@ Window {
             id: player
             source: "file:intro.mp4"
             autoPlay: true
+            playbackRate: 1.5
             videoOutput: splashVideoOutput
 
             onMediaStatusChanged: {
@@ -9852,6 +9853,7 @@ Window {
             id: story2sceneMenuPlayer
             source: "file:storymenu2scenemenu.mp4"
             autoPlay: false
+            playbackRate: 1.5
             videoOutput: story2sceneMenuVideoOutput
 
             onMediaStatusChanged: {
@@ -9886,6 +9888,7 @@ Window {
             id: scene2storyMenuPlayer
             source: "file:scenemenu2storymenu.mp4"
             autoPlay: false
+            playbackRate: 1.5
             videoOutput: scene2storyMenuVideoOutput
 
             onMediaStatusChanged: {
@@ -9920,6 +9923,7 @@ Window {
             id: sceneMenu2sceneEditorPlayer
             source: "file:scenemenu2sceneeditor.mp4"
             autoPlay: false
+            playbackRate: 1.5
             videoOutput: sceneMenu2sceneEditorVideoOutput
 
             onMediaStatusChanged: {
@@ -10036,6 +10040,7 @@ Window {
             id: sceneEditor2sceneMenuPlayer
             source: "file:sceneeditor2scenemenu.mp4"
             autoPlay: false
+            playbackRate: 1.5
             videoOutput: sceneEditor2sceneMenuVideoOutput
 
             onMediaStatusChanged: {
