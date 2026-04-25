@@ -2985,6 +2985,10 @@ Window {
             property bool wiping: false
             property real wipeProgress: 0.0   // animates 0→1 during wipe
             property real pendingWipeFeather: 0.0   // stored from fireInteractivity
+
+            // ── Video source transition signaling ────────────────────────────────
+            property int videoTransitionCompleteRevision: 0
+            property int videoTransitionCompleteIndex: -1
             property string pendingWipeDirection: "right"
             // Live values fed into the ShaderEffect during a wipe:
             property real wipeFeather: 0.0
@@ -3573,6 +3577,8 @@ Window {
                 for (var di = 0; di < sceneSettingsView.dirTransitions.length; di++)
                     sceneSettingsView.applyTemplateTransitions(di);
                 navigationSettings.loadNavLinks(sceneId);
+                selectSettings.stableOrbitCache = ({});
+                selectSettings.elementTransitionDest = ({});
                 selectSettings.evaluateAllSources();
             }
 
@@ -4083,7 +4089,8 @@ Window {
                             name: videoSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false,
-                            sourcesJson: "[]"
+                            sourcesJson: "[]",
+                            inTransition: false
                         });
                         viewport.selectVideo(viewport.videosModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -6835,6 +6842,10 @@ Window {
                     property string syncedType: ""
                     property int syncedIdx: -1
 
+                    // Orbit transition state — keyed by "vidIdx:netId:charName:nodeName" / vidIdx
+                    property var stableOrbitCache: ({})
+                    property var elementTransitionDest: ({})
+
                     function saveCurrentInteractivity() {
                         if (syncedIdx < 0)
                             return;
@@ -6984,12 +6995,8 @@ Window {
                         return false;
                     }
 
-                    function evaluateWhereCondition(s) {
-                        var netId = s.srcWhereNetId;
-                        var charName = s.srcWhereCharName;
-                        var op = s.srcWhereOp || "is at";
-                        var nodeName = s.srcWhereNodeName;
-                        if (netId < 0 || !charName || !nodeName) return false;
+                    // Returns true if the named character is currently orbiting the named node in netId.
+                    function isCharAtNode(netId, charName, nodeName) {
                         var orbits, nodes, characters;
                         if (netId === nodeWorkspace.networkId) {
                             orbits = []; nodes = []; characters = [];
@@ -7014,13 +7021,24 @@ Window {
                             if (nodes[i].name === nodeName) { nodeId = nodes[i].id; break; }
                         }
                         if (nodeId < 0) return false;
-                        var isOrbiting = false;
                         for (var i = 0; i < orbits.length; i++) {
                             var o = orbits[i];
-                            if (o.circleType === "char" && o.itemIdx === charIdx && o.nodeId === nodeId) { isOrbiting = true; break; }
+                            if (o.circleType === "char" && o.itemIdx === charIdx && o.nodeId === nodeId) return true;
                         }
-                        if (op === "is at")     return isOrbiting;
-                        if (op === "is not at") return !isOrbiting;
+                        return false;
+                    }
+
+                    function evaluateWhereCondition(s) {
+                        var op = s.srcWhereOp || "is at";
+                        // arrive/depart are handled by the transition system, not stateless eval
+                        if (op === "arrive" || op === "depart") return false;
+                        var netId = s.srcWhereNetId;
+                        var charName = s.srcWhereCharName;
+                        var nodeName = s.srcWhereNodeName;
+                        if (netId < 0 || !charName || !nodeName) return false;
+                        var orbiting = isCharAtNode(netId, charName, nodeName);
+                        if (op === "is at")  return orbiting;
+                        if (op === "not at") return !orbiting;
                         return false;
                     }
 
@@ -7044,6 +7062,83 @@ Window {
                         return null;
                     }
 
+                    // Evaluates the source for a single video element, handling arrive/depart transitions.
+                    // Returns { filePath, isTransition, destOrbiting, cacheKey } or null.
+                    function evaluateVideoSource(vidIdx, sj) {
+                        var sources;
+                        try { sources = JSON.parse(sj || "[]"); } catch(e) { return null; }
+                        if (!sources || sources.length === 0) return null;
+
+                        var arriveRow = null, departRow = null;
+                        for (var j = 0; j < sources.length; j++) {
+                            var s = sources[j];
+                            if (s.srcCondition === "where") {
+                                if (s.srcWhereOp === "arrive" && !arriveRow) arriveRow = s;
+                                else if (s.srcWhereOp === "depart" && !departRow) departRow = s;
+                            }
+                        }
+
+                        if (arriveRow || departRow) {
+                            var refRow = arriveRow || departRow;
+                            var netId = refRow.srcWhereNetId;
+                            var charName = refRow.srcWhereCharName;
+                            var nodeName = refRow.srcWhereNodeName;
+                            console.log("[ArriveDepart] vidIdx:", vidIdx, "netId:", netId, "char:", charName, "node:", nodeName,
+                                        "arriveFile:", arriveRow ? arriveRow.srcFilePath : "none",
+                                        "departFile:", departRow ? departRow.srcFilePath : "none")
+                            if (netId >= 0 && charName && nodeName) {
+                                var cacheKey = vidIdx + ":" + netId + ":" + charName + ":" + nodeName;
+                                var currentOrbiting = isCharAtNode(netId, charName, nodeName);
+                                var prevOrbiting = stableOrbitCache.hasOwnProperty(cacheKey) ? stableOrbitCache[cacheKey] : currentOrbiting;
+                                console.log("[ArriveDepart] cacheKey:", cacheKey, "prev:", prevOrbiting, "cur:", currentOrbiting,
+                                            "cacheHit:", stableOrbitCache.hasOwnProperty(cacheKey))
+
+                                if (!prevOrbiting && currentOrbiting && arriveRow && arriveRow.srcFilePath) {
+                                    console.log("[ArriveDepart] ARRIVE triggered →", arriveRow.srcFilePath)
+                                    return { filePath: arriveRow.srcFilePath, isTransition: true, destOrbiting: true, cacheKey: cacheKey };
+                                }
+                                if (prevOrbiting && !currentOrbiting && departRow && departRow.srcFilePath) {
+                                    console.log("[ArriveDepart] DEPART triggered →", departRow.srcFilePath)
+                                    return { filePath: departRow.srcFilePath, isTransition: true, destOrbiting: false, cacheKey: cacheKey };
+                                }
+                                console.log("[ArriveDepart] no transition — updating cache to", currentOrbiting)
+                                // No transition — update stable cache and fall through to stateless eval
+                                stableOrbitCache[cacheKey] = currentOrbiting;
+                            } else {
+                                console.log("[ArriveDepart] SKIPPED — incomplete condition (netId/char/node not set)")
+                            }
+                        }
+
+                        var stable = evaluateSourcesJson(sj);
+                        if (!stable) return null;
+                        return { filePath: stable.filePath, isTransition: false };
+                    }
+
+                    // Called by the video delegate via videoTransitionCompleteRevision when a
+                    // one-shot arrive/depart clip reaches EndOfMedia.
+                    function completeVideoTransition(vidIdx) {
+                        console.log("[ArriveDepart] completeVideoTransition called — vidIdx:", vidIdx)
+                        if (vidIdx < 0 || vidIdx >= viewport.videosModel.count) return;
+                        var dest = elementTransitionDest[vidIdx];
+                        if (dest) {
+                            stableOrbitCache[dest.cacheKey] = dest.destOrbiting;
+                            delete elementTransitionDest[vidIdx];
+                        }
+                        viewport.videosModel.setProperty(vidIdx, "inTransition", false);
+                        var m = viewport.videosModel.get(vidIdx);
+                        var sj = m.sourcesJson;
+                        if (!sj || sj === "[]") return;
+                        var result = evaluateVideoSource(vidIdx, sj);
+                        if (result === null) return;
+                        if (result.isTransition) {
+                            viewport.videosModel.setProperty(vidIdx, "inTransition", true);
+                            viewport.videosModel.setProperty(vidIdx, "filePath", result.filePath);
+                            elementTransitionDest[vidIdx] = { destOrbiting: result.destOrbiting, cacheKey: result.cacheKey };
+                        } else {
+                            viewport.videosModel.setProperty(vidIdx, "filePath", result.filePath);
+                        }
+                    }
+
                     function evaluateAllSources() {
                         var i, m, sj, result;
                         for (i = 0; i < viewport.imagesModel.count; i++) {
@@ -7057,8 +7152,17 @@ Window {
                             m = viewport.videosModel.get(i);
                             sj = m.sourcesJson;
                             if (!sj || sj === "[]") continue;
-                            result = evaluateSourcesJson(sj);
-                            if (result !== null) viewport.videosModel.setProperty(i, "filePath", result.filePath);
+                            if (m.inTransition) continue;
+                            result = evaluateVideoSource(i, sj);
+                            if (result !== null) {
+                                if (result.isTransition) {
+                                    viewport.videosModel.setProperty(i, "inTransition", true);
+                                    viewport.videosModel.setProperty(i, "filePath", result.filePath);
+                                    elementTransitionDest[i] = { destOrbiting: result.destOrbiting, cacheKey: result.cacheKey };
+                                } else {
+                                    viewport.videosModel.setProperty(i, "filePath", result.filePath);
+                                }
+                            }
                         }
                         for (i = 0; i < viewport.shadersModel.count; i++) {
                             m = viewport.shadersModel.get(i);
@@ -7081,6 +7185,13 @@ Window {
                     Connections {
                         target: nodeWorkspace
                         function onOrbitsRevisionChanged() { selectSettings.evaluateAllSources() }
+                    }
+
+                    Connections {
+                        target: viewport
+                        function onVideoTransitionCompleteRevisionChanged() {
+                            selectSettings.completeVideoTransition(viewport.videoTransitionCompleteIndex)
+                        }
                     }
 
                     // Load/save interactivity whenever the selection changes.
@@ -8065,6 +8176,8 @@ Window {
                                                     var arr = selectSettings.networksArray
                                                     if (ai >= 0 && ai < arr.length) {
                                                         selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereNetId", arr[ai].id)
+                                                        selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereCharName", "")
+                                                        selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereNodeName", "")
                                                         selectSettings.saveCurrentSources()
                                                     }
                                                 }
@@ -8124,11 +8237,11 @@ Window {
                                                 id: imgSrcWhereCharCombo
                                                 visible: srcCondition === "where"
                                                 Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                model: { var _ = nodeWorkspace.charactersModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
+                                                model: { var _ = nodeWorkspace.charactersModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; if (netId === nodeWorkspace.networkId) { var live = []; for (var ci = 0; ci < nodeWorkspace.charactersModel.count; ci++) live.push(nodeWorkspace.charactersModel.get(ci).charName); return live; } return storyManager.getNetworkCharacterNames(netId) }
                                                 currentIndex: {
                                                     var m = model; var n = srcWhereCharName
                                                     for (var i = 0; i < m.length; i++) { if (m[i] === n) return i }
-                                                    if (m.length > 0 && !n) {
+                                                    if (m.length > 0) {
                                                         var _rid = imgSrcRow.rowIdx; var _fn = m[0]
                                                         Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereCharName", _fn); selectSettings.saveCurrentSources() })
                                                     }
@@ -8166,8 +8279,8 @@ Window {
                                                 id: imgSrcWhereNodeCombo
                                                 visible: srcCondition === "where"
                                                 Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                model: { var _ = nodeWorkspace.nodesModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
-                                                currentIndex: { var n = srcWhereNodeName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                model: { var _ = nodeWorkspace.nodesModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; if (netId === nodeWorkspace.networkId) { var live = []; for (var ni = 0; ni < nodeWorkspace.nodesModel.count; ni++) live.push(nodeWorkspace.nodesModel.get(ni).name); return live; } return storyManager.getNetworkNodeNames(netId) }
+                                                currentIndex: { var m = model; var n = srcWhereNodeName; for (var i = 0; i < m.length; i++) { if (m[i] === n) return i } if (m.length > 0) { var _rid = imgSrcRow.rowIdx; var _fn = m[0]; Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereNodeName", _fn); selectSettings.saveCurrentSources() }) } return 0 }
                                                 onActivated: function(ai) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereNodeName", imgSrcWhereNodeCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
                                                 contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
@@ -8491,6 +8604,8 @@ Window {
                                                     var arr = selectSettings.networksArray
                                                     if (ai >= 0 && ai < arr.length) {
                                                         selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereNetId", arr[ai].id)
+                                                        selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereCharName", "")
+                                                        selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereNodeName", "")
                                                         selectSettings.saveCurrentSources()
                                                     }
                                                 }
@@ -8550,11 +8665,11 @@ Window {
                                                 id: vidSrcWhereCharCombo
                                                 visible: srcCondition === "where"
                                                 Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                model: { var _ = nodeWorkspace.charactersModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
+                                                model: { var _ = nodeWorkspace.charactersModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; if (netId === nodeWorkspace.networkId) { var live = []; for (var ci = 0; ci < nodeWorkspace.charactersModel.count; ci++) live.push(nodeWorkspace.charactersModel.get(ci).charName); return live; } return storyManager.getNetworkCharacterNames(netId) }
                                                 currentIndex: {
                                                     var m = model; var n = srcWhereCharName
                                                     for (var i = 0; i < m.length; i++) { if (m[i] === n) return i }
-                                                    if (m.length > 0 && !n) {
+                                                    if (m.length > 0) {
                                                         var _rid = vidSrcRow.rowIdx; var _fn = m[0]
                                                         Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereCharName", _fn); selectSettings.saveCurrentSources() })
                                                     }
@@ -8575,8 +8690,8 @@ Window {
                                                 id: vidSrcWhereOpCombo
                                                 visible: srcCondition === "where"
                                                 Layout.preferredWidth: 50; Layout.preferredHeight: 26
-                                                model: ["is at", "not at"]
-                                                currentIndex: srcWhereOp === "not at" ? 1 : 0
+                                                model: ["is at", "not at", "arrive", "depart"]
+                                                currentIndex: { var op = srcWhereOp; for (var i = 0; i < model.length; i++) if (model[i] === op) return i; return 0 }
                                                 onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereOp", model[ai]); selectSettings.saveCurrentSources() }
                                                 contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
@@ -8584,7 +8699,7 @@ Window {
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcWhereOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
                                                 delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
                                                 background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 82; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
                                                 contentItem: ListView { clip: true; model: vidSrcWhereOpCombo.delegateModel; currentIndex: vidSrcWhereOpCombo.currentIndex } }
                                             }
 
@@ -8592,8 +8707,8 @@ Window {
                                                 id: vidSrcWhereNodeCombo
                                                 visible: srcCondition === "where"
                                                 Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                model: { var _ = nodeWorkspace.nodesModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
-                                                currentIndex: { var n = srcWhereNodeName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                model: { var _ = nodeWorkspace.nodesModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; if (netId === nodeWorkspace.networkId) { var live = []; for (var ni = 0; ni < nodeWorkspace.nodesModel.count; ni++) live.push(nodeWorkspace.nodesModel.get(ni).name); return live; } return storyManager.getNetworkNodeNames(netId) }
+                                                currentIndex: { var m = model; var n = srcWhereNodeName; for (var i = 0; i < m.length; i++) { if (m[i] === n) return i } if (m.length > 0) { var _rid = vidSrcRow.rowIdx; var _fn = m[0]; Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereNodeName", _fn); selectSettings.saveCurrentSources() }) } return 0 }
                                                 onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereNodeName", vidSrcWhereNodeCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
                                                 contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
@@ -8985,6 +9100,8 @@ Window {
                                                         var arr = selectSettings.networksArray
                                                         if (ai >= 0 && ai < arr.length) {
                                                             selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereNetId", arr[ai].id)
+                                                            selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereCharName", "")
+                                                            selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereNodeName", "")
                                                             selectSettings.saveCurrentSources()
                                                         }
                                                     }
@@ -9044,11 +9161,11 @@ Window {
                                                     id: shaderSrcWhereCharCombo
                                                     visible: srcCondition === "where"
                                                     Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                    model: { var _ = nodeWorkspace.charactersModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
+                                                    model: { var _ = nodeWorkspace.charactersModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; if (netId === nodeWorkspace.networkId) { var live = []; for (var ci = 0; ci < nodeWorkspace.charactersModel.count; ci++) live.push(nodeWorkspace.charactersModel.get(ci).charName); return live; } return storyManager.getNetworkCharacterNames(netId) }
                                                     currentIndex: {
                                                         var m = model; var n = srcWhereCharName
                                                         for (var i = 0; i < m.length; i++) { if (m[i] === n) return i }
-                                                        if (m.length > 0 && !n) {
+                                                        if (m.length > 0) {
                                                             var _rid = shaderSrcRow.rowIdx; var _fn = m[0]
                                                             Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereCharName", _fn); selectSettings.saveCurrentSources() })
                                                         }
@@ -9086,8 +9203,8 @@ Window {
                                                     id: shaderSrcWhereNodeCombo
                                                     visible: srcCondition === "where"
                                                     Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                    model: { var _ = nodeWorkspace.nodesModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
-                                                    currentIndex: { var n = srcWhereNodeName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                    model: { var _ = nodeWorkspace.nodesModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; if (netId === nodeWorkspace.networkId) { var live = []; for (var ni = 0; ni < nodeWorkspace.nodesModel.count; ni++) live.push(nodeWorkspace.nodesModel.get(ni).name); return live; } return storyManager.getNetworkNodeNames(netId) }
+                                                    currentIndex: { var m = model; var n = srcWhereNodeName; for (var i = 0; i < m.length; i++) { if (m[i] === n) return i } if (m.length > 0) { var _rid = shaderSrcRow.rowIdx; var _fn = m[0]; Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereNodeName", _fn); selectSettings.saveCurrentSources() }) } return 0 }
                                                     onActivated: function(ai) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereNodeName", shaderSrcWhereNodeCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
                                                     contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                     indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }

@@ -134,7 +134,8 @@ Item {
                     interactivityJson: el.interactivityJson || "[]",
                     sourcesJson: el.sourcesJson || "[]",
                     template: el.template || "none",
-                    locked: el.locked || false
+                    locked: el.locked || false,
+                    inTransition: false
                 })
             } else if (el.type === "shader") {
                 shadersModelInst.append({
@@ -2171,7 +2172,7 @@ Item {
                         id: vidPlayer
                         source: vidDelegate.liveFilePath
                         autoPlay: true
-                        loops: MediaPlayer.Infinite
+                        loops: model.inTransition ? 1 : MediaPlayer.Infinite
                         videoOutput: vidOutput
                         // Mute while staging so audio doesn't bleed through during pre-buffering.
                         audioOutput: AudioOutput {
@@ -2185,6 +2186,14 @@ Item {
                                 !vidDelegate.videoReadySignaled) {
                                 vidDelegate.videoReadySignaled = true
                                 imageLoadComplete()
+                            }
+                            // Signal transition complete so selectSettings can chain to the next clip.
+                            if (mediaStatus === MediaPlayer.EndOfMedia) {
+                                console.log("[ArriveDepart] EndOfMedia — index:", index, "inTransition:", model.inTransition)
+                                if (model.inTransition) {
+                                    viewportRef.videoTransitionCompleteIndex = index
+                                    viewportRef.videoTransitionCompleteRevision++
+                                }
                             }
                         }
                     }
