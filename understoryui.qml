@@ -3676,6 +3676,18 @@ Window {
                 } catch (e) {
                     elements = [];
                 }
+                // Patch each element's source to the current orbit-resolved value before loading
+                // into staging, so the MediaPlayer buffers the correct file from the start.
+                // evaluateSourcesJson skips arrive/depart (returns false for those ops) and gives
+                // the stable "is at"/"else" result without any transition logic.
+                for (var ei = 0; ei < elements.length; ei++) {
+                    var el = elements[ei];
+                    if (!el.sourcesJson || el.sourcesJson === "[]") continue;
+                    var sr = selectSettings.evaluateSourcesJson(el.sourcesJson);
+                    if (sr === null) continue;
+                    if (el.type === "video" || el.type === "image") el.filePath = sr.filePath;
+                    else if (el.type === "shader") { el.fragPath = sr.fragPath; el.vertPath = sr.vertPath; }
+                }
                 stagingContent.loadScene(elements);
             }
 
@@ -3700,6 +3712,9 @@ Window {
                 mainWindow.currentSceneId = pendingJumpSceneId;
                 sceneNameInput.text = pendingJumpSceneName;
                 navigationSettings.loadNavLinks(pendingJumpSceneId);
+                selectSettings.stableOrbitCache = ({});
+                selectSettings.elementTransitionDest = ({});
+                selectSettings.evaluateAllSources();
                 stagingContent.clear();
                 checkOcclusion();
             }
@@ -7140,38 +7155,42 @@ Window {
                     }
 
                     function evaluateAllSources() {
+                        evaluateAllSourcesForContent(viewport.activeContent);
+                    }
+
+                    function evaluateAllSourcesForContent(content) {
                         var i, m, sj, result;
-                        for (i = 0; i < viewport.imagesModel.count; i++) {
-                            m = viewport.imagesModel.get(i);
+                        for (i = 0; i < content.imagesModel.count; i++) {
+                            m = content.imagesModel.get(i);
                             sj = m.sourcesJson;
                             if (!sj || sj === "[]") continue;
                             result = evaluateSourcesJson(sj);
-                            if (result !== null) viewport.imagesModel.setProperty(i, "filePath", result.filePath);
+                            if (result !== null) content.imagesModel.setProperty(i, "filePath", result.filePath);
                         }
-                        for (i = 0; i < viewport.videosModel.count; i++) {
-                            m = viewport.videosModel.get(i);
+                        for (i = 0; i < content.videosModel.count; i++) {
+                            m = content.videosModel.get(i);
                             sj = m.sourcesJson;
                             if (!sj || sj === "[]") continue;
                             if (m.inTransition) continue;
                             result = evaluateVideoSource(i, sj);
                             if (result !== null) {
                                 if (result.isTransition) {
-                                    viewport.videosModel.setProperty(i, "inTransition", true);
-                                    viewport.videosModel.setProperty(i, "filePath", result.filePath);
+                                    content.videosModel.setProperty(i, "inTransition", true);
+                                    content.videosModel.setProperty(i, "filePath", result.filePath);
                                     elementTransitionDest[i] = { destOrbiting: result.destOrbiting, cacheKey: result.cacheKey };
                                 } else {
-                                    viewport.videosModel.setProperty(i, "filePath", result.filePath);
+                                    content.videosModel.setProperty(i, "filePath", result.filePath);
                                 }
                             }
                         }
-                        for (i = 0; i < viewport.shadersModel.count; i++) {
-                            m = viewport.shadersModel.get(i);
+                        for (i = 0; i < content.shadersModel.count; i++) {
+                            m = content.shadersModel.get(i);
                             sj = m.sourcesJson;
                             if (!sj || sj === "[]") continue;
                             result = evaluateSourcesJson(sj);
                             if (result !== null) {
-                                viewport.shadersModel.setProperty(i, "fragPath", result.fragPath);
-                                viewport.shadersModel.setProperty(i, "vertPath", result.vertPath);
+                                content.shadersModel.setProperty(i, "fragPath", result.fragPath);
+                                content.shadersModel.setProperty(i, "vertPath", result.vertPath);
                             }
                         }
                     }
