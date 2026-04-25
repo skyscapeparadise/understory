@@ -2146,6 +2146,9 @@ Item {
                     property string pendingSwapPath: ""
                     property bool pendingTransitionComplete: false
                     property bool freezePreCaptured: false
+                    property bool transitionCapturing: false
+                    property bool transitionGrabDone: false
+                    property bool transitionFreezeReady: false
 
                     onTrackedFilePathChanged: {
                         if (!vidDelegate.videoReadySignaled) {
@@ -2160,6 +2163,9 @@ Item {
                     function startSourceSwap(newPath) {
                         if (vidDelegate.swapping) { vidDelegate.queuedFilePath = newPath; return }
                         vidFreezeFrameFadeOut.stop()
+                        vidDelegate.transitionCapturing = false
+                        vidDelegate.transitionGrabDone = false
+                        vidDelegate.transitionFreezeReady = false
                         // Transition-clip path: freeze was captured at EndOfMedia, already showing
                         if (vidDelegate.freezePreCaptured) {
                             vidDelegate.freezePreCaptured = false
@@ -2190,23 +2196,52 @@ Item {
                         audioOutput: AudioOutput {
                             volume: sceneContent.isInteractive ? 1.0 : 0.0
                         }
+                        onPositionChanged: {
+                            // Grab a freeze frame ~200ms before end so Image.Ready fires while
+                            // the clip is still playing. We then show it in Image.Ready — before
+                            // EndOfMedia — so the freeze is definitely visible when the VideoOutput
+                            // texture clears. Setting opacity=1 at or after EndOfMedia is too late:
+                            // the render thread can display a black frame before the JS handler runs.
+                            if (!model.inTransition || vidDelegate.pendingTransitionComplete ||
+                                    vidDelegate.transitionCapturing || vidDelegate.transitionGrabDone) return
+                            var rem = vidPlayer.duration - vidPlayer.position
+                            if (rem > 0 && rem <= 200) {
+                                vidDelegate.transitionCapturing = true
+                                vidOutput.grabToImage(function(result) {
+                                    vidDelegate.transitionCapturing = false
+                                    vidDelegate.transitionGrabDone = true
+                                    if (!model.inTransition || vidDelegate.pendingTransitionComplete) return
+                                    vidFreezeFrame.source = result.url
+                                })
+                            }
+                        }
                         onMediaStatusChanged: {
-                            // Release the counter for broken files (no frames will ever arrive)
-                            // and for end-of-media on very short single-frame videos.
                             if ((mediaStatus === MediaPlayer.InvalidMedia ||
                                  mediaStatus === MediaPlayer.EndOfMedia) &&
                                 !vidDelegate.videoReadySignaled) {
                                 vidDelegate.videoReadySignaled = true
                                 imageLoadComplete()
                             }
-                            // Pre-capture last frame before signaling transition complete.
-                            // VideoOutput clears its texture at EndOfMedia before JS runs, so we
-                            // grab here while the frame is still on-screen, then signal after ready.
                             if (mediaStatus === MediaPlayer.EndOfMedia && model.inTransition) {
-                                vidDelegate.pendingTransitionComplete = true
-                                vidOutput.grabToImage(function(result) {
-                                    vidFreezeFrame.source = result.url
-                                })
+                                if (vidDelegate.transitionFreezeReady) {
+                                    // Best case: freeze already showing (opacity=1 was set in
+                                    // Image.Ready while the clip was still playing). Just complete.
+                                    vidDelegate.transitionFreezeReady = false
+                                    vidDelegate.freezePreCaptured = true
+                                    viewportRef.videoTransitionCompleteIndex = index
+                                    viewportRef.videoTransitionCompleteRevision++
+                                } else {
+                                    // Fallback: Image.Ready hasn't fired yet — let it handle opacity
+                                    // and completion when it does.
+                                    vidDelegate.pendingTransitionComplete = true
+                                    if (!vidDelegate.transitionCapturing && !vidDelegate.transitionGrabDone) {
+                                        // No grab in progress and none done — last resort for very
+                                        // short clips. Texture is likely cleared on macOS already.
+                                        vidOutput.grabToImage(function(result) {
+                                            vidFreezeFrame.source = result.url
+                                        })
+                                    }
+                                }
                             }
                         }
                     }
@@ -2275,6 +2310,17 @@ Item {
                                 vidDelegate.swapFrameCount = 0
                                 vidDelegate.pendingSwapPath = ""
                             }
+                            // Pre-cache path: freeze loaded while clip is still playing.
+                            // Set opacity=1 NOW — before EndOfMedia — so the freeze is visible
+                            // before the render thread clears the VideoOutput texture. Reacting
+                            // at or after EndOfMedia is too late: the render thread can display
+                            // a black frame before the JS handler runs.
+                            if (status === Image.Ready && model.inTransition &&
+                                    !vidDelegate.pendingTransitionComplete && !vidDelegate.swapping) {
+                                opacity = 1
+                                vidDelegate.transitionFreezeReady = true
+                            }
+                            // Fallback path: EndOfMedia already fired before Image was ready.
                             if (status === Image.Ready && vidDelegate.pendingTransitionComplete) {
                                 opacity = 1
                                 vidDelegate.pendingTransitionComplete = false
