@@ -2142,6 +2142,7 @@ Item {
                     property bool swapping: false
                     property int swapFrameCount: 0
                     property string queuedFilePath: ""
+                    property string pendingSwapPath: ""
 
                     onTrackedFilePathChanged: {
                         if (!vidDelegate.videoReadySignaled) {
@@ -2155,14 +2156,13 @@ Item {
 
                     function startSourceSwap(newPath) {
                         if (vidDelegate.swapping) { vidDelegate.queuedFilePath = newPath; return }
+                        vidFreezeFrameFadeOut.stop()
                         vidDelegate.swapping = true
                         vidDelegate.queuedFilePath = ""
                         vidDelegate.swapFrameCount = 0
-                        // Grab current frame before source changes — becomes the freeze overlay
+                        vidDelegate.pendingSwapPath = newPath
                         vidOutput.grabToImage(function(result) {
                             vidFreezeFrame.source = result.url
-                            vidFreezeFrame.opacity = 1
-                            vidDelegate.liveFilePath = newPath
                         })
                     }
 
@@ -2213,8 +2213,8 @@ Item {
                                 // During a source swap, count new frames then reveal new video
                                 if (vidDelegate.swapping) {
                                     vidDelegate.swapFrameCount++
-                                    if (vidDelegate.swapFrameCount >= 2) {
-                                        vidFreezeFrame.opacity = 0
+                                    if (vidDelegate.swapFrameCount >= 3) {
+                                        vidFreezeFrameFadeOut.restart()
                                         vidDelegate.swapping = false
                                         if (vidDelegate.queuedFilePath !== "") {
                                             var next = vidDelegate.queuedFilePath
@@ -2229,6 +2229,8 @@ Item {
 
                     // Freeze-frame overlay: holds the last rendered frame while a new source loads,
                     // preventing the black flash between source changes.
+                    // opacity MUST snap to 1 instantly (no Behavior) — animating in while VideoOutput
+                    // is already black would defeat the purpose. Fade-out is handled explicitly below.
                     Image {
                         id: vidFreezeFrame
                         x: 28; y: 28
@@ -2237,7 +2239,21 @@ Item {
                         opacity: 0
                         fillMode: Image.Stretch
                         cache: false
-                        Behavior on opacity { NumberAnimation { duration: 80 } }
+                        NumberAnimation {
+                            id: vidFreezeFrameFadeOut
+                            target: vidFreezeFrame
+                            property: "opacity"
+                            to: 0
+                            duration: 80
+                        }
+                        onStatusChanged: {
+                            if (status === Image.Ready && vidDelegate.swapping && vidDelegate.pendingSwapPath !== "") {
+                                opacity = 1
+                                vidDelegate.liveFilePath = vidDelegate.pendingSwapPath
+                                vidDelegate.swapFrameCount = 0
+                                vidDelegate.pendingSwapPath = ""
+                            }
+                        }
                     }
 
                     // Border — only when active/selected or relayer hovered
