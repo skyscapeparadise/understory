@@ -2144,6 +2144,8 @@ Item {
                     property int swapFrameCount: 0
                     property string queuedFilePath: ""
                     property string pendingSwapPath: ""
+                    property bool pendingTransitionComplete: false
+                    property bool freezePreCaptured: false
 
                     onTrackedFilePathChanged: {
                         if (!vidDelegate.videoReadySignaled) {
@@ -2158,6 +2160,16 @@ Item {
                     function startSourceSwap(newPath) {
                         if (vidDelegate.swapping) { vidDelegate.queuedFilePath = newPath; return }
                         vidFreezeFrameFadeOut.stop()
+                        // Transition-clip path: freeze was captured at EndOfMedia, already showing
+                        if (vidDelegate.freezePreCaptured) {
+                            vidDelegate.freezePreCaptured = false
+                            vidDelegate.swapping = true
+                            vidDelegate.queuedFilePath = ""
+                            vidDelegate.swapFrameCount = 0
+                            vidDelegate.pendingSwapPath = ""
+                            vidDelegate.liveFilePath = newPath
+                            return
+                        }
                         vidDelegate.swapping = true
                         vidDelegate.queuedFilePath = ""
                         vidDelegate.swapFrameCount = 0
@@ -2187,13 +2199,14 @@ Item {
                                 vidDelegate.videoReadySignaled = true
                                 imageLoadComplete()
                             }
-                            // Signal transition complete so selectSettings can chain to the next clip.
-                            if (mediaStatus === MediaPlayer.EndOfMedia) {
-                                console.log("[ArriveDepart] EndOfMedia — index:", index, "inTransition:", model.inTransition)
-                                if (model.inTransition) {
-                                    viewportRef.videoTransitionCompleteIndex = index
-                                    viewportRef.videoTransitionCompleteRevision++
-                                }
+                            // Pre-capture last frame before signaling transition complete.
+                            // VideoOutput clears its texture at EndOfMedia before JS runs, so we
+                            // grab here while the frame is still on-screen, then signal after ready.
+                            if (mediaStatus === MediaPlayer.EndOfMedia && model.inTransition) {
+                                vidDelegate.pendingTransitionComplete = true
+                                vidOutput.grabToImage(function(result) {
+                                    vidFreezeFrame.source = result.url
+                                })
                             }
                         }
                     }
@@ -2261,6 +2274,13 @@ Item {
                                 vidDelegate.liveFilePath = vidDelegate.pendingSwapPath
                                 vidDelegate.swapFrameCount = 0
                                 vidDelegate.pendingSwapPath = ""
+                            }
+                            if (status === Image.Ready && vidDelegate.pendingTransitionComplete) {
+                                opacity = 1
+                                vidDelegate.pendingTransitionComplete = false
+                                vidDelegate.freezePreCaptured = true
+                                viewportRef.videoTransitionCompleteIndex = index
+                                viewportRef.videoTransitionCompleteRevision++
                             }
                         }
                     }
