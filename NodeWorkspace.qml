@@ -76,12 +76,14 @@ Item {
                     orbitsModel.setProperty(i, "itemIdx", o.itemIdx - 1)
             }
         }
+        root.orbitsRevision++
         requestRedraw()
     }
 
     // Appends the circle to orbitsModel and plays the snap animation from (fromStageX, fromStageY).
     function startSnapAnimation(fromStageX, fromStageY, circleType, itemIdx, nodeId) {
         orbitsModel.append({ circleType: circleType, itemIdx: itemIdx, nodeId: nodeId })
+        root.orbitsRevision++
         root.snappingCircle        = true
         root.snappingCircleType    = circleType
         root.snappingCircleItemIdx = itemIdx
@@ -91,6 +93,7 @@ Item {
         root.snappingProgress      = 0.0
         snapCircleAnim.restart()
     }
+    property int orbitsRevision: 0
     property real nodeRadius: 16
     property int networkId: -1
 
@@ -346,6 +349,7 @@ Item {
         var orbs = data.orbits || []
         for (var i = 0; i < orbs.length; i++)
             orbitsModel.append(orbs[i])
+        root.orbitsRevision++
 
         root.zoom = (data.zoom !== undefined) ? data.zoom : 1.0
         root.panX = (data.panX !== undefined) ? data.panX : 0.0
@@ -501,6 +505,7 @@ Item {
             if (orbitsModel.get(oi).nodeId === deletedNodeId)
                 orbitsModel.remove(oi)
         }
+        root.orbitsRevision++
 
         // First, cleanly remove all links connected to this node,
         // and shift down the indices of any nodes that come AFTER the deleted one.
@@ -2097,6 +2102,7 @@ Item {
                         if (nearest >= 0) {
                             root.startSnapAnimation(mouse.x, mouse.y, ct, ii, nodesModel.get(nearest).id)
                         } else {
+                            root.orbitsRevision++
                             root.requestRedraw()
                         }
                     } else {

@@ -3573,6 +3573,7 @@ Window {
                 for (var di = 0; di < sceneSettingsView.dirTransitions.length; di++)
                     sceneSettingsView.applyTemplateTransitions(di);
                 navigationSettings.loadNavLinks(sceneId);
+                selectSettings.evaluateAllSources();
             }
 
             function collectSceneElements() {
@@ -6809,6 +6810,27 @@ Window {
                     readonly property bool hasActiveVideo: (viewport.selectionRevision >= 0) && viewport.selectedVideos.length === 1 && viewport.selectionCount === 1
                     readonly property bool hasActiveShader: (viewport.selectionRevision >= 0) && viewport.selectedShaders.length === 1 && viewport.selectionCount === 1
 
+                    property int networksRevision: 0
+                    Connections {
+                        target: nodeWorkspace.networksModel
+                        function onCountChanged()  { selectSettings.networksRevision++ }
+                        function onDataChanged()   { selectSettings.networksRevision++ }
+                        function onRowsInserted()  { selectSettings.networksRevision++ }
+                        function onRowsRemoved()   { selectSettings.networksRevision++ }
+                        function onModelReset()    { selectSettings.networksRevision++ }
+                    }
+                    property var networksArray: {
+                        networksRevision
+                        var list = []
+                        if (nodeWorkspace.networksModel) {
+                            for (var i = 0; i < nodeWorkspace.networksModel.count; i++) {
+                                var net = nodeWorkspace.networksModel.get(i)
+                                list.push({ id: net.netId, name: net.netName, color: net.netColor })
+                            }
+                        }
+                        return list
+                    }
+
                     // Tracks which model/index is currently loaded into selectInteractivityModel.
                     property string syncedType: ""
                     property int syncedIdx: -1
@@ -6856,6 +6878,33 @@ Window {
                             viewport.videosModel.setProperty(syncedIdx, "sourcesJson", json);
                         else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count)
                             viewport.shadersModel.setProperty(syncedIdx, "sourcesJson", json);
+                        evaluateAllSources();
+                    }
+
+                    function clearSources() {
+                        if (syncedIdx < 0) return;
+                        // Restore the else entry's file path back to the object's primary source
+                        for (var i = 0; i < selectSourcesModel.count; i++) {
+                            var item = selectSourcesModel.get(i);
+                            if (item.srcCondition === "else") {
+                                if (syncedType === "image" && syncedIdx < viewport.imagesModel.count)
+                                    viewport.imagesModel.setProperty(syncedIdx, "filePath", item.srcFilePath);
+                                else if (syncedType === "video" && syncedIdx < viewport.videosModel.count)
+                                    viewport.videosModel.setProperty(syncedIdx, "filePath", item.srcFilePath);
+                                else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count) {
+                                    viewport.shadersModel.setProperty(syncedIdx, "fragPath", item.srcFragPath);
+                                    viewport.shadersModel.setProperty(syncedIdx, "vertPath", item.srcVertPath);
+                                }
+                                break;
+                            }
+                        }
+                        if (syncedType === "image" && syncedIdx < viewport.imagesModel.count)
+                            viewport.imagesModel.setProperty(syncedIdx, "sourcesJson", "[]");
+                        else if (syncedType === "video" && syncedIdx < viewport.videosModel.count)
+                            viewport.videosModel.setProperty(syncedIdx, "sourcesJson", "[]");
+                        else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count)
+                            viewport.shadersModel.setProperty(syncedIdx, "sourcesJson", "[]");
+                        selectSourcesModel.clear();
                     }
 
                     function loadCurrentSources(json) {
@@ -6908,6 +6957,130 @@ Window {
                             srcFilePath: curFilePath, srcFragPath: curFragPath, srcVertPath: curVertPath
                         });
                         saveCurrentSources();
+                    }
+
+                    function evaluateIfCondition(s) {
+                        var varName = s.srcCondVar;
+                        if (!varName) return false;
+                        var varRow = null;
+                        for (var i = 0; i < variablesModel.count; i++) {
+                            if (variablesModel.get(i).varName === varName) { varRow = variablesModel.get(i); break; }
+                        }
+                        if (!varRow) return false;
+                        var val = varRow.varValue || "";
+                        var target = s.srcCondVal || "";
+                        var op = s.srcCondOp || "is";
+                        if (varRow.varType === "number") {
+                            var numVal = parseFloat(val) || 0;
+                            var numTarget = parseFloat(target) || 0;
+                            if (op === "is")  return numVal === numTarget;
+                            if (op === "not") return numVal !== numTarget;
+                            if (op === ">")   return numVal > numTarget;
+                            if (op === "<")   return numVal < numTarget;
+                        } else {
+                            if (op === "is")  return val === target;
+                            if (op === "not") return val !== target;
+                        }
+                        return false;
+                    }
+
+                    function evaluateWhereCondition(s) {
+                        var netId = s.srcWhereNetId;
+                        var charName = s.srcWhereCharName;
+                        var op = s.srcWhereOp || "is at";
+                        var nodeName = s.srcWhereNodeName;
+                        if (netId < 0 || !charName || !nodeName) return false;
+                        var orbits, nodes, characters;
+                        if (netId === nodeWorkspace.networkId) {
+                            orbits = []; nodes = []; characters = [];
+                            for (var i = 0; i < nodeWorkspace.orbitsModel.count; i++) orbits.push(nodeWorkspace.orbitsModel.get(i));
+                            for (var i = 0; i < nodeWorkspace.nodesModel.count; i++) nodes.push(nodeWorkspace.nodesModel.get(i));
+                            for (var i = 0; i < nodeWorkspace.charactersModel.count; i++) characters.push(nodeWorkspace.charactersModel.get(i));
+                        } else {
+                            var raw = storyManager.loadNetworkData(netId);
+                            var data;
+                            try { data = JSON.parse(raw); } catch(e) { return false; }
+                            orbits = data.orbits || [];
+                            nodes = data.nodes || [];
+                            characters = data.characters || [];
+                        }
+                        var charIdx = -1;
+                        for (var i = 0; i < characters.length; i++) {
+                            if (characters[i].charName === charName) { charIdx = i; break; }
+                        }
+                        if (charIdx < 0) return false;
+                        var nodeId = -1;
+                        for (var i = 0; i < nodes.length; i++) {
+                            if (nodes[i].name === nodeName) { nodeId = nodes[i].id; break; }
+                        }
+                        if (nodeId < 0) return false;
+                        var isOrbiting = false;
+                        for (var i = 0; i < orbits.length; i++) {
+                            var o = orbits[i];
+                            if (o.circleType === "char" && o.itemIdx === charIdx && o.nodeId === nodeId) { isOrbiting = true; break; }
+                        }
+                        if (op === "is at")     return isOrbiting;
+                        if (op === "is not at") return !isOrbiting;
+                        return false;
+                    }
+
+                    function evaluateSourcesJson(sourcesJson) {
+                        var sources;
+                        try { sources = JSON.parse(sourcesJson || "[]"); } catch(e) { return null; }
+                        if (!sources || sources.length === 0) return null;
+                        for (var i = 0; i < sources.length; i++) {
+                            var s = sources[i];
+                            var match = false;
+                            if (s.srcCondition === "else") {
+                                match = true;
+                            } else if (s.srcCondition === "if") {
+                                match = evaluateIfCondition(s);
+                            } else if (s.srcCondition === "where") {
+                                match = evaluateWhereCondition(s);
+                            }
+                            if (match)
+                                return { filePath: s.srcFilePath || "", fragPath: s.srcFragPath || "", vertPath: s.srcVertPath || "" };
+                        }
+                        return null;
+                    }
+
+                    function evaluateAllSources() {
+                        var i, m, sj, result;
+                        for (i = 0; i < viewport.imagesModel.count; i++) {
+                            m = viewport.imagesModel.get(i);
+                            sj = m.sourcesJson;
+                            if (!sj || sj === "[]") continue;
+                            result = evaluateSourcesJson(sj);
+                            if (result !== null) viewport.imagesModel.setProperty(i, "filePath", result.filePath);
+                        }
+                        for (i = 0; i < viewport.videosModel.count; i++) {
+                            m = viewport.videosModel.get(i);
+                            sj = m.sourcesJson;
+                            if (!sj || sj === "[]") continue;
+                            result = evaluateSourcesJson(sj);
+                            if (result !== null) viewport.videosModel.setProperty(i, "filePath", result.filePath);
+                        }
+                        for (i = 0; i < viewport.shadersModel.count; i++) {
+                            m = viewport.shadersModel.get(i);
+                            sj = m.sourcesJson;
+                            if (!sj || sj === "[]") continue;
+                            result = evaluateSourcesJson(sj);
+                            if (result !== null) {
+                                viewport.shadersModel.setProperty(i, "fragPath", result.fragPath);
+                                viewport.shadersModel.setProperty(i, "vertPath", result.vertPath);
+                            }
+                        }
+                    }
+
+                    Connections {
+                        target: variablesModel
+                        function onCountChanged()  { selectSettings.evaluateAllSources() }
+                        function onDataChanged()   { selectSettings.evaluateAllSources() }
+                    }
+
+                    Connections {
+                        target: nodeWorkspace
+                        function onOrbitsRevisionChanged() { selectSettings.evaluateAllSources() }
                     }
 
                     // Load/save interactivity whenever the selection changes.
@@ -7741,13 +7914,50 @@ Window {
 
                                 Repeater {
                                     model: selectSourcesModel
-                                    delegate: Column {
+                                    delegate: Item {
                                         id: imgSrcRow
                                         width: parent ? parent.width : 0
-                                        spacing: 4
+                                        height: imgSrcInnerCol.height
                                         property int rowIdx: index
+                                        property real deleteProgress: 0.0
+
+                                        NumberAnimation {
+                                            id: imgDeleteAnim
+                                            target: imgSrcRow; property: "deleteProgress"
+                                            to: 1.0; duration: 1200; easing.type: Easing.Linear
+                                            onFinished: {
+                                                if (imgSrcRow.deleteProgress >= 1.0) {
+                                                    var idx = imgSrcRow.rowIdx
+                                                    selectSourcesModel.remove(idx)
+                                                    if (selectSourcesModel.count === 1 && selectSourcesModel.get(0).srcCondition === "else")
+                                                        selectSettings.clearSources()
+                                                    else
+                                                        selectSettings.saveCurrentSources()
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent; z: 10
+                                            acceptedButtons: Qt.RightButton
+                                            enabled: srcCondition !== "else"
+                                            onPressed: mouse => { imgSrcRow.deleteProgress = 0; imgDeleteAnim.start() }
+                                            onReleased: mouse => { imgDeleteAnim.stop(); imgSrcRow.deleteProgress = 0 }
+                                            onExited: { imgDeleteAnim.stop(); imgSrcRow.deleteProgress = 0 }
+                                        }
+                                        Rectangle {
+                                            anchors.fill: parent; z: 9; radius: 4
+                                            color: "#ff4444"; enabled: false
+                                            opacity: imgSrcRow.deleteProgress * 0.75
+                                            visible: imgSrcRow.deleteProgress > 0
+                                        }
+
+                                        Column {
+                                            id: imgSrcInnerCol
+                                            width: parent.width
+                                            spacing: 4
 
                                         RowLayout {
+                                            visible: srcCondition !== "else"
                                             width: parent.width
                                             height: 26
                                             spacing: 4
@@ -7778,8 +7988,10 @@ Window {
                                                 indicator: Text { x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 10; color: "white" }
                                                 HoverHandler { id: imgSrcCondHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcCondHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: parent.width; height: imgSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcCondCombo.delegateModel; currentIndex: imgSrcCondCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: parent.width; height: imgSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: imgSrcCondCombo.delegateModel; currentIndex: imgSrcCondCombo.currentIndex } }
                                             }
 
                                             ComboBox {
@@ -7793,8 +8005,10 @@ Window {
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: imgSrcCondVarHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcCondVarHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcCondVarCombo.delegateModel; currentIndex: imgSrcCondVarCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: imgSrcCondVarCombo.delegateModel; currentIndex: imgSrcCondVarCombo.currentIndex } }
                                             }
 
                                             ComboBox {
@@ -7808,18 +8022,25 @@ Window {
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: imgSrcCondOpHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcCondOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: parent.width; height: imgSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcCondOpCombo.delegateModel; currentIndex: imgSrcCondOpCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: parent.width; height: imgSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: imgSrcCondOpCombo.delegateModel; currentIndex: imgSrcCondOpCombo.currentIndex } }
                                             }
 
                                             Item {
                                                 visible: srcCondition === "if"
                                                 Layout.fillWidth: true; Layout.preferredHeight: 26
                                                 Rectangle {
-                                                    anchors.fill: parent; radius: 4; color: "transparent"; border.color: "#555"; border.width: 1
+                                                    anchors.fill: parent; radius: 4; color: "transparent"; border.color: "white"; border.width: 1
                                                     TextInput {
-                                                        anchors.fill: parent; anchors.margins: 4; color: "white"; font.pixelSize: 10; verticalAlignment: TextInput.AlignVCenter; clip: true
+                                                        anchors.left: parent.left; anchors.right: parent.right
+                                                        anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
                                                         text: srcCondVal || ""
+                                                        Keys.onReturnPressed: focus = false
+                                                        Keys.onEscapePressed: focus = false
                                                         onEditingFinished: { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcCondVal", text); selectSettings.saveCurrentSources() }
                                                     }
                                                 }
@@ -7829,30 +8050,99 @@ Window {
                                                 id: imgSrcWhereNetCombo
                                                 visible: srcCondition === "where"
                                                 Layout.preferredWidth: 44; Layout.preferredHeight: 26
-                                                model: { var arr = []; if (nodeWorkspace.networksModel) { var mc = nodeWorkspace.networksModel.count; for (var i = 0; i < mc; i++) { var n = nodeWorkspace.networksModel.get(i); arr.push({ id: n.netId, name: n.netName }) } } return arr }
-                                                currentIndex: { var id = srcWhereNetId; for (var i = 0; i < model.length; i++) { if (model[i].id === id) return i } return 0 }
-                                                onActivated: function(ai) { if (ai < model.length) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereNetId", model[ai].id); selectSettings.saveCurrentSources() } }
-                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: { var m = parent.model; var ci = parent.currentIndex; return (m && ci >= 0 && ci < m.length) ? (m[ci].name || "") : "" }; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                model: selectSettings.networksArray
+                                                currentIndex: {
+                                                    var arr = selectSettings.networksArray
+                                                    var id = srcWhereNetId
+                                                    for (var i = 0; i < arr.length; i++) { if (arr[i].id === id) return i }
+                                                    if (arr.length > 0 && id < 0) {
+                                                        var _rid = imgSrcRow.rowIdx; var _fid = arr[0].id
+                                                        Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereNetId", _fid); selectSettings.saveCurrentSources() })
+                                                    }
+                                                    return 0
+                                                }
+                                                onActivated: function(ai) {
+                                                    var arr = selectSettings.networksArray
+                                                    if (ai >= 0 && ai < arr.length) {
+                                                        selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereNetId", arr[ai].id)
+                                                        selectSettings.saveCurrentSources()
+                                                    }
+                                                }
+                                                contentItem: Item {
+                                                    anchors.fill: parent
+                                                    Item {
+                                                        id: imgNetIconBox
+                                                        anchors.left: parent.left; anchors.leftMargin: 6
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        width: 14; height: 14
+                                                        Image { id: imgNetIconImg; anchors.fill: parent; source: "icons/nodenetwork.svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                                        ColorOverlay {
+                                                            anchors.fill: parent; source: imgNetIconImg
+                                                            color: { var arr = selectSettings.networksArray; var idx = imgSrcWhereNetCombo.currentIndex; if (idx < 0 || idx >= arr.length) return "white"; var c = arr[idx].color; return (c && c !== "#2e2e33") ? c : "white" }
+                                                        }
+                                                    }
+                                                    Text {
+                                                        anchors.left: imgNetIconBox.right; anchors.leftMargin: 5
+                                                        anchors.right: parent.right; anchors.rightMargin: 16
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        text: { var arr = selectSettings.networksArray; var idx = imgSrcWhereNetCombo.currentIndex; if (idx < 0 || idx >= arr.length) return ""; return arr[idx].name || "" }
+                                                        font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                        visible: text !== ""
+                                                    }
+                                                }
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: imgSrcWhereNetHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcWhereNetHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData.name || ""; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcWhereNetCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcWhereNetCombo.delegateModel; currentIndex: imgSrcWhereNetCombo.currentIndex } }
+                                                delegate: ItemDelegate {
+                                                    id: imgNetDelegate
+                                                    width: imgSrcWhereNetCombo.popup.width; height: 26; padding: 0
+                                                    contentItem: Item {
+                                                        anchors.fill: parent
+                                                        Item {
+                                                            id: imgNetDelIconBox
+                                                            anchors.left: parent.left; anchors.leftMargin: 8
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            width: 14; height: 14
+                                                            Image { id: imgNetDelIconImg; anchors.fill: parent; source: "icons/nodenetwork.svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                                            ColorOverlay { anchors.fill: parent; source: imgNetDelIconImg; color: { var c = modelData ? modelData.color : ""; return (c && c !== "#2e2e33") ? c : "white" } }
+                                                        }
+                                                        Text {
+                                                            anchors.left: imgNetDelIconBox.right; anchors.leftMargin: 6
+                                                            anchors.right: parent.right; anchors.rightMargin: 6
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            text: (modelData && modelData.name) ? modelData.name : ""
+                                                            font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                    background: Rectangle { color: (imgNetDelegate.highlighted || imgNetDelegate.hovered) ? "#477B78" : "transparent" }
+                                                }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(imgSrcWhereNetCombo.width, 120); height: Math.min(selectSettings.networksArray.length * 26 + 2, 132); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: imgSrcWhereNetCombo.delegateModel; currentIndex: imgSrcWhereNetCombo.currentIndex } }
                                             }
 
                                             ComboBox {
                                                 id: imgSrcWhereCharCombo
                                                 visible: srcCondition === "where"
                                                 Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
-                                                currentIndex: { var n = srcWhereCharName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                model: { var _ = nodeWorkspace.charactersModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
+                                                currentIndex: {
+                                                    var m = model; var n = srcWhereCharName
+                                                    for (var i = 0; i < m.length; i++) { if (m[i] === n) return i }
+                                                    if (m.length > 0 && !n) {
+                                                        var _rid = imgSrcRow.rowIdx; var _fn = m[0]
+                                                        Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereCharName", _fn); selectSettings.saveCurrentSources() })
+                                                    }
+                                                    return 0
+                                                }
                                                 onActivated: function(ai) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereCharName", imgSrcWhereCharCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
                                                 contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: imgSrcWhereCharHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcWhereCharHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcWhereCharCombo.delegateModel; currentIndex: imgSrcWhereCharCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: imgSrcWhereCharCombo.delegateModel; currentIndex: imgSrcWhereCharCombo.currentIndex } }
                                             }
 
                                             ComboBox {
@@ -7866,32 +8156,42 @@ Window {
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: imgSrcWhereOpHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcWhereOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcWhereOpCombo.delegateModel; currentIndex: imgSrcWhereOpCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: imgSrcWhereOpCombo.delegateModel; currentIndex: imgSrcWhereOpCombo.currentIndex } }
                                             }
 
                                             ComboBox {
                                                 id: imgSrcWhereNodeCombo
                                                 visible: srcCondition === "where"
                                                 Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
+                                                model: { var _ = nodeWorkspace.nodesModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
                                                 currentIndex: { var n = srcWhereNodeName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
                                                 onActivated: function(ai) { selectSourcesModel.setProperty(imgSrcRow.rowIdx, "srcWhereNodeName", imgSrcWhereNodeCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
                                                 contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: imgSrcWhereNodeHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: imgSrcWhereNodeHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: imgSrcWhereNodeCombo.delegateModel; currentIndex: imgSrcWhereNodeCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(imgSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: imgSrcWhereNodeCombo.delegateModel; currentIndex: imgSrcWhereNodeCombo.currentIndex } }
                                             }
 
-                                            Item { visible: srcCondition === "else"; Layout.fillWidth: true }
                                         }
 
                                         RowLayout {
                                             width: parent.width
                                             height: 26
                                             spacing: 4
+
+                                            Rectangle {
+                                                visible: srcCondition === "else"
+                                                Layout.preferredWidth: 62; Layout.preferredHeight: 26
+                                                color: "transparent"; radius: 4; border.color: "white"; border.width: 1
+                                                Text { anchors.centerIn: parent; text: "else"; font.pixelSize: 11; color: "white"; verticalAlignment: Text.AlignVCenter }
+                                            }
 
                                             Rectangle {
                                                 Layout.fillWidth: true; Layout.preferredHeight: 26
@@ -7936,6 +8236,7 @@ Window {
                                                     }
                                                 }
                                             }
+                                        }
                                         }
                                     }
                                 }
@@ -8055,13 +8356,50 @@ Window {
 
                                 Repeater {
                                     model: selectSourcesModel
-                                    delegate: Column {
+                                    delegate: Item {
                                         id: vidSrcRow
                                         width: parent ? parent.width : 0
-                                        spacing: 4
+                                        height: vidSrcInnerCol.height
                                         property int rowIdx: index
+                                        property real deleteProgress: 0.0
+
+                                        NumberAnimation {
+                                            id: vidDeleteAnim
+                                            target: vidSrcRow; property: "deleteProgress"
+                                            to: 1.0; duration: 1200; easing.type: Easing.Linear
+                                            onFinished: {
+                                                if (vidSrcRow.deleteProgress >= 1.0) {
+                                                    var idx = vidSrcRow.rowIdx
+                                                    selectSourcesModel.remove(idx)
+                                                    if (selectSourcesModel.count === 1 && selectSourcesModel.get(0).srcCondition === "else")
+                                                        selectSettings.clearSources()
+                                                    else
+                                                        selectSettings.saveCurrentSources()
+                                                }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent; z: 10
+                                            acceptedButtons: Qt.RightButton
+                                            enabled: srcCondition !== "else"
+                                            onPressed: mouse => { vidSrcRow.deleteProgress = 0; vidDeleteAnim.start() }
+                                            onReleased: mouse => { vidDeleteAnim.stop(); vidSrcRow.deleteProgress = 0 }
+                                            onExited: { vidDeleteAnim.stop(); vidSrcRow.deleteProgress = 0 }
+                                        }
+                                        Rectangle {
+                                            anchors.fill: parent; z: 9; radius: 4
+                                            color: "#ff4444"; enabled: false
+                                            opacity: vidSrcRow.deleteProgress * 0.75
+                                            visible: vidSrcRow.deleteProgress > 0
+                                        }
+
+                                        Column {
+                                            id: vidSrcInnerCol
+                                            width: parent.width
+                                            spacing: 4
 
                                         RowLayout {
+                                            visible: srcCondition !== "else"
                                             width: parent.width
                                             height: 26
                                             spacing: 4
@@ -8076,8 +8414,10 @@ Window {
                                                 indicator: Text { x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 10; color: "white" }
                                                 HoverHandler { id: vidSrcCondHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcCondHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: parent.width; height: vidSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcCondCombo.delegateModel; currentIndex: vidSrcCondCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: parent.width; height: vidSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: vidSrcCondCombo.delegateModel; currentIndex: vidSrcCondCombo.currentIndex } }
                                             }
 
                                             ComboBox {
@@ -8091,8 +8431,10 @@ Window {
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: vidSrcCondVarHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcCondVarHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcCondVarCombo.delegateModel; currentIndex: vidSrcCondVarCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: vidSrcCondVarCombo.delegateModel; currentIndex: vidSrcCondVarCombo.currentIndex } }
                                             }
 
                                             ComboBox {
@@ -8106,16 +8448,27 @@ Window {
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: vidSrcCondOpHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcCondOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: parent.width; height: vidSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcCondOpCombo.delegateModel; currentIndex: vidSrcCondOpCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: parent.width; height: vidSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: vidSrcCondOpCombo.delegateModel; currentIndex: vidSrcCondOpCombo.currentIndex } }
                                             }
 
                                             Item {
                                                 visible: srcCondition === "if"
                                                 Layout.fillWidth: true; Layout.preferredHeight: 26
                                                 Rectangle {
-                                                    anchors.fill: parent; radius: 4; color: "transparent"; border.color: "#555"; border.width: 1
-                                                    TextInput { anchors.fill: parent; anchors.margins: 4; color: "white"; font.pixelSize: 10; verticalAlignment: TextInput.AlignVCenter; clip: true; text: srcCondVal || ""; onEditingFinished: { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcCondVal", text); selectSettings.saveCurrentSources() } }
+                                                    anchors.fill: parent; radius: 4; color: "transparent"; border.color: "white"; border.width: 1
+                                                    TextInput {
+                                                        anchors.left: parent.left; anchors.right: parent.right
+                                                        anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                        text: srcCondVal || ""
+                                                        Keys.onReturnPressed: focus = false
+                                                        Keys.onEscapePressed: focus = false
+                                                        onEditingFinished: { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcCondVal", text); selectSettings.saveCurrentSources() }
+                                                    }
                                                 }
                                             }
 
@@ -8123,30 +8476,99 @@ Window {
                                                 id: vidSrcWhereNetCombo
                                                 visible: srcCondition === "where"
                                                 Layout.preferredWidth: 44; Layout.preferredHeight: 26
-                                                model: { var arr = []; if (nodeWorkspace.networksModel) { var mc = nodeWorkspace.networksModel.count; for (var i = 0; i < mc; i++) { var n = nodeWorkspace.networksModel.get(i); arr.push({ id: n.netId, name: n.netName }) } } return arr }
-                                                currentIndex: { var id = srcWhereNetId; for (var i = 0; i < model.length; i++) { if (model[i].id === id) return i } return 0 }
-                                                onActivated: function(ai) { if (ai < model.length) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereNetId", model[ai].id); selectSettings.saveCurrentSources() } }
-                                                contentItem: Text { leftPadding: 4; rightPadding: 14; text: { var m = parent.model; var ci = parent.currentIndex; return (m && ci >= 0 && ci < m.length) ? (m[ci].name || "") : "" }; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                model: selectSettings.networksArray
+                                                currentIndex: {
+                                                    var arr = selectSettings.networksArray
+                                                    var id = srcWhereNetId
+                                                    for (var i = 0; i < arr.length; i++) { if (arr[i].id === id) return i }
+                                                    if (arr.length > 0 && id < 0) {
+                                                        var _rid = vidSrcRow.rowIdx; var _fid = arr[0].id
+                                                        Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereNetId", _fid); selectSettings.saveCurrentSources() })
+                                                    }
+                                                    return 0
+                                                }
+                                                onActivated: function(ai) {
+                                                    var arr = selectSettings.networksArray
+                                                    if (ai >= 0 && ai < arr.length) {
+                                                        selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereNetId", arr[ai].id)
+                                                        selectSettings.saveCurrentSources()
+                                                    }
+                                                }
+                                                contentItem: Item {
+                                                    anchors.fill: parent
+                                                    Item {
+                                                        id: vidNetIconBox
+                                                        anchors.left: parent.left; anchors.leftMargin: 6
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        width: 14; height: 14
+                                                        Image { id: vidNetIconImg; anchors.fill: parent; source: "icons/nodenetwork.svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                                        ColorOverlay {
+                                                            anchors.fill: parent; source: vidNetIconImg
+                                                            color: { var arr = selectSettings.networksArray; var idx = vidSrcWhereNetCombo.currentIndex; if (idx < 0 || idx >= arr.length) return "white"; var c = arr[idx].color; return (c && c !== "#2e2e33") ? c : "white" }
+                                                        }
+                                                    }
+                                                    Text {
+                                                        anchors.left: vidNetIconBox.right; anchors.leftMargin: 5
+                                                        anchors.right: parent.right; anchors.rightMargin: 16
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        text: { var arr = selectSettings.networksArray; var idx = vidSrcWhereNetCombo.currentIndex; if (idx < 0 || idx >= arr.length) return ""; return arr[idx].name || "" }
+                                                        font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                        visible: text !== ""
+                                                    }
+                                                }
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: vidSrcWhereNetHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcWhereNetHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData.name || ""; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcWhereNetCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcWhereNetCombo.delegateModel; currentIndex: vidSrcWhereNetCombo.currentIndex } }
+                                                delegate: ItemDelegate {
+                                                    id: vidNetDelegate
+                                                    width: vidSrcWhereNetCombo.popup.width; height: 26; padding: 0
+                                                    contentItem: Item {
+                                                        anchors.fill: parent
+                                                        Item {
+                                                            id: vidNetDelIconBox
+                                                            anchors.left: parent.left; anchors.leftMargin: 8
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            width: 14; height: 14
+                                                            Image { id: vidNetDelIconImg; anchors.fill: parent; source: "icons/nodenetwork.svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                                            ColorOverlay { anchors.fill: parent; source: vidNetDelIconImg; color: { var c = modelData ? modelData.color : ""; return (c && c !== "#2e2e33") ? c : "white" } }
+                                                        }
+                                                        Text {
+                                                            anchors.left: vidNetDelIconBox.right; anchors.leftMargin: 6
+                                                            anchors.right: parent.right; anchors.rightMargin: 6
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            text: (modelData && modelData.name) ? modelData.name : ""
+                                                            font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                    background: Rectangle { color: (vidNetDelegate.highlighted || vidNetDelegate.hovered) ? "#477B78" : "transparent" }
+                                                }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(vidSrcWhereNetCombo.width, 120); height: Math.min(selectSettings.networksArray.length * 26 + 2, 132); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: vidSrcWhereNetCombo.delegateModel; currentIndex: vidSrcWhereNetCombo.currentIndex } }
                                             }
 
                                             ComboBox {
                                                 id: vidSrcWhereCharCombo
                                                 visible: srcCondition === "where"
                                                 Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
-                                                currentIndex: { var n = srcWhereCharName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                model: { var _ = nodeWorkspace.charactersModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
+                                                currentIndex: {
+                                                    var m = model; var n = srcWhereCharName
+                                                    for (var i = 0; i < m.length; i++) { if (m[i] === n) return i }
+                                                    if (m.length > 0 && !n) {
+                                                        var _rid = vidSrcRow.rowIdx; var _fn = m[0]
+                                                        Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereCharName", _fn); selectSettings.saveCurrentSources() })
+                                                    }
+                                                    return 0
+                                                }
                                                 onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereCharName", vidSrcWhereCharCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
                                                 contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: vidSrcWhereCharHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcWhereCharHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcWhereCharCombo.delegateModel; currentIndex: vidSrcWhereCharCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: vidSrcWhereCharCombo.delegateModel; currentIndex: vidSrcWhereCharCombo.currentIndex } }
                                             }
 
                                             ComboBox {
@@ -8160,32 +8582,42 @@ Window {
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: vidSrcWhereOpHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcWhereOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcWhereOpCombo.delegateModel; currentIndex: vidSrcWhereOpCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: vidSrcWhereOpCombo.delegateModel; currentIndex: vidSrcWhereOpCombo.currentIndex } }
                                             }
 
                                             ComboBox {
                                                 id: vidSrcWhereNodeCombo
                                                 visible: srcCondition === "where"
                                                 Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
+                                                model: { var _ = nodeWorkspace.nodesModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
                                                 currentIndex: { var n = srcWhereNodeName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
                                                 onActivated: function(ai) { selectSourcesModel.setProperty(vidSrcRow.rowIdx, "srcWhereNodeName", vidSrcWhereNodeCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
                                                 contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                 indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                 HoverHandler { id: vidSrcWhereNodeHover }
                                                 background: Rectangle { radius: 4; color: "transparent"; border.color: vidSrcWhereNodeHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: vidSrcWhereNodeCombo.delegateModel; currentIndex: vidSrcWhereNodeCombo.currentIndex } }
+                                                delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(vidSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                contentItem: ListView { clip: true; model: vidSrcWhereNodeCombo.delegateModel; currentIndex: vidSrcWhereNodeCombo.currentIndex } }
                                             }
 
-                                            Item { visible: srcCondition === "else"; Layout.fillWidth: true }
                                         }
 
                                         RowLayout {
                                             width: parent.width
                                             height: 26
                                             spacing: 4
+
+                                            Rectangle {
+                                                visible: srcCondition === "else"
+                                                Layout.preferredWidth: 62; Layout.preferredHeight: 26
+                                                color: "transparent"; radius: 4; border.color: "white"; border.width: 1
+                                                Text { anchors.centerIn: parent; text: "else"; font.pixelSize: 11; color: "white"; verticalAlignment: Text.AlignVCenter }
+                                            }
 
                                             Rectangle {
                                                 Layout.fillWidth: true; Layout.preferredHeight: 26
@@ -8230,6 +8662,7 @@ Window {
                                                     }
                                                 }
                                             }
+                                        }
                                         }
                                     }
                                 }
@@ -8417,13 +8850,50 @@ Window {
 
                                     Repeater {
                                         model: selectSourcesModel
-                                        delegate: Column {
+                                        delegate: Item {
                                             id: shaderSrcRow
                                             width: parent ? parent.width : 0
-                                            spacing: 4
+                                            height: shaderSrcInnerCol.height
                                             property int rowIdx: index
+                                            property real deleteProgress: 0.0
+
+                                            NumberAnimation {
+                                                id: shaderDeleteAnim
+                                                target: shaderSrcRow; property: "deleteProgress"
+                                                to: 1.0; duration: 1200; easing.type: Easing.Linear
+                                                onFinished: {
+                                                    if (shaderSrcRow.deleteProgress >= 1.0) {
+                                                        var idx = shaderSrcRow.rowIdx
+                                                        selectSourcesModel.remove(idx)
+                                                        if (selectSourcesModel.count === 1 && selectSourcesModel.get(0).srcCondition === "else")
+                                                            selectSettings.clearSources()
+                                                        else
+                                                            selectSettings.saveCurrentSources()
+                                                    }
+                                                }
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent; z: 10
+                                                acceptedButtons: Qt.RightButton
+                                                enabled: srcCondition !== "else"
+                                                onPressed: mouse => { shaderSrcRow.deleteProgress = 0; shaderDeleteAnim.start() }
+                                                onReleased: mouse => { shaderDeleteAnim.stop(); shaderSrcRow.deleteProgress = 0 }
+                                                onExited: { shaderDeleteAnim.stop(); shaderSrcRow.deleteProgress = 0 }
+                                            }
+                                            Rectangle {
+                                                anchors.fill: parent; z: 9; radius: 4
+                                                color: "#ff4444"; enabled: false
+                                                opacity: shaderSrcRow.deleteProgress * 0.75
+                                                visible: shaderSrcRow.deleteProgress > 0
+                                            }
+
+                                            Column {
+                                                id: shaderSrcInnerCol
+                                                width: parent.width
+                                                spacing: 4
 
                                             RowLayout {
+                                                visible: srcCondition !== "else"
                                                 width: parent.width
                                                 height: 26
                                                 spacing: 4
@@ -8438,8 +8908,10 @@ Window {
                                                     indicator: Text { x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 10; color: "white" }
                                                     HoverHandler { id: shaderSrcCondHover }
                                                     background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcCondHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                    delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                    popup: Popup { y: parent.height + 2; width: parent.width; height: shaderSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcCondCombo.delegateModel; currentIndex: shaderSrcCondCombo.currentIndex } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: parent.width; height: shaderSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: shaderSrcCondCombo.delegateModel; currentIndex: shaderSrcCondCombo.currentIndex } }
                                                 }
 
                                                 ComboBox {
@@ -8453,8 +8925,10 @@ Window {
                                                     indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                     HoverHandler { id: shaderSrcCondVarHover }
                                                     background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcCondVarHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                    delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcCondVarCombo.delegateModel; currentIndex: shaderSrcCondVarCombo.currentIndex } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: shaderSrcCondVarCombo.delegateModel; currentIndex: shaderSrcCondVarCombo.currentIndex } }
                                                 }
 
                                                 ComboBox {
@@ -8468,16 +8942,27 @@ Window {
                                                     indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                     HoverHandler { id: shaderSrcCondOpHover }
                                                     background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcCondOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                    delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                    popup: Popup { y: parent.height + 2; width: parent.width; height: shaderSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcCondOpCombo.delegateModel; currentIndex: shaderSrcCondOpCombo.currentIndex } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: parent.width; height: shaderSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: shaderSrcCondOpCombo.delegateModel; currentIndex: shaderSrcCondOpCombo.currentIndex } }
                                                 }
 
                                                 Item {
                                                     visible: srcCondition === "if"
                                                     Layout.fillWidth: true; Layout.preferredHeight: 26
                                                     Rectangle {
-                                                        anchors.fill: parent; radius: 4; color: "transparent"; border.color: "#555"; border.width: 1
-                                                        TextInput { anchors.fill: parent; anchors.margins: 4; color: "white"; font.pixelSize: 10; verticalAlignment: TextInput.AlignVCenter; clip: true; text: srcCondVal || ""; onEditingFinished: { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcCondVal", text); selectSettings.saveCurrentSources() } }
+                                                        anchors.fill: parent; radius: 4; color: "transparent"; border.color: "white"; border.width: 1
+                                                        TextInput {
+                                                            anchors.left: parent.left; anchors.right: parent.right
+                                                            anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                            text: srcCondVal || ""
+                                                            Keys.onReturnPressed: focus = false
+                                                            Keys.onEscapePressed: focus = false
+                                                            onEditingFinished: { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcCondVal", text); selectSettings.saveCurrentSources() }
+                                                        }
                                                     }
                                                 }
 
@@ -8485,30 +8970,99 @@ Window {
                                                     id: shaderSrcWhereNetCombo
                                                     visible: srcCondition === "where"
                                                     Layout.preferredWidth: 44; Layout.preferredHeight: 26
-                                                    model: { var arr = []; if (nodeWorkspace.networksModel) { var mc = nodeWorkspace.networksModel.count; for (var i = 0; i < mc; i++) { var n = nodeWorkspace.networksModel.get(i); arr.push({ id: n.netId, name: n.netName }) } } return arr }
-                                                    currentIndex: { var id = srcWhereNetId; for (var i = 0; i < model.length; i++) { if (model[i].id === id) return i } return 0 }
-                                                    onActivated: function(ai) { if (ai < model.length) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereNetId", model[ai].id); selectSettings.saveCurrentSources() } }
-                                                    contentItem: Text { leftPadding: 4; rightPadding: 14; text: { var m = parent.model; var ci = parent.currentIndex; return (m && ci >= 0 && ci < m.length) ? (m[ci].name || "") : "" }; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                                    model: selectSettings.networksArray
+                                                    currentIndex: {
+                                                        var arr = selectSettings.networksArray
+                                                        var id = srcWhereNetId
+                                                        for (var i = 0; i < arr.length; i++) { if (arr[i].id === id) return i }
+                                                        if (arr.length > 0 && id < 0) {
+                                                            var _rid = shaderSrcRow.rowIdx; var _fid = arr[0].id
+                                                            Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereNetId", _fid); selectSettings.saveCurrentSources() })
+                                                        }
+                                                        return 0
+                                                    }
+                                                    onActivated: function(ai) {
+                                                        var arr = selectSettings.networksArray
+                                                        if (ai >= 0 && ai < arr.length) {
+                                                            selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereNetId", arr[ai].id)
+                                                            selectSettings.saveCurrentSources()
+                                                        }
+                                                    }
+                                                    contentItem: Item {
+                                                        anchors.fill: parent
+                                                        Item {
+                                                            id: shaderNetIconBox
+                                                            anchors.left: parent.left; anchors.leftMargin: 6
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            width: 14; height: 14
+                                                            Image { id: shaderNetIconImg; anchors.fill: parent; source: "icons/nodenetwork.svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                                            ColorOverlay {
+                                                                anchors.fill: parent; source: shaderNetIconImg
+                                                                color: { var arr = selectSettings.networksArray; var idx = shaderSrcWhereNetCombo.currentIndex; if (idx < 0 || idx >= arr.length) return "white"; var c = arr[idx].color; return (c && c !== "#2e2e33") ? c : "white" }
+                                                            }
+                                                        }
+                                                        Text {
+                                                            anchors.left: shaderNetIconBox.right; anchors.leftMargin: 5
+                                                            anchors.right: parent.right; anchors.rightMargin: 16
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            text: { var arr = selectSettings.networksArray; var idx = shaderSrcWhereNetCombo.currentIndex; if (idx < 0 || idx >= arr.length) return ""; return arr[idx].name || "" }
+                                                            font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                            visible: text !== ""
+                                                        }
+                                                    }
                                                     indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                     HoverHandler { id: shaderSrcWhereNetHover }
                                                     background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcWhereNetHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                    delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData.name || ""; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcWhereNetCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcWhereNetCombo.delegateModel; currentIndex: shaderSrcWhereNetCombo.currentIndex } }
+                                                    delegate: ItemDelegate {
+                                                        id: shaderNetDelegate
+                                                        width: shaderSrcWhereNetCombo.popup.width; height: 26; padding: 0
+                                                        contentItem: Item {
+                                                            anchors.fill: parent
+                                                            Item {
+                                                                id: shaderNetDelIconBox
+                                                                anchors.left: parent.left; anchors.leftMargin: 8
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                width: 14; height: 14
+                                                                Image { id: shaderNetDelIconImg; anchors.fill: parent; source: "icons/nodenetwork.svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                                                ColorOverlay { anchors.fill: parent; source: shaderNetDelIconImg; color: { var c = modelData ? modelData.color : ""; return (c && c !== "#2e2e33") ? c : "white" } }
+                                                            }
+                                                            Text {
+                                                                anchors.left: shaderNetDelIconBox.right; anchors.leftMargin: 6
+                                                                anchors.right: parent.right; anchors.rightMargin: 6
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                text: (modelData && modelData.name) ? modelData.name : ""
+                                                                font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                            }
+                                                        }
+                                                        background: Rectangle { color: (shaderNetDelegate.highlighted || shaderNetDelegate.hovered) ? "#477B78" : "transparent" }
+                                                    }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(shaderSrcWhereNetCombo.width, 120); height: Math.min(selectSettings.networksArray.length * 26 + 2, 132); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: shaderSrcWhereNetCombo.delegateModel; currentIndex: shaderSrcWhereNetCombo.currentIndex } }
                                                 }
 
                                                 ComboBox {
                                                     id: shaderSrcWhereCharCombo
                                                     visible: srcCondition === "where"
                                                     Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                    model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
-                                                    currentIndex: { var n = srcWhereCharName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
+                                                    model: { var _ = nodeWorkspace.charactersModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkCharacterNames(netId) }
+                                                    currentIndex: {
+                                                        var m = model; var n = srcWhereCharName
+                                                        for (var i = 0; i < m.length; i++) { if (m[i] === n) return i }
+                                                        if (m.length > 0 && !n) {
+                                                            var _rid = shaderSrcRow.rowIdx; var _fn = m[0]
+                                                            Qt.callLater(function() { selectSourcesModel.setProperty(_rid, "srcWhereCharName", _fn); selectSettings.saveCurrentSources() })
+                                                        }
+                                                        return 0
+                                                    }
                                                     onActivated: function(ai) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereCharName", shaderSrcWhereCharCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
                                                     contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                     indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                     HoverHandler { id: shaderSrcWhereCharHover }
                                                     background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcWhereCharHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                    delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcWhereCharCombo.delegateModel; currentIndex: shaderSrcWhereCharCombo.currentIndex } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: shaderSrcWhereCharCombo.delegateModel; currentIndex: shaderSrcWhereCharCombo.currentIndex } }
                                                 }
 
                                                 ComboBox {
@@ -8522,32 +9076,42 @@ Window {
                                                     indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                     HoverHandler { id: shaderSrcWhereOpHover }
                                                     background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcWhereOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                    delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcWhereOpCombo.delegateModel; currentIndex: shaderSrcWhereOpCombo.currentIndex } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: shaderSrcWhereOpCombo.delegateModel; currentIndex: shaderSrcWhereOpCombo.currentIndex } }
                                                 }
 
                                                 ComboBox {
                                                     id: shaderSrcWhereNodeCombo
                                                     visible: srcCondition === "where"
                                                     Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
-                                                    model: { var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
+                                                    model: { var _ = nodeWorkspace.nodesModel.count; var netId = srcWhereNetId; if (netId === -1 && nodeWorkspace.networksModel && nodeWorkspace.networksModel.count > 0) netId = nodeWorkspace.networksModel.get(0).netId; if (netId === -1) return []; return storyManager.getNetworkNodeNames(netId) }
                                                     currentIndex: { var n = srcWhereNodeName; for (var i = 0; i < model.length; i++) { if (model[i] === n) return i } return 0 }
                                                     onActivated: function(ai) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcWhereNodeName", shaderSrcWhereNodeCombo.model[ai] || ""); selectSettings.saveCurrentSources() }
                                                     contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                                                     indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
                                                     HoverHandler { id: shaderSrcWhereNodeHover }
                                                     background: Rectangle { radius: 4; color: "transparent"; border.color: shaderSrcWhereNodeHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
-                                                    delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }; background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
-                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }; contentItem: ListView { clip: true; model: shaderSrcWhereNodeCombo.delegateModel; currentIndex: shaderSrcWhereNodeCombo.currentIndex } }
+                                                    delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                                    popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(shaderSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                                    contentItem: ListView { clip: true; model: shaderSrcWhereNodeCombo.delegateModel; currentIndex: shaderSrcWhereNodeCombo.currentIndex } }
                                                 }
 
-                                                Item { visible: srcCondition === "else"; Layout.fillWidth: true }
                                             }
 
                                             RowLayout {
                                                 width: parent.width
                                                 height: 26
                                                 spacing: 4
+
+                                                Rectangle {
+                                                    visible: srcCondition === "else"
+                                                    Layout.preferredWidth: 62; Layout.preferredHeight: 26
+                                                    color: "transparent"; radius: 4; border.color: "#444"; border.width: 1
+                                                    Text { anchors.centerIn: parent; text: "else"; font.pixelSize: 11; color: "#666"; verticalAlignment: Text.AlignVCenter }
+                                                }
 
                                                 Rectangle {
                                                     Layout.fillWidth: true; Layout.preferredHeight: 26
@@ -8619,6 +9183,7 @@ Window {
                                                         }
                                                     }
                                                 }
+                                            }
                                             }
                                         }
                                     }
@@ -12168,61 +12733,63 @@ Window {
         id: loopingSoundPool
         Repeater {
             model: nodeWorkspace.soundsModel
-            delegate: MediaPlayer {
-                id: loopPlayer
-                source: (model.enabled && (model.soundType || "loop") === "loop") ? model.filePath : ""
-                loops: MediaPlayer.Infinite
-                audioOutput: AudioOutput {
-                    volume: 1.0
-                }
-
-                readonly property int orbitingNodeId: {
-                    var sIdx = index;
-                    var orbits = nodeWorkspace.orbitsModel;
-                    for (var i = 0; i < orbits.count; i++) {
-                        var o = orbits.get(i);
-                        if (o.circleType === "sound" && o.itemIdx === sIdx)
-                            return o.nodeId;
+            delegate: Item {
+                MediaPlayer {
+                    id: loopPlayer
+                    source: (model.enabled && (model.soundType || "loop") === "loop") ? model.filePath : ""
+                    loops: MediaPlayer.Infinite
+                    audioOutput: AudioOutput {
+                        volume: 1.0
                     }
-                    return -1;
-                }
 
-                readonly property bool shouldBePlaying: {
-                    if (orbitingNodeId === -1 || !model.enabled || (model.soundType || "loop") !== "loop" || !storyManager.isOpen || mainWindow.currentSceneId === -1)
-                        return false;
-                    if (mainWindow.currentLocationNodeName === "")
-                        return false;
-
-                    var nodes = nodeWorkspace.nodesModel;
-                    for (var i = 0; i < nodes.count; i++) {
-                        var n = nodes.get(i);
-                        if (n.id === orbitingNodeId && n.name === mainWindow.currentLocationNodeName)
-                            return true;
+                    readonly property int orbitingNodeId: {
+                        var sIdx = index;
+                        var orbits = nodeWorkspace.orbitsModel;
+                        for (var i = 0; i < orbits.count; i++) {
+                            var o = orbits.get(i);
+                            if (o.circleType === "sound" && o.itemIdx === sIdx)
+                                return o.nodeId;
+                        }
+                        return -1;
                     }
-                    return false;
-                }
 
-                onShouldBePlayingChanged: {
-                    if (shouldBePlaying) {
-                        if (playbackState !== MediaPlayer.PlayingState) {
+                    readonly property bool shouldBePlaying: {
+                        if (orbitingNodeId === -1 || !model.enabled || (model.soundType || "loop") !== "loop" || !storyManager.isOpen || mainWindow.currentSceneId === -1)
+                            return false;
+                        if (mainWindow.currentLocationNodeName === "")
+                            return false;
+
+                        var nodes = nodeWorkspace.nodesModel;
+                        for (var i = 0; i < nodes.count; i++) {
+                            var n = nodes.get(i);
+                            if (n.id === orbitingNodeId && n.name === mainWindow.currentLocationNodeName)
+                                return true;
+                        }
+                        return false;
+                    }
+
+                    onShouldBePlayingChanged: {
+                        if (shouldBePlaying) {
+                            if (playbackState !== MediaPlayer.PlayingState) {
+                                if (duration > 0) {
+                                    var elapsed = Date.now() % duration;
+                                    position = elapsed;
+                                }
+                                play();
+                            }
+                        } else {
+                            stop();
+                        }
+                    }
+
+                    onMediaStatusChanged: {
+                        if (mediaStatus === MediaPlayer.LoadedMedia && shouldBePlaying) {
                             if (duration > 0) {
                                 var elapsed = Date.now() % duration;
                                 position = elapsed;
                             }
                             play();
                         }
-                    } else {
-                        stop();
-                    }
-                }
-
-                onMediaStatusChanged: {
-                    if (mediaStatus === MediaPlayer.LoadedMedia && shouldBePlaying) {
-                        if (duration > 0) {
-                            var elapsed = Date.now() % duration;
-                            position = elapsed;
-                        }
-                        play();
                     }
                 }
             }

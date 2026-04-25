@@ -121,6 +121,7 @@ Item {
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
+                    sourcesJson: el.sourcesJson || "[]",
                     template: el.template || "none",
                     locked: el.locked || false
                 })
@@ -131,6 +132,7 @@ Item {
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
+                    sourcesJson: el.sourcesJson || "[]",
                     template: el.template || "none",
                     locked: el.locked || false
                 })
@@ -143,6 +145,7 @@ Item {
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
+                    sourcesJson: el.sourcesJson || "[]",
                     template: el.template || "none",
                     locked: el.locked || false
                 })
@@ -190,6 +193,7 @@ Item {
                 name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
+                sourcesJson: m.sourcesJson || "[]",
                 template: m.template || "none",
                 locked: m.locked || false })
         }
@@ -201,6 +205,7 @@ Item {
                 name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
+                sourcesJson: m.sourcesJson || "[]",
                 template: m.template || "none",
                 locked: m.locked || false })
         }
@@ -214,6 +219,7 @@ Item {
                 uniformsJson: m.uniformsJson,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
+                sourcesJson: m.sourcesJson || "[]",
                 template: m.template || "none",
                 locked: m.locked || false })
         }
@@ -2129,10 +2135,41 @@ Item {
                     property bool videoReadySignaled: false
                     property int videoFrameCount: 0
 
+                    // Source-swap freeze-frame state. liveFilePath must NOT bind to model.filePath
+                    // — it is initialized by onTrackedFilePathChanged and then managed manually.
+                    property string liveFilePath: ""
+                    property string trackedFilePath: model.filePath
+                    property bool swapping: false
+                    property int swapFrameCount: 0
+                    property string queuedFilePath: ""
+
+                    onTrackedFilePathChanged: {
+                        if (!vidDelegate.videoReadySignaled) {
+                            // Still in initial load — follow model directly, no freeze needed
+                            vidDelegate.liveFilePath = trackedFilePath
+                            return
+                        }
+                        if (trackedFilePath === vidDelegate.liveFilePath) return
+                        vidDelegate.startSourceSwap(trackedFilePath)
+                    }
+
+                    function startSourceSwap(newPath) {
+                        if (vidDelegate.swapping) { vidDelegate.queuedFilePath = newPath; return }
+                        vidDelegate.swapping = true
+                        vidDelegate.queuedFilePath = ""
+                        vidDelegate.swapFrameCount = 0
+                        // Grab current frame before source changes — becomes the freeze overlay
+                        vidOutput.grabToImage(function(result) {
+                            vidFreezeFrame.source = result.url
+                            vidFreezeFrame.opacity = 1
+                            vidDelegate.liveFilePath = newPath
+                        })
+                    }
+
                     // Video fill
                     MediaPlayer {
                         id: vidPlayer
-                        source: model.filePath
+                        source: vidDelegate.liveFilePath
                         autoPlay: true
                         loops: MediaPlayer.Infinite
                         videoOutput: vidOutput
@@ -2173,8 +2210,34 @@ Item {
                                         imageLoadComplete()
                                     }
                                 }
+                                // During a source swap, count new frames then reveal new video
+                                if (vidDelegate.swapping) {
+                                    vidDelegate.swapFrameCount++
+                                    if (vidDelegate.swapFrameCount >= 2) {
+                                        vidFreezeFrame.opacity = 0
+                                        vidDelegate.swapping = false
+                                        if (vidDelegate.queuedFilePath !== "") {
+                                            var next = vidDelegate.queuedFilePath
+                                            vidDelegate.queuedFilePath = ""
+                                            vidDelegate.startSourceSwap(next)
+                                        }
+                                    }
+                                }
                             }
                         }
+                    }
+
+                    // Freeze-frame overlay: holds the last rendered frame while a new source loads,
+                    // preventing the black flash between source changes.
+                    Image {
+                        id: vidFreezeFrame
+                        x: 28; y: 28
+                        width: parent.width - 56; height: parent.height - 56
+                        z: 0.5
+                        opacity: 0
+                        fillMode: Image.Stretch
+                        cache: false
+                        Behavior on opacity { NumberAnimation { duration: 80 } }
                     }
 
                     // Border — only when active/selected or relayer hovered
