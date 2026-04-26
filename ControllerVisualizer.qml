@@ -14,31 +14,27 @@ Item {
     readonly property real bodyW: 48 * u
     readonly property real bodyH: 32 * u
 
-    // Button definitions — cx/cy are center coords in ps5.svg 48×32 space.
-    // bw/bh define the clickable hit zone in the same units.
-    // Face button positions derived directly from ps5.svg path "M" coordinates.
-    // D-pad positions derived from the cross-path span (x 5–15, y 5–15).
-    // Shoulder/trigger positions estimated from controller body outline.
+    // cx/cy — center in 48×32 SVG space. bw/bh — hit zone size (scale already applied).
     readonly property var buttonDefs: [
         // ── Face buttons ────────────────────────────────────────────────────
-        {t:"△", kc:"triangle", icon:"icons/ps5triangle.svg", cx:40,   cy:7.5,  bw:3,  bh:3},
-        {t:"○", kc:"circle",   icon:"icons/ps5circle.svg",   cx:43,   cy:10.5, bw:3,  bh:3},
-        {t:"✕", kc:"cross",    icon:"icons/ps5cross.svg",    cx:40,   cy:13.5, bw:3,  bh:3},
-        {t:"□", kc:"square",   icon:"icons/ps5square.svg",   cx:37,   cy:10.5, bw:3,  bh:3},
-        // ── D-pad ───────────────────────────────────────────────────────────
-        {t:"↑", kc:"dpadup",    icon:"icons/ps5dpadup.svg",    cx:10,  cy:7,    bw:2,  bh:4},
-        {t:"↓", kc:"dpaddown",  icon:"icons/ps5dpaddown.svg",  cx:10,  cy:13,   bw:2,  bh:4},
-        {t:"←", kc:"dpadleft",  icon:"icons/ps5dpadleft.svg",  cx:7,   cy:10,   bw:4,  bh:2},
-        {t:"→", kc:"dpadright", icon:"icons/ps5dpadright.svg", cx:13,  cy:10,   bw:4,  bh:2},
+        { t:"△", kc:"triangle", icon:"icons/ps5triangle.svg", cx:38.5, cy:7.5,  bw:3,    bh:3   },
+        { t:"○", kc:"circle",   icon:"icons/ps5circle.svg",   cx:41.5, cy:10.5, bw:3,    bh:3   },
+        { t:"✕", kc:"cross",    icon:"icons/ps5cross.svg",    cx:38.5, cy:13.5, bw:3,    bh:3   },
+        { t:"□", kc:"square",   icon:"icons/ps5square.svg",   cx:35.5, cy:10.5, bw:3,    bh:3   },
+        // ── D-pad (scale 1.5 baked in: bw/bh × 1.5) ────────────────────────
+        { t:"↑", kc:"dpadup",    icon:"icons/ps5dpadup.svg",    cx:10.0, cy:6.9,  bw:3.0, bh:6.0 },
+        { t:"↓", kc:"dpaddown",  icon:"icons/ps5dpaddown.svg",  cx:10.0, cy:13.4, bw:3.0, bh:6.0 },
+        { t:"←", kc:"dpadleft",  icon:"icons/ps5dpadleft.svg",  cx:6.9,  cy:10.0, bw:6.0, bh:3.0 },
+        { t:"→", kc:"dpadright", icon:"icons/ps5dpadright.svg", cx:13.4, cy:10.0, bw:6.0, bh:3.0 },
         // ── Shoulder bumpers ─────────────────────────────────────────────────
-        {t:"L1", kc:"l1", icon:"icons/ps5l1.svg", cx:8,  cy:7,  bw:7, bh:3.5},
-        {t:"R1", kc:"r1", icon:"icons/ps5r1.svg", cx:40, cy:7,  bw:7, bh:3.5},
+        { t:"L1", kc:"l1", icon:"icons/ps5l1.svg", cx:-1.0, cy:7.0, bw:7,    bh:3.5 },
+        { t:"R1", kc:"r1", icon:"icons/ps5r1.svg", cx:49.0, cy:7.0, bw:7,    bh:3.5 },
         // ── Triggers ────────────────────────────────────────────────────────
-        {t:"L2", kc:"l2", icon:"icons/ps5l2.svg", cx:8,  cy:3,  bw:7, bh:3.5},
-        {t:"R2", kc:"r2", icon:"icons/ps5r2.svg", cx:40, cy:3,  bw:7, bh:3.5},
-        // ── Center ──────────────────────────────────────────────────────────
-        {t:"touchpad", kc:"touchpad", icon:"icons/ps5touchpad.svg", cx:24,   cy:16,   bw:14, bh:8},
-        {t:"options",  kc:"options",  icon:"icons/ps5options.svg",  cx:29.5, cy:11.5, bw:2.5,bh:4.5},
+        { t:"L2", kc:"l2", icon:"icons/ps5l2.svg", cx:-1.0, cy:3.0, bw:7,    bh:3.5 },
+        { t:"R2", kc:"r2", icon:"icons/ps5r2.svg", cx:49.0, cy:3.0, bw:7,    bh:3.5 },
+        // ── Center (touchpad scale 1.1 baked in: bw 14→15.4, bh 8→8.8) ─────
+        { t:"touchpad", kc:"touchpad", icon:"icons/ps5touchpad.svg", cx:24.2, cy:6.5,  bw:15.4, bh:8.8 },
+        { t:"options",  kc:"options",  icon:"icons/ps5options.svg",  cx:34.0, cy:5.0,  bw:2.5,  bh:4.5 },
     ]
 
     // ── Controller body ──────────────────────────────────────────────────────
@@ -48,13 +44,16 @@ Item {
         width:  cvRoot.bodyW
         height: cvRoot.bodyH
 
-        // ps5.svg silhouette — very dim, just for spatial reference
+        // sourceSize forces rasterization at display size — prevents pixelation when
+        // stretching an SVG whose intrinsic size is only its 48×32 viewBox.
         Image {
             id: bgImg
             anchors.fill: parent
-            source: "icons/ps5.svg"
-            fillMode: Image.Stretch
-            opacity: 0.18
+            source:       "icons/ps5.svg"
+            fillMode:     Image.Stretch
+            opacity:      0.18
+            sourceSize.width:  Math.ceil(cvRoot.bodyW)
+            sourceSize.height: Math.ceil(cvRoot.bodyH)
         }
 
         // ── Button overlays ──────────────────────────────────────────────────
@@ -73,7 +72,6 @@ Item {
                 width:  d.bw * cvRoot.u
                 height: d.bh * cvRoot.u
 
-                // Teal selection border
                 Rectangle {
                     anchors.fill: parent
                     color:        "transparent"
@@ -83,7 +81,6 @@ Item {
                     Behavior on border.width { NumberAnimation { duration: 60 } }
                 }
 
-                // Icon (hidden — used as ColorOverlay source)
                 Image {
                     id: btnIcon
                     anchors.fill:    parent
@@ -91,6 +88,8 @@ Item {
                     source:          d.icon
                     fillMode:        Image.PreserveAspectFit
                     visible:         false
+                    sourceSize.width:  128
+                    sourceSize.height: 128
                 }
 
                 ColorOverlay {
