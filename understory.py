@@ -130,17 +130,74 @@ class ShaderInspector(QObject):
         return uniforms
 
 
+class _Command:
+    """Single undoable/redoable action stored in session history."""
+    __slots__ = ("_undo_fn", "_redo_fn")
+
+    def __init__(self, undo_fn, redo_fn):
+        self._undo_fn = undo_fn
+        self._redo_fn = redo_fn
+
+    def undo(self):
+        self._undo_fn()
+
+    def redo(self):
+        self._redo_fn()
+
+
+class _CommandHistory:
+    """Unbounded undo/redo stack that lives for the duration of a story session."""
+
+    def __init__(self):
+        self._stack = []
+        self._index = -1
+
+    def push(self, command):
+        del self._stack[self._index + 1:]
+        self._stack.append(command)
+        self._index = len(self._stack) - 1
+
+    def undo(self):
+        if self._index < 0:
+            return False
+        self._stack[self._index].undo()
+        self._index -= 1
+        return True
+
+    def redo(self):
+        if self._index >= len(self._stack) - 1:
+            return False
+        self._index += 1
+        self._stack[self._index].redo()
+        return True
+
+    @property
+    def can_undo(self):
+        return self._index >= 0
+
+    @property
+    def can_redo(self):
+        return self._index < len(self._stack) - 1
+
+    def clear(self):
+        self._stack.clear()
+        self._index = -1
+
+
 class StoryManager(QObject):
     """Owns the SQLite connection for the currently-open .story file."""
 
     storyChanged = Signal()
     storyOpened = Signal()  # fires only on open/new, not on metadata updates
+    undoAvailabilityChanged = Signal()
+    redoAvailabilityChanged = Signal()
 
     def __init__(self):
         super().__init__()
         self._path = ""
         self._title = "new story"
         self._conn = None
+        self._history = _CommandHistory()
         tmpl = Path(__file__).parent / "template.sql"
         self._template_sql = tmpl.read_text() if tmpl.exists() else ""
         self._recent_path = Path.home() / ".config" / "understory" / "recent.json"
@@ -186,6 +243,39 @@ class StoryManager(QObject):
         self._recent = self._recent[:8]
         self._save_recent()
 
+    # ------------------------------------------------------------------ undo/redo
+
+    def _push_command(self, undo_fn, redo_fn):
+        had_redo = self._history.can_redo
+        had_undo = self._history.can_undo
+        self._history.push(_Command(undo_fn, redo_fn))
+        if not had_undo:
+            self.undoAvailabilityChanged.emit()
+        if had_redo:
+            self.redoAvailabilityChanged.emit()
+
+    @Property(bool, notify=undoAvailabilityChanged)
+    def canUndo(self):
+        return self._history.can_undo
+
+    @Property(bool, notify=redoAvailabilityChanged)
+    def canRedo(self):
+        return self._history.can_redo
+
+    @Slot()
+    def undo(self):
+        if self._history.undo():
+            self.undoAvailabilityChanged.emit()
+            self.redoAvailabilityChanged.emit()
+            self.storyChanged.emit()
+
+    @Slot()
+    def redo(self):
+        if self._history.redo():
+            self.undoAvailabilityChanged.emit()
+            self.redoAvailabilityChanged.emit()
+            self.storyChanged.emit()
+
     # ------------------------------------------------------------------ properties
 
     @Property(str, notify=storyChanged)
@@ -221,6 +311,9 @@ class StoryManager(QObject):
             self._conn = conn
             self._path = path
             self._title = ""
+            self._history.clear()
+            self.undoAvailabilityChanged.emit()
+            self.redoAvailabilityChanged.emit()
             self._add_recent(path, self.storyTitle)
             self.storyChanged.emit()
             self.storyOpened.emit()
@@ -294,6 +387,9 @@ class StoryManager(QObject):
             # Treat the old default "new story" as no custom title so the
             # filename stem is shown instead.
             self._title = "" if stored in ("", "new story") else stored
+            self._history.clear()
+            self.undoAvailabilityChanged.emit()
+            self.redoAvailabilityChanged.emit()
             self._add_recent(path, self.storyTitle)
             self.storyChanged.emit()
             self.storyOpened.emit()
@@ -337,11 +433,18 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
-            self._conn.execute("UPDATE story SET title = ? WHERE id = 1", (title,))
-            self._conn.commit()
-            self._title = title
-            self._add_recent(self._path, self.storyTitle)
-            self.storyChanged.emit()
+            row = self._conn.execute("SELECT title FROM story WHERE id = 1").fetchone()
+            old_title = row[0] if row else ""
+
+            def apply(t):
+                self._conn.execute("UPDATE story SET title = ? WHERE id = 1", (t,))
+                self._conn.commit()
+                self._title = "" if t in ("", "new story") else t
+                self._add_recent(self._path, self.storyTitle)
+                self.storyChanged.emit()
+
+            apply(title)
+            self._push_command(lambda t=old_title: apply(t), lambda t=title: apply(t))
         except Exception as e:
             print(f"StoryManager.setStoryTitle: {e}")
 
@@ -367,11 +470,23 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
-            self._conn.execute(
-                "UPDATE story SET resolution_w = ?, resolution_h = ? WHERE id = 1",
-                (w, h),
+            row = self._conn.execute(
+                "SELECT resolution_w, resolution_h FROM story WHERE id = 1"
+            ).fetchone()
+            old_w, old_h = (row[0], row[1]) if row else (1920, 1080)
+
+            def apply(rw, rh):
+                self._conn.execute(
+                    "UPDATE story SET resolution_w = ?, resolution_h = ? WHERE id = 1",
+                    (rw, rh),
+                )
+                self._conn.commit()
+
+            apply(w, h)
+            self._push_command(
+                lambda rw=old_w, rh=old_h: apply(rw, rh),
+                lambda rw=w, rh=h: apply(rw, rh),
             )
-            self._conn.commit()
         except Exception as e:
             print(f"StoryManager.setResolution: {e}")
 
@@ -403,21 +518,89 @@ class StoryManager(QObject):
                 "INSERT INTO scenes (name, sort_order) VALUES (?, ?)",
                 (name, sort_order),
             )
+            scene_id = cur.lastrowid
             self._conn.commit()
-            return cur.lastrowid
+
+            def do_undo(sid=scene_id):
+                self._conn.execute("DELETE FROM elements WHERE scene_id = ?", (sid,))
+                self._conn.execute("DELETE FROM scenes WHERE id = ?", (sid,))
+                self._conn.commit()
+
+            def do_redo(sid=scene_id, n=name, so=sort_order):
+                self._conn.execute(
+                    "INSERT INTO scenes (id, name, sort_order) VALUES (?, ?, ?)",
+                    (sid, n, so),
+                )
+                self._conn.commit()
+
+            self._push_command(do_undo, do_redo)
+            return scene_id
         except Exception as e:
             print(f"StoryManager.createScene: {e}")
             return -1
+
+    @Slot(int)
+    def deleteScene(self, scene_id):
+        """Delete a scene and all its elements (with undo support)."""
+        if not self._conn:
+            return
+        try:
+            row = self._conn.execute(
+                "SELECT name, sort_order, thumbnail FROM scenes WHERE id = ?", (scene_id,)
+            ).fetchone()
+            if not row:
+                return
+            old_name, old_sort_order, old_thumbnail = row
+
+            elem_rows = self._conn.execute(
+                "SELECT type, name, x, y, w, h, z_order, meta"
+                " FROM elements WHERE scene_id = ? ORDER BY z_order",
+                (scene_id,),
+            ).fetchall()
+
+            self._conn.execute("DELETE FROM scenes WHERE id = ?", (scene_id,))
+            self._conn.commit()
+
+            def do_undo(sid=scene_id, n=old_name, so=old_sort_order, thumb=old_thumbnail, elems=elem_rows):
+                self._conn.execute(
+                    "INSERT INTO scenes (id, name, sort_order, thumbnail) VALUES (?, ?, ?, ?)",
+                    (sid, n, so, thumb),
+                )
+                for type_, ename, x, y, w, h, z_order, meta in elems:
+                    self._conn.execute(
+                        "INSERT INTO elements (scene_id, type, name, x, y, w, h, z_order, meta)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (sid, type_, ename, x, y, w, h, z_order, meta),
+                    )
+                self._conn.commit()
+
+            def do_redo(sid=scene_id):
+                self._conn.execute("DELETE FROM scenes WHERE id = ?", (sid,))
+                self._conn.commit()
+
+            self._push_command(do_undo, do_redo)
+        except Exception as e:
+            print(f"StoryManager.deleteScene: {e}")
 
     @Slot(int, str)
     def updateSceneName(self, scene_id, name):
         if not self._conn:
             return
         try:
-            self._conn.execute(
-                "UPDATE scenes SET name = ? WHERE id = ?", (name, scene_id)
+            row = self._conn.execute(
+                "SELECT name FROM scenes WHERE id = ?", (scene_id,)
+            ).fetchone()
+            old_name = row[0] if row else ""
+
+            def apply(sid, n):
+                self._conn.execute("UPDATE scenes SET name = ? WHERE id = ?", (n, sid))
+                self._conn.commit()
+
+            apply(scene_id, name)
+            self._push_command(
+                lambda sid=scene_id, n=old_name: apply(sid, n),
+                lambda sid=scene_id, n=name: apply(sid, n),
             )
-            self._conn.commit()
         except Exception as e:
             print(f"StoryManager.updateSceneName: {e}")
 
@@ -440,25 +623,38 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
-            data = json.loads(elements_json)
-            self._conn.execute("DELETE FROM elements WHERE scene_id = ?", (scene_id,))
-            for el in data:
-                self._conn.execute(
-                    "INSERT INTO elements (scene_id, type, name, x, y, w, h, z_order, meta)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        scene_id,
-                        el["type"],
-                        el.get("name", ""),
-                        el["x"],
-                        el["y"],
-                        el["w"],
-                        el["h"],
-                        el.get("z_order", 0),
-                        json.dumps(el),
-                    ),
-                )
-            self._conn.commit()
+            rows = self._conn.execute(
+                "SELECT meta FROM elements WHERE scene_id = ? ORDER BY z_order",
+                (scene_id,),
+            ).fetchall()
+            old_json = json.dumps([json.loads(r[0]) for r in rows])
+
+            def apply(sid, ej):
+                data = json.loads(ej)
+                self._conn.execute("DELETE FROM elements WHERE scene_id = ?", (sid,))
+                for el in data:
+                    self._conn.execute(
+                        "INSERT INTO elements (scene_id, type, name, x, y, w, h, z_order, meta)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            sid,
+                            el["type"],
+                            el.get("name", ""),
+                            el["x"],
+                            el["y"],
+                            el["w"],
+                            el["h"],
+                            el.get("z_order", 0),
+                            json.dumps(el),
+                        ),
+                    )
+                self._conn.commit()
+
+            apply(scene_id, elements_json)
+            self._push_command(
+                lambda sid=scene_id, ej=old_json: apply(sid, ej),
+                lambda sid=scene_id, ej=elements_json: apply(sid, ej),
+            )
         except Exception as e:
             print(f"StoryManager.saveSceneElements: {e}")
 
@@ -635,10 +831,22 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
-            self._conn.execute(
-                "UPDATE networks SET meta = ? WHERE id = ?", (json_str, network_id)
+            row = self._conn.execute(
+                "SELECT meta FROM networks WHERE id = ?", (network_id,)
+            ).fetchone()
+            old_json = row[0] if (row and row[0]) else "{}"
+
+            def apply(nid, js):
+                self._conn.execute(
+                    "UPDATE networks SET meta = ? WHERE id = ?", (js, nid)
+                )
+                self._conn.commit()
+
+            apply(network_id, json_str)
+            self._push_command(
+                lambda nid=network_id, js=old_json: apply(nid, js),
+                lambda nid=network_id, js=json_str: apply(nid, js),
             )
-            self._conn.commit()
         except Exception as e:
             print(f"StoryManager.saveNetworkData: {e}")
 
@@ -649,8 +857,21 @@ class StoryManager(QObject):
             return -1
         try:
             cur = self._conn.execute("INSERT INTO networks (name) VALUES (?)", (name,))
+            network_id = cur.lastrowid
             self._conn.commit()
-            return cur.lastrowid
+
+            def do_undo(nid=network_id):
+                self._conn.execute("DELETE FROM networks WHERE id = ?", (nid,))
+                self._conn.commit()
+
+            def do_redo(nid=network_id, n=name):
+                self._conn.execute(
+                    "INSERT INTO networks (id, name) VALUES (?, ?)", (nid, n)
+                )
+                self._conn.commit()
+
+            self._push_command(do_undo, do_redo)
+            return network_id
         except Exception as e:
             print(f"StoryManager.createNetwork: {e}")
             return -1
@@ -661,10 +882,22 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
-            self._conn.execute(
-                "UPDATE networks SET name = ? WHERE id = ?", (name, network_id)
+            row = self._conn.execute(
+                "SELECT name FROM networks WHERE id = ?", (network_id,)
+            ).fetchone()
+            old_name = row[0] if row else ""
+
+            def apply(nid, n):
+                self._conn.execute(
+                    "UPDATE networks SET name = ? WHERE id = ?", (n, nid)
+                )
+                self._conn.commit()
+
+            apply(network_id, name)
+            self._push_command(
+                lambda nid=network_id, n=old_name: apply(nid, n),
+                lambda nid=network_id, n=name: apply(nid, n),
             )
-            self._conn.commit()
         except Exception as e:
             print(f"StoryManager.renameNetwork: {e}")
 
@@ -674,10 +907,22 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
-            self._conn.execute(
-                "UPDATE networks SET color = ? WHERE id = ?", (color, network_id)
+            row = self._conn.execute(
+                "SELECT color FROM networks WHERE id = ?", (network_id,)
+            ).fetchone()
+            old_color = row[0] if (row and row[0]) else "#2e2e33"
+
+            def apply(nid, c):
+                self._conn.execute(
+                    "UPDATE networks SET color = ? WHERE id = ?", (c, nid)
+                )
+                self._conn.commit()
+
+            apply(network_id, color)
+            self._push_command(
+                lambda nid=network_id, c=old_color: apply(nid, c),
+                lambda nid=network_id, c=color: apply(nid, c),
             )
-            self._conn.commit()
         except Exception as e:
             print(f"StoryManager.saveNetworkColor: {e}")
 
@@ -687,8 +932,28 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
+            row = self._conn.execute(
+                "SELECT name, color, meta FROM networks WHERE id = ?", (network_id,)
+            ).fetchone()
+            if not row:
+                return
+            old_name, old_color, old_meta = row
+
             self._conn.execute("DELETE FROM networks WHERE id = ?", (network_id,))
             self._conn.commit()
+
+            def do_undo(nid=network_id, n=old_name, c=old_color, m=old_meta):
+                self._conn.execute(
+                    "INSERT INTO networks (id, name, color, meta) VALUES (?, ?, ?, ?)",
+                    (nid, n, c or "#2e2e33", m),
+                )
+                self._conn.commit()
+
+            def do_redo(nid=network_id):
+                self._conn.execute("DELETE FROM networks WHERE id = ?", (nid,))
+                self._conn.commit()
+
+            self._push_command(do_undo, do_redo)
         except Exception as e:
             print(f"StoryManager.deleteNetwork: {e}")
 
@@ -731,19 +996,36 @@ class StoryManager(QObject):
         if not self._conn:
             return
         try:
-            data = json.loads(variables_json)
-            self._conn.execute("DELETE FROM variables")
-            for v in data:
-                name = v.get("varName", "").strip()
-                if not name:
-                    continue
-                db_type = self._QML_TO_DB_TYPE.get(v.get("varType", "text"), "string")
-                value = v.get("varValue", "")
-                self._conn.execute(
-                    "INSERT INTO variables (name, type, default_value) VALUES (?, ?, ?)",
-                    (name, db_type, value),
-                )
-            self._conn.commit()
+            old_rows = self._conn.execute(
+                "SELECT name, type, default_value FROM variables ORDER BY id"
+            ).fetchall()
+
+            def do_redo(vj=variables_json):
+                data = json.loads(vj)
+                self._conn.execute("DELETE FROM variables")
+                for v in data:
+                    name = v.get("varName", "").strip()
+                    if not name:
+                        continue
+                    db_type = self._QML_TO_DB_TYPE.get(v.get("varType", "text"), "string")
+                    value = v.get("varValue", "")
+                    self._conn.execute(
+                        "INSERT INTO variables (name, type, default_value) VALUES (?, ?, ?)",
+                        (name, db_type, value),
+                    )
+                self._conn.commit()
+
+            def do_undo(rows=old_rows):
+                self._conn.execute("DELETE FROM variables")
+                for name, type_, value in rows:
+                    self._conn.execute(
+                        "INSERT INTO variables (name, type, default_value) VALUES (?, ?, ?)",
+                        (name, type_, value),
+                    )
+                self._conn.commit()
+
+            do_redo()
+            self._push_command(do_undo, do_redo)
         except Exception as e:
             print(f"StoryManager.saveVariables: {e}")
 

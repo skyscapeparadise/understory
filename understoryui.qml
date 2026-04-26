@@ -81,6 +81,27 @@ Window {
         Platform.Menu {
             title: "Edit"
             Platform.MenuItem {
+                text: "Undo"
+                shortcut: StandardKey.Undo
+                enabled: storyManager.canUndo
+                onTriggered: {
+                    storyManager.undo()
+                    if (sceneEditor.visible && mainWindow.currentSceneId !== -1)
+                        viewport.loadSceneIntoViewport(mainWindow.currentSceneId)
+                }
+            }
+            Platform.MenuItem {
+                text: "Redo"
+                shortcut: StandardKey.Redo
+                enabled: storyManager.canRedo
+                onTriggered: {
+                    storyManager.redo()
+                    if (sceneEditor.visible && mainWindow.currentSceneId !== -1)
+                        viewport.loadSceneIntoViewport(mainWindow.currentSceneId)
+                }
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
                 text: "Deselect"
                 shortcut: "Ctrl+D"
                 enabled: viewport.selectionCount > 0
@@ -739,6 +760,24 @@ Window {
 
                         property bool hovered: false
                         property bool isLast: model.sceneId === -1
+                        property real deleteProgress: 0.0
+
+                        // Hold-to-delete timer — same cadence as the scene editor (16ms / 600ms total)
+                        Timer {
+                            id: sceneCardDeleteTimer
+                            interval: 16
+                            repeat: true
+                            onTriggered: {
+                                deleteProgress += 16.0 / 1200.0;
+                                if (deleteProgress >= 1.0) {
+                                    stop();
+                                    deleteProgress = 0.0;
+                                    var sid = model.sceneId;
+                                    storyManager.deleteScene(sid);
+                                    scenesRectModel.remove(index);
+                                }
+                            }
+                        }
 
                         // Thumbnail fill — wrapped in a layer+OpacityMask Item so the
                         // image is clipped to the card's rounded corners.
@@ -763,11 +802,11 @@ Window {
                             }
                         }
 
-                        // Dimming overlay on hover (existing scenes)
+                        // Dimming overlay on hover (existing scenes, suppressed while deleting)
                         Rectangle {
                             anchors.fill: parent
                             color: "black"
-                            opacity: hovered && !isLast ? 0.25 : 0.0
+                            opacity: hovered && !isLast && deleteProgress === 0 ? 0.25 : 0.0
                             Behavior on opacity {
                                 NumberAnimation {
                                     duration: 120
@@ -775,12 +814,38 @@ Window {
                             }
                         }
 
+                        // Delete progress overlay
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 30
+                            color: Qt.rgba(1, 0, 0, deleteProgress * 0.6)
+                            visible: !isLast && deleteProgress > 0
+                        }
+
                         MouseArea {
                             anchors.fill: parent
                             hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
                             onEntered: hovered = true
-                            onExited: hovered = false
-                            onClicked: {
+                            onExited: {
+                                hovered = false;
+                                sceneCardDeleteTimer.stop();
+                                deleteProgress = 0.0;
+                            }
+                            onPressed: function(mouse) {
+                                if (mouse.button === Qt.RightButton && !isLast) {
+                                    deleteProgress = 0.0;
+                                    sceneCardDeleteTimer.start();
+                                }
+                            }
+                            onReleased: function(mouse) {
+                                if (mouse.button === Qt.RightButton) {
+                                    sceneCardDeleteTimer.stop();
+                                    deleteProgress = 0.0;
+                                }
+                            }
+                            onClicked: function(mouse) {
+                                if (mouse.button !== Qt.LeftButton) return;
                                 if (isLast) {
                                     var newId = storyManager.createScene("new scene");
                                     if (newId !== -1) {
@@ -847,7 +912,7 @@ Window {
                         Rectangle {
                             anchors.fill: parent
                             color: "transparent"
-                            border.color: "white"
+                            border.color: deleteProgress > 0 ? Qt.rgba(1, 0, 0, 0.4 + deleteProgress * 0.6) : "white"
                             border.width: 4
                             radius: 30
                         }
@@ -3047,6 +3112,11 @@ Window {
             property real elementDragX: 0
             property real elementDragY: 0
 
+            onElementDraggingChanged: {
+                if (!elementDragging && mainWindow.currentSceneId !== -1)
+                    storyManager.saveSceneElements(mainWindow.currentSceneId, collectSceneElements())
+            }
+
             property bool textEditing: false
 
             // Selection state
@@ -3141,6 +3211,8 @@ Window {
                             viewport.videosModel.remove(i);
                         else if (t === "shader")
                             viewport.shadersModel.remove(i);
+                        if (mainWindow.currentSceneId !== -1)
+                            storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements())
                     }
                 }
             }
@@ -6861,6 +6933,16 @@ Window {
                     property var stableOrbitCache: ({})
                     property var elementTransitionDest: ({})
 
+                    Timer {
+                        id: propSaveDebounce
+                        interval: 800
+                        repeat: false
+                        onTriggered: {
+                            if (mainWindow.currentSceneId !== -1)
+                                storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements())
+                        }
+                    }
+
                     function saveCurrentInteractivity() {
                         if (syncedIdx < 0)
                             return;
@@ -6875,6 +6957,7 @@ Window {
                             viewport.videosModel.setProperty(syncedIdx, "interactivityJson", json);
                         else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count)
                             viewport.shadersModel.setProperty(syncedIdx, "interactivityJson", json);
+                        propSaveDebounce.restart();
                     }
 
                     function saveCurrentSources() {
@@ -6905,6 +6988,7 @@ Window {
                         else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count)
                             viewport.shadersModel.setProperty(syncedIdx, "sourcesJson", json);
                         evaluateAllSources();
+                        propSaveDebounce.restart();
                     }
 
                     function clearSources() {
@@ -7345,8 +7429,10 @@ Window {
                             idx = viewport.selectedShaders[0];
                             mod = viewport.shadersModel;
                         }
-                        if (mod !== null && idx >= 0)
+                        if (mod !== null && idx >= 0) {
                             mod.setProperty(idx, "locked", selLock);
+                            propSaveDebounce.restart();
+                        }
                     }
 
                     onSelLockChanged: writeLockToModel()
@@ -7376,6 +7462,7 @@ Window {
                             mod.setProperty(idx, "x2", selX + selW);
                             mod.setProperty(idx, "y2", selY + selH);
                             viewport.layoutRevision++;
+                            propSaveDebounce.restart();
                         }
                     }
 
@@ -7401,6 +7488,7 @@ Window {
                         if (mod !== null && idx >= 0) {
                             mod.setProperty(idx, "cursor", selCursor);
                             mod.setProperty(idx, "cursorPath", selCursorPath);
+                            propSaveDebounce.restart();
                         }
                     }
 
@@ -7426,8 +7514,10 @@ Window {
                             idx = viewport.selectedShaders[0];
                             mod = viewport.shadersModel;
                         }
-                        if (mod !== null && idx >= 0)
+                        if (mod !== null && idx >= 0) {
                             mod.setProperty(idx, "template", selTemplate);
+                            propSaveDebounce.restart();
+                        }
                     }
 
                     onSelTemplateChanged: writeTemplateToModel()
@@ -7451,8 +7541,10 @@ Window {
                             idx = viewport.selectedShaders[0];
                             mod = viewport.shadersModel;
                         }
-                        if (mod !== null && idx >= 0)
+                        if (mod !== null && idx >= 0) {
                             mod.setProperty(idx, "name", n);
+                            propSaveDebounce.restart();
+                        }
                     }
 
                     Connections {
@@ -7490,6 +7582,7 @@ Window {
                         viewport.textBoxesModel.setProperty(idx, "italic", tbItalic);
                         viewport.textBoxesModel.setProperty(idx, "underline", tbUnderline);
                         viewport.textBoxesModel.setProperty(idx, "textColor", tbColor.toString());
+                        propSaveDebounce.restart();
                     }
 
                     // Sync from model whenever the selection changes
