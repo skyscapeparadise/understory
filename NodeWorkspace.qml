@@ -116,6 +116,7 @@ Item {
     property real playheadTime: 0
     property real timelineScrollOffset: 0
     property bool isPlaying: false
+    property int activeWorkspaceTab: 0
     property real pixelsPerSecond: 60
     property bool draggingPlayhead: false
     property bool playheadHovered: false
@@ -768,6 +769,7 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             height: 36
+            visible: root.activeWorkspaceTab === 0
 
             Repeater {
                 model: ["characters", "sound"]
@@ -808,6 +810,7 @@ Item {
             anchors.right: parent.right
             height: 1
             color: "#2a2a30"
+            visible: root.activeWorkspaceTab === 0
         }
 
         ListModel { id: charactersModel }
@@ -843,6 +846,20 @@ Item {
             anchors.topMargin: 20
             anchors.left: parent.left
             anchors.leftMargin: 20
+            visible: root.activeWorkspaceTab === 0
+        }
+
+        Text {
+            id: trackHeading
+            text: "track"
+            font.pixelSize: 24
+            font.bold: true
+            color: "white"
+            anchors.top: parent.top
+            anchors.topMargin: 20
+            anchors.left: parent.left
+            anchors.leftMargin: 20
+            visible: root.activeWorkspaceTab !== 0
         }
 
         //
@@ -850,7 +867,7 @@ Item {
         //
         ScrollView {
             id: charsScrollView
-            visible: leftPanel.activeTab === "characters"
+            visible: root.activeWorkspaceTab === 0 && leftPanel.activeTab === "characters"
             anchors.top: leftPanelHeading.bottom
             anchors.topMargin: 10
             anchors.left: parent.left
@@ -1250,7 +1267,7 @@ Item {
         //
         ScrollView {
             id: soundsScrollView
-            visible: leftPanel.activeTab === "sound"
+            visible: root.activeWorkspaceTab === 0 && leftPanel.activeTab === "sound"
             anchors.top: leftPanelHeading.bottom
             anchors.topMargin: 10
             anchors.left: parent.left
@@ -1631,11 +1648,12 @@ Item {
         id: stage
         x: 360
         y: 0
-        width: parent.width - 360
+        width: parent.width - 360 - 36
         height: parent.height - 50
         color: "#1a1a1d"
         clip: true
-        focus: true // Allows the background to take focus and defocus inputs
+        focus: true
+        visible: root.activeWorkspaceTab === 0 // Allows the background to take focus and defocus inputs
 
         //
         // LAYER 0: background interaction
@@ -2204,6 +2222,80 @@ Item {
     }
 
     //
+    Rectangle {
+        x: 360
+        y: 0
+        width: parent.width - 360 - 36
+        height: parent.height - 50
+        color: "#1a1a1d"
+        visible: root.activeWorkspaceTab !== 0
+    }
+
+    //
+    // Right workspace tab strip
+    //
+    Rectangle {
+        id: workspaceTabStrip
+        x: parent.width - 36
+        y: 0
+        width: 36
+        height: parent.height - 50
+        color: "#151518"
+
+        Rectangle {
+            anchors.left: parent.left
+            width: 1
+            height: parent.height
+            color: "#2a2a30"
+        }
+
+        Column {
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+
+            Repeater {
+                model: ["nodenetwork", "sound"]
+
+                delegate: Item {
+                    width: 36
+                    height: 36
+                    property bool active: root.activeWorkspaceTab === index
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        width: 2
+                        height: parent.height
+                        color: parent.active ? "#5DA9A4" : "transparent"
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    Image {
+                        id: wsTabIcon
+                        anchors.centerIn: parent
+                        width: 22
+                        height: 22
+                        fillMode: Image.PreserveAspectFit
+                        source: "icons/" + modelData + ".svg"
+                        visible: false
+                    }
+
+                    ColorOverlay {
+                        anchors.fill: wsTabIcon
+                        source: wsTabIcon
+                        color: parent.active ? "white" : "#555555"
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.activeWorkspaceTab = index
+                    }
+                }
+            }
+        }
+    }
+
     // Chapter panel
     //
     Rectangle {
@@ -2857,6 +2949,7 @@ Item {
     //
     Item {
         id: networkBar
+        visible: root.activeWorkspaceTab === 0
 
         // Float from rest position (8,8) to editing position (20,28)
         property bool anyEditing: false
