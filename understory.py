@@ -20,6 +20,7 @@
 # USA
 
 import base64
+import ctypes
 import hashlib
 import json
 import re
@@ -30,10 +31,16 @@ import sys
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from PySide6.QtCore import Property, QObject, QSize, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QObject, QSize, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication, QImage
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickImageProvider
+
+try:
+    from sdl3 import *
+    _SDL3_AVAILABLE = True
+except Exception:
+    _SDL3_AVAILABLE = False
 
 versionnumber = "0.4"
 
@@ -772,6 +779,123 @@ class StoryManager(QObject):
             print(f"StoryManager.setEditorState: {e}")
 
 
+class ControllerManager(QObject):
+    """Polls SDL3 gamepad events and emits Qt signals for button press/release.
+
+    button kc strings match the ControllerVisualizer buttonDefs:
+      cross, circle, triangle, square, l1, r1, l2, r2,
+      dpadup, dpaddown, dpadleft, dpadright, touchpad, options
+    """
+
+    buttonPressed    = Signal(str)
+    buttonReleased   = Signal(str)
+    connectedChanged = Signal(bool)
+
+    TRIGGER_THRESHOLD = 8000  # out of 32767 (~25 %)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._gamepads         = {}                            # instance_id → LP_SDL_Gamepad
+        self._trigger_pressed  = {"l2": False, "r2": False}
+        self._connected        = False
+        self._button_map       = {}
+        self._timer            = None
+
+        if not _SDL3_AVAILABLE:
+            return
+
+        self._button_map = {
+            int(SDL_GAMEPAD_BUTTON_SOUTH):          "cross",
+            int(SDL_GAMEPAD_BUTTON_EAST):           "circle",
+            int(SDL_GAMEPAD_BUTTON_NORTH):          "triangle",
+            int(SDL_GAMEPAD_BUTTON_WEST):           "square",
+            int(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER):  "l1",
+            int(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER): "r1",
+            int(SDL_GAMEPAD_BUTTON_DPAD_UP):        "dpadup",
+            int(SDL_GAMEPAD_BUTTON_DPAD_DOWN):      "dpaddown",
+            int(SDL_GAMEPAD_BUTTON_DPAD_LEFT):      "dpadleft",
+            int(SDL_GAMEPAD_BUTTON_DPAD_RIGHT):     "dpadright",
+            int(SDL_GAMEPAD_BUTTON_TOUCHPAD):       "touchpad",
+            int(SDL_GAMEPAD_BUTTON_START):          "options",
+        }
+
+        SDL_Init(SDL_INIT_GAMEPAD)
+
+        # Open any gamepads already connected at startup
+        count = ctypes.c_int(0)
+        ids = SDL_GetGamepads(ctypes.byref(count))
+        if ids and count.value > 0:
+            for i in range(count.value):
+                gp = SDL_OpenGamepad(ids[i])
+                if gp:
+                    self._gamepads[int(ids[i])] = gp
+        self._connected = len(self._gamepads) > 0
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self._poll)
+        self._timer.start()
+
+    @Property(bool, notify=connectedChanged)
+    def connected(self):
+        return self._connected
+
+    def _poll(self):
+        event = SDL_Event()
+        while SDL_PollEvent(ctypes.byref(event)):
+            t = int(event.type)
+
+            if t == int(SDL_EVENT_GAMEPAD_ADDED):
+                iid = int(event.gdevice.which)
+                gp  = SDL_OpenGamepad(event.gdevice.which)
+                if gp:
+                    self._gamepads[iid] = gp
+                    if not self._connected:
+                        self._connected = True
+                        self.connectedChanged.emit(True)
+
+            elif t == int(SDL_EVENT_GAMEPAD_REMOVED):
+                iid = int(event.gdevice.which)
+                if iid in self._gamepads:
+                    SDL_CloseGamepad(self._gamepads.pop(iid))
+                if not self._gamepads and self._connected:
+                    self._connected = False
+                    self.connectedChanged.emit(False)
+
+            elif t == int(SDL_EVENT_GAMEPAD_BUTTON_DOWN):
+                kc = self._button_map.get(int(event.gbutton.button))
+                if kc:
+                    self.buttonPressed.emit(kc)
+
+            elif t == int(SDL_EVENT_GAMEPAD_BUTTON_UP):
+                kc = self._button_map.get(int(event.gbutton.button))
+                if kc:
+                    self.buttonReleased.emit(kc)
+
+            elif t == int(SDL_EVENT_GAMEPAD_AXIS_MOTION):
+                axis = int(event.gaxis.axis)
+                val  = int(event.gaxis.value)
+                if axis == int(SDL_GAMEPAD_AXIS_LEFT_TRIGGER):
+                    now = val >= self.TRIGGER_THRESHOLD
+                    if now != self._trigger_pressed["l2"]:
+                        self._trigger_pressed["l2"] = now
+                        (self.buttonPressed if now else self.buttonReleased).emit("l2")
+                elif axis == int(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER):
+                    now = val >= self.TRIGGER_THRESHOLD
+                    if now != self._trigger_pressed["r2"]:
+                        self._trigger_pressed["r2"] = now
+                        (self.buttonPressed if now else self.buttonReleased).emit("r2")
+
+    def cleanup(self):
+        if self._timer:
+            self._timer.stop()
+        for gp in self._gamepads.values():
+            SDL_CloseGamepad(gp)
+        self._gamepads.clear()
+        if _SDL3_AVAILABLE:
+            SDL_QuitSubSystem(SDL_INIT_GAMEPAD)
+
+
 app = QGuiApplication(sys.argv)
 
 QFontDatabase.addApplicationFont("headings/MonaSans-VariableFont_wdth,wght.ttf")
@@ -794,6 +918,11 @@ engine.rootContext().setContextProperty("storyManager", storyManager)
 # Register image provider so QML can load thumbnails via image://thumbnails/<sceneId>
 thumbnailProvider = ThumbnailProvider(storyManager)
 engine.addImageProvider("thumbnails", thumbnailProvider)
+
+# Expose PS5 controller manager so QML can react to gamepad input
+controllerManager = ControllerManager()
+engine.rootContext().setContextProperty("controllerManager", controllerManager)
+app.aboutToQuit.connect(controllerManager.cleanup)
 
 
 # Load QML file

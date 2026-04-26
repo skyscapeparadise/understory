@@ -117,8 +117,11 @@ Item {
     property real timelineScrollOffset: 0
     property bool isPlaying: false
     property int activeWorkspaceTab: 0
-    property var kbPressedKeys: ({})
-    property alias kbMappings: leftPanel.kbMappings
+    property var kbPressedKeys:     ({})
+    property alias kbMappings:      leftPanel.kbMappings
+    property var ctrlPressedButtons: ({})
+    property alias ctrlMappings:    leftPanel.ctrlMappings
+    signal ctrlMappingTriggered(string templateName)
     property string simulateTool: "select"
     signal keyMappingTriggered(string templateName)
 
@@ -782,7 +785,8 @@ Item {
         property string activeTab: "characters"
         property string controllerTab: "keyboard"
         onControllerTabChanged: root.kbPressedKeys = ({})
-        property var kbMappings: ({})
+        property var kbMappings:   ({})
+        property var ctrlMappings: ({})
         property int activeDialogIndex: -1
 
         // Right border divider
@@ -1903,6 +1907,152 @@ Item {
                 }
             }
         }
+
+        // Controller button detail panel
+        Item {
+            id: ctrlDetailPanel
+            visible: root.activeWorkspaceTab === 4 && leftPanel.controllerTab === "controller" && controllerViz.selectedButtonData !== null
+            anchors.top: controllerHeading.bottom
+            anchors.topMargin: 20
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            height: ctrlBtnPreview.height + ctrlMappingLabel.height + ctrlMappingCombo.height + 32
+
+            Rectangle {
+                id: ctrlBtnPreview
+                width: 60
+                height: 60
+                radius: 8
+                color: "transparent"
+                border.width: 2
+                border.color: "white"
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                Image {
+                    id: ctrlBtnIcon
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    source: controllerViz.selectedButtonData ? controllerViz.selectedButtonData.icon : ""
+                    fillMode: Image.PreserveAspectFit
+                    visible: false
+                }
+                ColorOverlay {
+                    anchors.fill: ctrlBtnIcon
+                    source: ctrlBtnIcon
+                    color: "white"
+                }
+            }
+
+            Text {
+                id: ctrlMappingLabel
+                text: "mapping"
+                font.pixelSize: 11
+                color: "#999999"
+                anchors.top: ctrlBtnPreview.bottom
+                anchors.topMargin: 16
+                anchors.left: parent.left
+            }
+
+            Rectangle {
+                id: ctrlMappingCombo
+                anchors.top: ctrlMappingLabel.bottom
+                anchors.topMargin: 6
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 30
+                radius: 4
+                color: "#252528"
+                border.width: 1
+                border.color: "#444"
+
+                property var templateModel: ["none", "default", "north", "south", "east", "west"]
+                property int currentIndex: {
+                    if (!controllerViz.selectedButtonData) return 0
+                    var saved = leftPanel.ctrlMappings[controllerViz.selectedButtonData.kc]
+                    var idx = templateModel.indexOf(saved)
+                    return idx >= 0 ? idx : 0
+                }
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: ctrlMappingCombo.templateModel[ctrlMappingCombo.currentIndex]
+                    font.pixelSize: 12
+                    color: "white"
+                }
+
+                Text {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "▾"
+                    font.pixelSize: 10
+                    color: "#999"
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: ctrlMappingPopup.open()
+                }
+
+                Popup {
+                    id: ctrlMappingPopup
+                    y: -height - 2
+                    width: parent.width
+                    padding: 0
+
+                    background: Rectangle {
+                        color: "#252528"
+                        border.width: 1
+                        border.color: "#444"
+                        radius: 4
+                    }
+
+                    Column {
+                        width: parent.width
+
+                        Repeater {
+                            model: ctrlMappingCombo.templateModel
+
+                            delegate: Item {
+                                width: ctrlMappingCombo.width
+                                height: 30
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: ctrlMappingCombo.currentIndex === index ? "#5DA9A4" : "transparent"
+                                    radius: 2
+                                }
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData
+                                    font.pixelSize: 12
+                                    color: ctrlMappingCombo.currentIndex === index ? "#1a1a1d" : "white"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        if (controllerViz.selectedButtonData) {
+                                            var cm = Object.assign({}, leftPanel.ctrlMappings)
+                                            cm[controllerViz.selectedButtonData.kc] = modelData
+                                            leftPanel.ctrlMappings = cm
+                                        }
+                                        ctrlMappingPopup.close()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Rectangle {
@@ -2501,6 +2651,16 @@ Item {
         visible: root.activeWorkspaceTab === 4 && leftPanel.controllerTab === "keyboard"
         pressedKeys: root.kbPressedKeys
         onVisibleChanged: if (visible) root.forceActiveFocus()
+    }
+
+    ControllerVisualizer {
+        id: controllerViz
+        x: 360
+        y: 0
+        width: parent.width - 360 - 36
+        height: parent.height - 50
+        visible: root.activeWorkspaceTab === 4 && leftPanel.controllerTab === "controller"
+        pressedButtons: root.ctrlPressedButtons
     }
 
     //

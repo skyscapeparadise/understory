@@ -12622,7 +12622,8 @@ Window {
         width: 1365
         height: 300
         simulateTool: buttonGrid.selectedTool
-        onKeyMappingTriggered: templateName => viewport.activeContent.fireAreasByTemplate(templateName)
+        onKeyMappingTriggered:  templateName => viewport.activeContent.fireAreasByTemplate(templateName)
+        onCtrlMappingTriggered: templateName => viewport.activeContent.fireAreasByTemplate(templateName)
     }
 
     Rectangle {
@@ -12967,9 +12968,13 @@ Window {
     Connections {
         target: storyManager
         function onStoryOpened() {
-            var json = storyManager.getEditorState("keyboard_mappings")
-            if (json !== "") {
-                try { nodeWorkspace.kbMappings = JSON.parse(json) } catch(e) {}
+            var kbJson = storyManager.getEditorState("keyboard_mappings")
+            if (kbJson !== "") {
+                try { nodeWorkspace.kbMappings = JSON.parse(kbJson) } catch(e) {}
+            }
+            var ctrlJson = storyManager.getEditorState("controller_mappings")
+            if (ctrlJson !== "") {
+                try { nodeWorkspace.ctrlMappings = JSON.parse(ctrlJson) } catch(e) {}
             }
         }
     }
@@ -12979,6 +12984,28 @@ Window {
         function onKbMappingsChanged() {
             if (storyManager.isOpen)
                 storyManager.setEditorState("keyboard_mappings", JSON.stringify(nodeWorkspace.kbMappings))
+        }
+        function onCtrlMappingsChanged() {
+            if (storyManager.isOpen)
+                storyManager.setEditorState("controller_mappings", JSON.stringify(nodeWorkspace.ctrlMappings))
+        }
+    }
+
+    Connections {
+        target: controllerManager
+        function onButtonPressed(kc) {
+            var pb = Object.assign({}, nodeWorkspace.ctrlPressedButtons)
+            pb[kc] = true
+            nodeWorkspace.ctrlPressedButtons = pb
+            if (buttonGrid.selectedTool === "simulate") {
+                var tpl = nodeWorkspace.ctrlMappings[kc] || "none"
+                if (tpl !== "none") nodeWorkspace.ctrlMappingTriggered(tpl)
+            }
+        }
+        function onButtonReleased(kc) {
+            var pb = Object.assign({}, nodeWorkspace.ctrlPressedButtons)
+            delete pb[kc]
+            nodeWorkspace.ctrlPressedButtons = pb
         }
     }
 
