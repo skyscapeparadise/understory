@@ -752,6 +752,7 @@ Item {
         clip: true
 
         property string activeTab: "characters"
+        property string controllerTab: "keyboard"
         property int activeDialogIndex: -1
 
         // Right border divider
@@ -859,7 +860,33 @@ Item {
             anchors.topMargin: 20
             anchors.left: parent.left
             anchors.leftMargin: 20
-            visible: root.activeWorkspaceTab !== 0
+            visible: root.activeWorkspaceTab === 1
+        }
+
+        Text {
+            id: conversationsHeading
+            text: "conversations"
+            font.pixelSize: 24
+            font.bold: true
+            color: "white"
+            anchors.top: parent.top
+            anchors.topMargin: 20
+            anchors.left: parent.left
+            anchors.leftMargin: 20
+            visible: root.activeWorkspaceTab === 2
+        }
+
+        Text {
+            id: treadHeading
+            text: "tread"
+            font.pixelSize: 24
+            font.bold: true
+            color: "white"
+            anchors.top: parent.top
+            anchors.topMargin: 20
+            anchors.left: parent.left
+            anchors.leftMargin: 20
+            visible: root.activeWorkspaceTab === 3
         }
 
         //
@@ -1642,6 +1669,70 @@ Item {
                 }
             }
         }
+
+        // Controller inputs tab
+        Row {
+            id: controllerTabBar
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 36
+            visible: root.activeWorkspaceTab === 4
+
+            Repeater {
+                model: ["keyboard", "controller"]
+                delegate: Item {
+                    width: leftPanel.width / 2
+                    height: 36
+                    property bool active: leftPanel.controllerTab === modelData
+
+                    Text {
+                        text: modelData
+                        color: parent.active ? "white" : "#555"
+                        font.pixelSize: 12
+                        anchors.centerIn: parent
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        height: 2
+                        color: parent.active ? "#5DA9A4" : "transparent"
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: leftPanel.controllerTab = modelData
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            id: controllerTabSeparator
+            anchors.top: controllerTabBar.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 1
+            color: "#2a2a30"
+            visible: root.activeWorkspaceTab === 4
+        }
+
+        Text {
+            id: controllerHeading
+            text: leftPanel.controllerTab
+            font.pixelSize: 24
+            font.bold: true
+            color: "white"
+            anchors.top: controllerTabSeparator.bottom
+            anchors.topMargin: 20
+            anchors.left: parent.left
+            anchors.leftMargin: 20
+            visible: root.activeWorkspaceTab === 4
+        }
     }
 
     Rectangle {
@@ -2255,7 +2346,7 @@ Item {
             anchors.right: parent.right
 
             Repeater {
-                model: ["nodenetwork", "sound"]
+                model: ["nodenetwork", "sound", "conversation", "footprints", "ps3"]
 
                 delegate: Item {
                     width: 36
