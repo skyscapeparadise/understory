@@ -12,6 +12,7 @@ Item {
     property alias orbitsModel: orbitsModel
     property alias soundsModel: soundsModel
     property alias charactersModel: charactersModel
+    property alias chaptersModel: chaptersModel
 
     //
     // MODELS
@@ -33,8 +34,17 @@ Item {
     ListModel {
         id: orbitsModel
     }
+    // chaptersModel rows: { chapterId:int, chapterName:string }
+    // Chapters are a time namespace — each chapter is a discrete timeline (a separately
+    // choreographed sequence), analogous to how node networks are namespaces for nodes
+    // and the paths between them.
+    ListModel {
+        id: chaptersModel
+    }
 
     property int nextNodeId: 0
+    property int activeChapterId: 0
+    property int nextChapterId: 1
 
     // Drag-circle state (character/sound circle dragged from list onto canvas)
     property bool   isDraggingCircle:      false
@@ -272,6 +282,10 @@ Item {
                 networksModel.append({ netId: nets[i].id, netName: nets[i].name, netColor: nets[i].color })
             root.networkId = netId
             root.loadFromDb(netId)
+            chaptersModel.clear()
+            chaptersModel.append({ chapterId: 0, chapterName: "1" })
+            root.activeChapterId = 0
+            root.nextChapterId = 1
         }
     }
 
@@ -389,8 +403,8 @@ Item {
     }
 
     function deleteOrClearNetwork(netId, idx) {
-        if (idx === 0) {
-            // Index 0 is never deleted — just cleared back to blank state
+        if (networksModel.count === 1) {
+            // Last network is never deleted — just cleared back to blank state
             storyManager.renameNetwork(netId, "")
             storyManager.saveNetworkColor(netId, "#2e2e33")
             storyManager.saveNetworkData(netId, "{}")
@@ -403,15 +417,42 @@ Item {
                 root.requestRedraw()
             }
         } else {
-            var wasActive  = (root.networkId === netId)
-            var fallbackId = networksModel.get(0).netId
+            var wasActive = (root.networkId === netId)
             storyManager.deleteNetwork(netId)
             networksModel.remove(idx)
-            if (wasActive) {
-                root.networkId = fallbackId
-                root.loadFromDb(fallbackId)
+            if (wasActive || networksModel.count === 1) {
+                var switchToId = networksModel.get(0).netId
+                root.networkId = switchToId
+                root.loadFromDb(switchToId)
             }
         }
+    }
+
+    function createNewChapter() {
+        var newId = root.nextChapterId++
+        chaptersModel.append({ chapterId: newId, chapterName: String(chaptersModel.count + 1) })
+        root.activeChapterId = newId
+    }
+
+    function switchToChapter(chapterId) {
+        root.activeChapterId = chapterId
+    }
+
+    function renameChapterInModel(chapterId, name) {
+        for (var i = 0; i < chaptersModel.count; i++) {
+            if (chaptersModel.get(i).chapterId === chapterId) {
+                chaptersModel.setProperty(i, "chapterName", name)
+                return
+            }
+        }
+    }
+
+    function deleteChapter(chapterId, idx) {
+        if (chaptersModel.count <= 1) return
+        var wasActive = (root.activeChapterId === chapterId)
+        chaptersModel.remove(idx)
+        if (wasActive)
+            root.activeChapterId = chaptersModel.get(0).chapterId
     }
 
     function createNewNetwork() {
@@ -2163,13 +2204,280 @@ Item {
     }
 
     //
+    // Chapter panel
+    //
+    Rectangle {
+        id: chapterPanel
+        x: 0
+        y: parent.height - 50
+        width: chapterBar.x + chapterBar.width + 12
+        height: 50
+        color: "#151518"
+
+        Rectangle {
+            width: parent.width
+            height: 1
+            color: "#2a2a30"
+            anchors.top: parent.top
+        }
+        Rectangle {
+            anchors.right: parent.right
+            width: 1
+            height: parent.height
+            color: "#2a2a30"
+        }
+
+        Text {
+            id: chapterLabel
+            text: "chapter"
+            font.pixelSize: 14
+            font.bold: true
+            color: "white"
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 14
+        }
+
+        // Chapter button bar — width is content-driven so the panel stays tight
+        Item {
+            id: chapterBar
+            anchors.left: chapterLabel.right
+            anchors.leftMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            width: chapterBtnRow.width
+            height: 26
+
+            property int    draggingIdx:   -1
+            property real   dragGhostX:     0
+            property string draggingName:  ""
+            property bool   wasDragging:   false
+
+            function computeDropTarget(rowX) {
+                var x = 0
+                for (var i = 0; i < chaptersModel.count; i++) {
+                    if (rowX < x + 13) return i
+                    x += 30
+                }
+                return chaptersModel.count - 1
+            }
+
+            Row {
+                id: chapterBtnRow
+                spacing: 4
+
+                Repeater {
+                    model: chaptersModel
+
+                    delegate: Item {
+                        id: chapBtn
+
+                        property bool isActive:  model.chapterId === root.activeChapterId
+                        property bool editMode:  false
+                        property bool isEditing: isActive && editMode
+                        property bool isHovered: false
+                        property real deleteProgress: 0.0
+                        property bool isDragging: chapterBar.draggingIdx === index
+
+                        Text { id: chapNameMeasure; visible: false; text: model.chapterName; font.pixelSize: 12 }
+                        property real labelW: Math.max(26, chapNameMeasure.contentWidth + 16)
+                        width:  isEditing ? Math.max(60, labelW) : labelW
+                        height: 26
+                        opacity: isDragging ? 0.0 : 1.0
+                        Behavior on width   { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+                        Behavior on opacity { NumberAnimation { duration: 100 } }
+
+                        property string fillColor:    isActive ? "white" : "transparent"
+                        property string contentColor: isActive ? "#1a1a1d" : "white"
+
+                        NumberAnimation {
+                            id: chapDeleteAnim
+                            target: chapBtn
+                            property: "deleteProgress"
+                            to: 1.0
+                            duration: 1200
+                            easing.type: Easing.Linear
+                            onFinished: {
+                                if (chapBtn.deleteProgress >= 1.0) {
+                                    if (chaptersModel.count > 1)
+                                        root.deleteChapter(model.chapterId, index)
+                                    else
+                                        root.renameChapterInModel(model.chapterId, "1")
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 4
+                            color: chapBtn.fillColor
+                            border.width: 1
+                            border.color: chapBtn.deleteProgress > 0
+                                ? Qt.rgba(1, 1 - chapBtn.deleteProgress, 1 - chapBtn.deleteProgress, 1)
+                                : "white"
+                            Behavior on color        { ColorAnimation { duration: 150 } }
+                            Behavior on border.color { ColorAnimation { duration: 80  } }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 4
+                            color: "#ff4444"
+                            opacity: chapBtn.deleteProgress * 0.75
+                            visible: chapBtn.deleteProgress > 0
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: model.chapterName
+                            font.pixelSize: 12
+                            visible: !chapBtn.isEditing
+                            color: chapBtn.contentColor
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
+
+                        TextInput {
+                            id: chapNameEdit
+                            anchors.centerIn: parent
+                            text: model.chapterName
+                            font.pixelSize: 12
+                            color: chapBtn.contentColor
+                            visible: chapBtn.isEditing
+                            enabled: chapBtn.isEditing
+                            selectByMouse: true
+                            horizontalAlignment: TextInput.AlignHCenter
+                            Keys.onReturnPressed: focus = false
+                            Keys.onEscapePressed: { chapBtn.editMode = false; focus = false }
+                            onEditingFinished: {
+                                root.renameChapterInModel(model.chapterId, text)
+                                chapBtn.editMode = false
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            property real pressRowX: 0
+
+                            onEntered: chapBtn.isHovered = true
+                            onExited: {
+                                chapBtn.isHovered = false
+                                chapDeleteAnim.stop()
+                                chapBtn.deleteProgress = 0
+                            }
+                            onPressed: mouse => {
+                                if (mouse.button === Qt.RightButton) {
+                                    chapBtn.deleteProgress = 0
+                                    chapDeleteAnim.start()
+                                } else {
+                                    chapterBar.wasDragging = false
+                                    pressRowX = mapToItem(chapterBtnRow, mouse.x, 0).x
+                                }
+                            }
+                            onReleased: mouse => {
+                                if (mouse.button === Qt.RightButton) {
+                                    chapDeleteAnim.stop()
+                                    chapBtn.deleteProgress = 0
+                                } else if (chapterBar.draggingIdx === index) {
+                                    var targetIdx = chapterBar.computeDropTarget(chapterBar.dragGhostX)
+                                    if (targetIdx !== index)
+                                        chaptersModel.move(index, targetIdx, 1)
+                                    chapterBar.draggingIdx = -1
+                                    chapterBar.wasDragging = true
+                                }
+                            }
+                            onPositionChanged: mouse => {
+                                if (mouse.buttons & Qt.LeftButton) {
+                                    var rowX = mapToItem(chapterBtnRow, mouse.x, 0).x
+                                    if (chapterBar.draggingIdx < 0 && Math.abs(rowX - pressRowX) > 4 && chaptersModel.count > 1) {
+                                        chapterBar.draggingIdx = index
+                                        chapterBar.draggingName = model.chapterName
+                                    }
+                                    if (chapterBar.draggingIdx === index)
+                                        chapterBar.dragGhostX = rowX
+                                }
+                            }
+                            onClicked: mouse => {
+                                if (mouse.button === Qt.LeftButton && !chapterBar.wasDragging && !chapBtn.isActive)
+                                    root.switchToChapter(model.chapterId)
+                                chapterBar.wasDragging = false
+                            }
+                            onDoubleClicked: mouse => {
+                                if (mouse.button === Qt.LeftButton && chapBtn.isActive && !chapBtn.editMode) {
+                                    chapBtn.editMode = true
+                                    chapNameEdit.forceActiveFocus()
+                                    chapNameEdit.selectAll()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // "+" button
+                Item {
+                    id: addChapterBtn
+                    width: 26; height: 26
+                    property bool isHovered: false
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 4
+                        color: addChapterBtn.isHovered ? "white" : "transparent"
+                        border.width: 1
+                        border.color: "white"
+                        Behavior on color { ColorAnimation { duration: 100 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            anchors.verticalCenterOffset: -1
+                            anchors.horizontalCenterOffset: -0.5
+                            text: "+"
+                            font.pixelSize: 18
+                            font.bold: true
+                            color: addChapterBtn.isHovered ? "darkslategrey" : "white"
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: addChapterBtn.isHovered = true
+                        onExited:  addChapterBtn.isHovered = false
+                        onClicked: root.createNewChapter()
+                    }
+                }
+            }
+
+            // Drag ghost — floats over bar during reorder
+            Rectangle {
+                visible: chapterBar.draggingIdx >= 0
+                x: chapterBar.dragGhostX - 13
+                y: 0
+                width: 26; height: 26
+                radius: 4
+                color: "white"
+                opacity: 0.85
+                z: 10
+
+                Text {
+                    anchors.centerIn: parent
+                    text: chapterBar.draggingName
+                    font.pixelSize: 12
+                    color: "#1a1a1d"
+                }
+            }
+        }
+    }
+
+    //
     // Timeline section
     //
     Rectangle {
         id: timelineSection
-        x: 0
+        x: chapterPanel.width
         y: parent.height - 50
-        width: parent.width - 240
+        width: parent.width - 240 - chapterPanel.width
         height: 50
         color: "#141417"
         clip: true
@@ -2334,9 +2642,9 @@ Item {
     //
     Rectangle {
         id: transportControls
-        x: parent.width - 240
+        x: parent.width - 284
         y: parent.height - 50
-        width: 240
+        width: 284
         height: 50
         color: "#141417"
 
@@ -2363,7 +2671,7 @@ Item {
             spacing: 8
 
             Repeater {
-                model: ["previous", "stop", "play", "pause", "next"]
+                model: ["previous", "next", "stop", "play", "pause"]
 
                 delegate: Item {
                     id: transportBtn
@@ -2432,6 +2740,107 @@ Item {
                     }
                 }
             }
+
+            Item {
+                id: recordBtn
+                width: 36
+                height: 36
+
+                property bool hovered: false
+                property bool isRecording: false
+                property bool isFlashing: false
+                property real holdProgress: 0.0
+                property bool toggled: isRecording || isFlashing
+                property string recordIconSource: isFlashing ? "icons/superrecord.svg" : "icons/record.svg"
+
+                Timer {
+                    id: flashTimer
+                    interval: 300
+                    onTriggered: recordBtn.isFlashing = false
+                }
+
+                NumberAnimation {
+                    id: recordHoldAnim
+                    target: recordBtn
+                    property: "holdProgress"
+                    from: 0
+                    to: 1.0
+                    duration: 1200
+                    easing.type: Easing.Linear
+                    onFinished: {
+                        if (recordBtn.holdProgress >= 1.0) {
+                            recordBtn.isRecording = true
+                            recordBtn.holdProgress = 0
+                        }
+                    }
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 12
+                    color: recordBtn.toggled ? "white" : "transparent"
+                    border.width: 2
+                    border.color: recordBtn.hovered ? "#80cfff" : "white"
+                    Behavior on border.color { ColorAnimation { duration: 150 } }
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 12
+                    color: "#ff4444"
+                    opacity: recordBtn.holdProgress * 0.75
+                    visible: recordBtn.holdProgress > 0
+                }
+
+                Image {
+                    id: recordIcon
+                    anchors.centerIn: parent
+                    width: 22
+                    height: 22
+                    fillMode: Image.PreserveAspectFit
+                    source: recordBtn.recordIconSource
+                    visible: false
+                }
+
+                ColorOverlay {
+                    anchors.fill: recordIcon
+                    source: recordIcon
+                    color: recordBtn.toggled ? "#477B78" : "white"
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: recordBtn.hovered = true
+                    onExited: {
+                        recordBtn.hovered = false
+                        if (!recordBtn.isRecording) {
+                            recordHoldAnim.stop()
+                            recordBtn.holdProgress = 0
+                        }
+                    }
+                    onPressed: mouse => {
+                        if (mouse.button === Qt.LeftButton) {
+                            if (recordBtn.isRecording) {
+                                recordBtn.isRecording = false
+                            } else {
+                                recordBtn.holdProgress = 0
+                                recordHoldAnim.start()
+                            }
+                        }
+                    }
+                    onReleased: mouse => {
+                        if (mouse.button === Qt.LeftButton && !recordBtn.isRecording && recordHoldAnim.running) {
+                            recordHoldAnim.stop()
+                            recordBtn.holdProgress = 0
+                            recordBtn.isFlashing = true
+                            flashTimer.restart()
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2458,6 +2867,20 @@ Item {
         Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
         Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
+        property int    draggingIdx:  -1
+        property real   dragGhostX:    0
+        property string draggingName: ""
+        property bool   wasDragging:  false
+
+        function computeDropTarget(rowX) {
+            var x = 0
+            for (var i = 0; i < networksModel.count; i++) {
+                if (rowX < x + 18) return i
+                x += 40
+            }
+            return networksModel.count - 1
+        }
+
         Row {
             id: networkBtnRow
             spacing: 4
@@ -2479,6 +2902,10 @@ Item {
 
                     // Raise above the "+" button so the ring canvas renders in front of it
                     z: isEditing ? 1 : 0
+
+                    property bool isDragging: networkBar.draggingIdx === index
+                    opacity: isDragging ? 0.0 : 1.0
+                    Behavior on opacity { NumberAnimation { duration: 100 } }
 
                     // ── Computed style helpers ───────────────────────────────────
                     // Active with default dark color → show white fill (like tool palette).
@@ -2668,6 +3095,8 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        property real pressRowX: 0
+
                         onEntered: netBtn.isHovered = true
                         onExited: {
                             netBtn.isHovered = false
@@ -2680,17 +3109,38 @@ Item {
                                 netBtn.deleteProgress = 0
                                 deleteAnim.start()
                                 mouse.accepted = true
+                            } else {
+                                networkBar.wasDragging = false
+                                pressRowX = mapToItem(networkBtnRow, mouse.x, 0).x
                             }
                         }
                         onReleased: mouse => {
                             if (mouse.button === Qt.RightButton) {
                                 deleteAnim.stop()
                                 netBtn.deleteProgress = 0
+                            } else if (networkBar.draggingIdx === index) {
+                                var targetIdx = networkBar.computeDropTarget(networkBar.dragGhostX)
+                                if (targetIdx !== index)
+                                    networksModel.move(index, targetIdx, 1)
+                                networkBar.draggingIdx = -1
+                                networkBar.wasDragging = true
+                            }
+                        }
+                        onPositionChanged: mouse => {
+                            if (mouse.buttons & Qt.LeftButton) {
+                                var rowX = mapToItem(networkBtnRow, mouse.x, 0).x
+                                if (networkBar.draggingIdx < 0 && Math.abs(rowX - pressRowX) > 4 && networksModel.count > 1) {
+                                    networkBar.draggingIdx = index
+                                    networkBar.draggingName = model.netName
+                                }
+                                if (networkBar.draggingIdx === index)
+                                    networkBar.dragGhostX = rowX
                             }
                         }
                         onClicked: mouse => {
-                            if (mouse.button === Qt.LeftButton && !netBtn.isActive)
+                            if (mouse.button === Qt.LeftButton && !networkBar.wasDragging && !netBtn.isActive)
                                 root.switchToNetwork(model.netId)
+                            networkBar.wasDragging = false
                         }
                         onDoubleClicked: mouse => {
                             if (mouse.button === Qt.LeftButton
@@ -2713,17 +3163,20 @@ Item {
                 Rectangle {
                     anchors.fill: parent
                     radius: 12
-                    color: "transparent"
+                    color: addNetworkBtn.isHovered ? "white" : "transparent"
                     border.width: 2
-                    border.color: addNetworkBtn.isHovered ? "#80cfff" : "white"
-                    Behavior on border.color { ColorAnimation { duration: 150 } }
+                    border.color: "white"
+                    Behavior on color { ColorAnimation { duration: 100 } }
 
                     Text {
                         anchors.centerIn: parent
                         anchors.verticalCenterOffset: -1
+                        anchors.horizontalCenterOffset: -0.5
                         text: "+"
-                        font.pixelSize: 20
-                        color: "white"
+                        font.pixelSize: 18
+                        font.bold: true
+                        color: addNetworkBtn.isHovered ? "darkslategrey" : "white"
+                        Behavior on color { ColorAnimation { duration: 100 } }
                     }
                 }
 
@@ -2734,6 +3187,25 @@ Item {
                     onExited:  addNetworkBtn.isHovered = false
                     onClicked: root.createNewNetwork()
                 }
+            }
+        }
+
+        // Drag ghost — floats over bar during reorder
+        Rectangle {
+            visible: networkBar.draggingIdx >= 0
+            x: networkBar.dragGhostX - 18
+            y: 0
+            width: 36; height: 36
+            radius: 12
+            color: "white"
+            opacity: 0.85
+            z: 10
+
+            Text {
+                anchors.centerIn: parent
+                text: networkBar.draggingName
+                font.pixelSize: 12
+                color: "#1a1a1d"
             }
         }
     }
