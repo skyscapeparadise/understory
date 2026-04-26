@@ -12621,6 +12621,8 @@ Window {
         y: 540
         width: 1365
         height: 300
+        simulateTool: buttonGrid.selectedTool
+        onKeyMappingTriggered: templateName => viewport.activeContent.fireAreasByTemplate(templateName)
     }
 
     Rectangle {
@@ -12959,4 +12961,25 @@ Window {
             mainWindow.updateGlobalLoopingSound();
         }
     }
+
+    // ── Keyboard mapping: persist and dispatch ───────────────────────────────
+
+    Connections {
+        target: storyManager
+        function onStoryOpened() {
+            var json = storyManager.getEditorState("keyboard_mappings")
+            if (json !== "") {
+                try { nodeWorkspace.kbMappings = JSON.parse(json) } catch(e) {}
+            }
+        }
+    }
+
+    Connections {
+        target: nodeWorkspace
+        function onKbMappingsChanged() {
+            if (storyManager.isOpen)
+                storyManager.setEditorState("keyboard_mappings", JSON.stringify(nodeWorkspace.kbMappings))
+        }
+    }
+
 }

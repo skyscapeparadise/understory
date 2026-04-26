@@ -293,8 +293,20 @@ Item {
     // Expose shader delegate for external code that needs to update live uniforms.
     function shaderDelegateAt(idx) { return shadersRepeater.itemAt(idx) }
 
+    // Fire "click" interactivity on all areas whose template matches tpl.
+    // Called by NodeWorkspace keyboard mapping when simulate mode is active.
+    function fireAreasByTemplate(tpl) {
+        for (var i = 0; i < areasModelInst.count; i++) {
+            if (areasModelInst.get(i).template === tpl) {
+                var item = areasRepeater.itemAt(i)
+                if (item) item.fireByKeyboard()
+            }
+        }
+    }
+
     // ── Repeaters ───────────────────────────────────────────────────────────
             Repeater {
+                id: areasRepeater
                 model: areasModel
                 delegate: Item {
                     id: areaDelegate
@@ -316,6 +328,8 @@ Item {
                     property real origY2: 0
                     property real origAspect: 1
                     property bool isBeingDeleted: isInteractive && (buttonGridRef.selectedTool === "destroy" || viewportRef.tempDestroyMode) && viewportRef.deleteTargetType === "area" && viewportRef.deleteTargetIndex === index
+
+                    function fireByKeyboard() { areaSimulateMouseArea.fireInteractivity("click") }
 
                     // Visual border (inset by 28px to match model coordinates).
                     // Hidden during simulate mode, shader transitions, and thumbnail capture —

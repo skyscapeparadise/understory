@@ -117,6 +117,14 @@ Item {
     property real timelineScrollOffset: 0
     property bool isPlaying: false
     property int activeWorkspaceTab: 0
+    property var kbPressedKeys: ({})
+    property alias kbMappings: leftPanel.kbMappings
+    property string simulateTool: "select"
+    signal keyMappingTriggered(string templateName)
+
+    onActiveWorkspaceTabChanged: {
+        if (activeWorkspaceTab !== 4) kbPressedKeys = ({})
+    }
     property real pixelsPerSecond: 60
     property bool draggingPlayhead: false
     property bool playheadHovered: false
@@ -129,6 +137,26 @@ Item {
         if (event.key === Qt.Key_Space && root.timelineAreaHovered) {
             root.isPlaying = !root.isPlaying
             event.accepted = true
+        }
+        if (root.activeWorkspaceTab === 4 && leftPanel.controllerTab === "keyboard" && !event.isAutoRepeat) {
+            var keyId = event.key | (event.modifiers & Qt.KeypadModifier ? 0x01000000 : 0)
+            var kp = Object.assign({}, root.kbPressedKeys)
+            kp[keyId] = true
+            root.kbPressedKeys = kp
+        }
+        if (root.simulateTool === "simulate" && !event.isAutoRepeat) {
+            var simKeyId = event.key | (event.modifiers & Qt.KeypadModifier ? 0x01000000 : 0)
+            var tpl = leftPanel.kbMappings[simKeyId] || "none"
+            if (tpl !== "none") root.keyMappingTriggered(tpl)
+        }
+    }
+
+    Keys.onReleased: event => {
+        if (root.activeWorkspaceTab === 4 && leftPanel.controllerTab === "keyboard") {
+            var keyId = event.key | (event.modifiers & Qt.KeypadModifier ? 0x01000000 : 0)
+            var kp = Object.assign({}, root.kbPressedKeys)
+            delete kp[keyId]
+            root.kbPressedKeys = kp
         }
     }
 
@@ -753,6 +781,8 @@ Item {
 
         property string activeTab: "characters"
         property string controllerTab: "keyboard"
+        onControllerTabChanged: root.kbPressedKeys = ({})
+        property var kbMappings: ({})
         property int activeDialogIndex: -1
 
         // Right border divider
@@ -1733,6 +1763,146 @@ Item {
             anchors.leftMargin: 20
             visible: root.activeWorkspaceTab === 4
         }
+
+        // Key detail panel — shown when a key is selected in the keyboard visualizer
+        Item {
+            id: keyDetailPanel
+            visible: root.activeWorkspaceTab === 4 && leftPanel.controllerTab === "keyboard" && keyboardViz.selectedKeyData !== null
+            anchors.top: controllerHeading.bottom
+            anchors.topMargin: 20
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            height: keyPreview.height + mappingLabel.height + mappingCombo.height + 32
+
+            Rectangle {
+                id: keyPreview
+                width: 60
+                height: 60
+                radius: 8
+                color: "transparent"
+                border.width: 2
+                border.color: "white"
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                Text {
+                    anchors.centerIn: parent
+                    text: keyboardViz.selectedKeyData ? keyboardViz.selectedKeyData.t : ""
+                    font.pixelSize: 18
+                    font.bold: true
+                    color: "white"
+                }
+            }
+
+            Text {
+                id: mappingLabel
+                text: "mapping"
+                font.pixelSize: 11
+                color: "#999999"
+                anchors.top: keyPreview.bottom
+                anchors.topMargin: 16
+                anchors.left: parent.left
+            }
+
+            Rectangle {
+                id: mappingCombo
+                anchors.top: mappingLabel.bottom
+                anchors.topMargin: 6
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 30
+                radius: 4
+                color: "#252528"
+                border.width: 1
+                border.color: "#444"
+
+                property var templateModel: ["none", "default", "north", "south", "east", "west"]
+                property int currentIndex: {
+                    if (!keyboardViz.selectedKeyData) return 0
+                    var saved = leftPanel.kbMappings[keyboardViz.selectedKeyData.kc]
+                    var idx = templateModel.indexOf(saved)
+                    return idx >= 0 ? idx : 0
+                }
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: mappingCombo.templateModel[mappingCombo.currentIndex]
+                    font.pixelSize: 12
+                    color: "white"
+                }
+
+                Text {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "▾"
+                    font.pixelSize: 10
+                    color: "#999"
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: mappingPopup.open()
+                }
+
+                Popup {
+                    id: mappingPopup
+                    y: -height - 2
+                    width: parent.width
+                    padding: 0
+
+                    background: Rectangle {
+                        color: "#252528"
+                        border.width: 1
+                        border.color: "#444"
+                        radius: 4
+                    }
+
+                    Column {
+                        width: parent.width
+
+                        Repeater {
+                            model: mappingCombo.templateModel
+
+                            delegate: Item {
+                                width: mappingCombo.width
+                                height: 30
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: mappingCombo.currentIndex === index ? "#5DA9A4" : "transparent"
+                                    radius: 2
+                                }
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData
+                                    font.pixelSize: 12
+                                    color: mappingCombo.currentIndex === index ? "#1a1a1d" : "white"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        if (keyboardViz.selectedKeyData) {
+                                            var km = Object.assign({}, leftPanel.kbMappings)
+                                            km[keyboardViz.selectedKeyData.kc] = modelData
+                                            leftPanel.kbMappings = km
+                                        }
+                                        mappingPopup.close()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Rectangle {
@@ -2320,6 +2490,17 @@ Item {
         height: parent.height - 50
         color: "#1a1a1d"
         visible: root.activeWorkspaceTab !== 0
+    }
+
+    KeyboardVisualizer {
+        id: keyboardViz
+        x: 360
+        y: 0
+        width: parent.width - 360 - 36
+        height: parent.height - 50
+        visible: root.activeWorkspaceTab === 4 && leftPanel.controllerTab === "keyboard"
+        pressedKeys: root.kbPressedKeys
+        onVisibleChanged: if (visible) root.forceActiveFocus()
     }
 
     //
