@@ -20,7 +20,7 @@ Window {
             return qsTr("understory");
         if (sceneEditor.visible && currentSceneName)
             return "understory — " + storyManager.storyTitle + " — " + currentSceneName;
-        if (sceneMenu.visible)
+        if (storyHub.visible)
             return "understory — " + storyManager.storyTitle;
         return qsTr("understory");
     }
@@ -164,10 +164,10 @@ Window {
                 script: {
                     mainWindow.lockedWidth = mainWindow.width;
                     mainWindow.widthAnimating = false;
-                    if (sceneEditor2sceneMenu.windowSizeCompleteTrigger) {
+                    if (sceneEditor2storyHub.windowSizeCompleteTrigger) {
                         console.log("ScriptAction triggered");
-                        sceneEditor2sceneMenu.visible = true;
-                        sceneEditor2sceneMenuPlayer.play();
+                        sceneEditor2storyHub.visible = true;
+                        sceneEditor2storyHubPlayer.play();
                     } else if (mainWindow.width === 1365 && mainWindow.currentSceneId !== -1) {
                         // Just finished opening the scene editor — auto-open timeline if it was open last time
                         var tlState = storyManager.getEditorState("scene_" + mainWindow.currentSceneId + "_timeline_open");
@@ -243,7 +243,7 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
-                    storyMenu.visible = true;
+                    launchScreen.visible = true;
                     splashScreen.visible = false;
                 }
             }
@@ -256,20 +256,20 @@ Window {
     }
 
     Rectangle {
-        id: storyMenu
+        id: launchScreen
         width: parent.width
         height: parent.height
         visible: false
 
         Image {
-            id: storyMenuImage
+            id: launchScreenImage
             anchors.fill: parent
             source: "file:storymenu.jpg"
             fillMode: Image.PreserveAspectFit
         }
 
         ScrollView {
-            visible: storyMenuButtons.selectedButton !== "settings" && storyMenuButtons.selectedButton !== "credits"
+            visible: launchScreenButtons.selectedButton !== "settings" && launchScreenButtons.selectedButton !== "credits"
 
             x: 29
             y: 28
@@ -315,14 +315,14 @@ Window {
 
                         // Thumbnail fill — clipped to rounded corners via OpacityMask
                         Item {
-                            id: storyMenuStoryThumbClip
+                            id: launchScreenStoryThumbClip
                             anchors.fill: parent
                             visible: parent.thumbPath !== ""
                             layer.enabled: true
                             layer.effect: OpacityMask {
                                 maskSource: Rectangle {
-                                    width: storyMenuStoryThumbClip.width
-                                    height: storyMenuStoryThumbClip.height
+                                    width: launchScreenStoryThumbClip.width
+                                    height: launchScreenStoryThumbClip.height
                                     radius: 30
                                     color: "white"
                                 }
@@ -370,8 +370,8 @@ Window {
                                     saveStoryDialog.open();
                                 } else {
                                     if (storyManager.openStory(storyData.path)) {
-                                        story2sceneMenu.visible = true;
-                                        story2sceneMenuPlayer.play();
+                                        story2storyHub.visible = true;
+                                        story2storyHubPlayer.play();
                                     }
                                 }
                             }
@@ -429,13 +429,13 @@ Window {
         }
 
         ScrollView {
-            id: storySettingsView
+            id: launchSettingsView
             x: 29
             y: 28
             height: 398
             width: 900
-            contentHeight: storySettingsLayout.implicitHeight + topPadding + 20
-            visible: storyMenuButtons.selectedButton === "settings"
+            contentHeight: launchSettingsLayout.implicitHeight + topPadding + 20
+            visible: launchScreenButtons.selectedButton === "settings"
             clip: true
 
             topPadding: 20
@@ -443,8 +443,8 @@ Window {
             rightPadding: 20
 
             ColumnLayout {
-                id: storySettingsLayout
-                width: storySettingsView.availableWidth
+                id: launchSettingsLayout
+                width: launchSettingsView.availableWidth
                 spacing: 20
 
                 Text {
@@ -465,14 +465,14 @@ Window {
         }
 
         Rectangle {
-            id: storyCreditsView
+            id: launchCreditsView
             x: 29
             y: 28
             height: 398
             width: 900
             color: "transparent"
             clip: true
-            visible: storyMenuButtons.selectedButton === "credits"
+            visible: launchScreenButtons.selectedButton === "credits"
 
             ColumnLayout {
                 id: creditsContent
@@ -557,29 +557,29 @@ Window {
 
             SequentialAnimation {
                 id: creditsAnimation
-                running: storyCreditsView.visible
+                running: launchCreditsView.visible
                 loops: 1
 
                 NumberAnimation {
                     target: creditsContent
                     property: "y"
-                    from: storyCreditsView.height
+                    from: launchCreditsView.height
                     to: -creditsContent.height
                     duration: 15000
                     easing.type: Easing.Linear
                 }
 
                 onStopped: {
-                    if (storyMenuButtons.selectedButton === "credits") {
-                        storyMenuButtons.selectedButton = "";
+                    if (launchScreenButtons.selectedButton === "credits") {
+                        launchScreenButtons.selectedButton = "";
                     }
-                    creditsContent.y = storyCreditsView.height;
+                    creditsContent.y = launchCreditsView.height;
                 }
             }
         }
 
         GridLayout {
-            id: storyMenuButtons
+            id: launchScreenButtons
             x: 23
             y: 449
             columns: 2
@@ -598,7 +598,7 @@ Window {
 
                     property bool hovered: false
                     property bool togglable: modelData === "settings" || modelData === "credits"
-                    property bool toggled: togglable && storyMenuButtons.selectedButton === modelData
+                    property bool toggled: togglable && launchScreenButtons.selectedButton === modelData
                     property bool pressed: !togglable && storyMouseArea.pressed
 
                     Rectangle {
@@ -623,7 +623,7 @@ Window {
                         anchors.centerIn: parent
                         text: modelData
                         font.pixelSize: 14
-                        color: toggled ? storyMenuButtons.activeIconColor : (storyBtn.pressed ? storyMenuButtons.activeIconColor : "white")
+                        color: toggled ? launchScreenButtons.activeIconColor : (storyBtn.pressed ? launchScreenButtons.activeIconColor : "white")
                         Behavior on color {
                             ColorAnimation {
                                 duration: 100
@@ -643,7 +643,7 @@ Window {
                             storyBtn.pressed = false
                         onClicked: {
                             if (togglable) {
-                                storyMenuButtons.selectedButton = toggled ? "" : modelData;
+                                launchScreenButtons.selectedButton = toggled ? "" : modelData;
                             } else {
                                 console.log("button", modelData, "clicked!");
                             }
@@ -670,13 +670,13 @@ Window {
     }
 
     Rectangle {
-        id: sceneMenu
+        id: storyHub
         width: parent.width
         height: parent.height
         visible: false
 
         Image {
-            id: sceneMenuImage
+            id: storyHubImage
             anchors.fill: parent
             source: "file:scenemenu.jpg"
             fillMode: Image.PreserveAspectFit
@@ -715,12 +715,12 @@ Window {
         Connections {
             target: storyManager
             function onStoryChanged() {
-                sceneMenu.reloadScenes();
+                storyHub.reloadScenes();
             }
         }
 
         ScrollView {
-            visible: sceneMenuButtons.selectedButton !== "settings"
+            visible: storyHubButtons.selectedButton !== "settings"
 
             x: 29
             y: 28
@@ -782,14 +782,14 @@ Window {
                         // Thumbnail fill — wrapped in a layer+OpacityMask Item so the
                         // image is clipped to the card's rounded corners.
                         Item {
-                            id: sceneMenuThumbClip
+                            id: storyHubThumbClip
                             anchors.fill: parent
                             visible: !isLast && model.thumbnailRev > 0
                             layer.enabled: true
                             layer.effect: OpacityMask {
                                 maskSource: Rectangle {
-                                    width: sceneMenuThumbClip.width
-                                    height: sceneMenuThumbClip.height
+                                    width: storyHubThumbClip.width
+                                    height: storyHubThumbClip.height
                                     radius: 30
                                     color: "white"
                                 }
@@ -857,15 +857,15 @@ Window {
                                         mainWindow.currentSceneId = newId;
                                         viewport.activeContent.clear();
                                         viewport.nextStackOrder = 0;
-                                        sceneMenu2sceneEditor.visible = true;
-                                        sceneMenu2sceneEditorPlayer.play();
+                                        storyHub2sceneEditor.visible = true;
+                                        storyHub2sceneEditorPlayer.play();
                                     }
                                 } else {
                                     navigationSettings.saveNavLinks(mainWindow.currentSceneId);
                                     mainWindow.currentSceneId = model.sceneId;
                                     viewport.loadSceneIntoViewport(model.sceneId);
-                                    sceneMenu2sceneEditor.visible = true;
-                                    sceneMenu2sceneEditorPlayer.play();
+                                    storyHub2sceneEditor.visible = true;
+                                    storyHub2sceneEditorPlayer.play();
                                 }
                             }
                         }
@@ -922,14 +922,14 @@ Window {
         }
 
         ScrollView {
-            id: sceneSettingsView
+            id: storyHubSettingsView
             x: 29
             y: 28
             height: 398
             width: 900
-            contentHeight: sceneSettingsLayout.implicitHeight + topPadding + 20
+            contentHeight: storyHubSettingsLayout.implicitHeight + topPadding + 20
 
-            visible: sceneMenuButtons.selectedButton === "settings"
+            visible: storyHubButtons.selectedButton === "settings"
             clip: true
             topPadding: 20
             leftPadding: 20
@@ -1206,8 +1206,8 @@ Window {
                 if (storyManager.isOpen) {
                     storyManager.setEditorState("dir_transitions", JSON.stringify(dirTransitions));
                     for (var i = 0; i < dirTransitions.length; i++)
-                        sceneSettingsView.applyTemplateTransitions(i);
-                    sceneSettingsView.applyAllTemplateTransitionsToDb();
+                        storyHubSettingsView.applyTemplateTransitions(i);
+                    storyHubSettingsView.applyAllTemplateTransitionsToDb();
                 }
             }
 
@@ -1329,19 +1329,19 @@ Window {
             Connections {
                 target: storyManager
                 function onStoryOpened() {
-                    sceneSettingsView.loadResolution();
-                    sceneSettingsView.loadStoryCursor();
-                    sceneSettingsView.loadTransitions();
-                    sceneSettingsView.loadTimecodeFormat();
+                    storyHubSettingsView.loadResolution();
+                    storyHubSettingsView.loadStoryCursor();
+                    storyHubSettingsView.loadTransitions();
+                    storyHubSettingsView.loadTimecodeFormat();
                 }
                 function onStoryChanged() {
-                    sceneSettingsView.loadTimecodeFormat();
+                    storyHubSettingsView.loadTimecodeFormat();
                 }
             }
 
             ColumnLayout {
-                id: sceneSettingsLayout
-                width: sceneSettingsView.availableWidth
+                id: storyHubSettingsLayout
+                width: storyHubSettingsView.availableWidth
                 spacing: 20
 
                 Text {
@@ -1375,7 +1375,7 @@ Window {
                         Layout.preferredHeight: 28
                         model: ["16:9", "4:3", "Custom"]
                         onCurrentIndexChanged: {
-                            if (sceneSettingsView._loading)
+                            if (storyHubSettingsView._loading)
                                 return;
                             if (currentIndex === 0)
                                 resCombo169.currentIndex = 3;
@@ -1454,14 +1454,14 @@ Window {
                         id: resCombo169
                         Layout.preferredWidth: 220
                         Layout.preferredHeight: 28
-                        model: sceneSettingsView.res169.map(function (r) {
+                        model: storyHubSettingsView.res169.map(function (r) {
                             return r.label;
                         })
                         currentIndex: 3
                         onCurrentIndexChanged: {
-                            if (sceneSettingsView._loading)
+                            if (storyHubSettingsView._loading)
                                 return;
-                            var entry = sceneSettingsView.res169[currentIndex];
+                            var entry = storyHubSettingsView.res169[currentIndex];
                             if (entry && entry.w !== -1) {
                                 storyManager.setResolution(entry.w, entry.h);
                                 customWidthField.text = entry.w.toString();
@@ -1541,14 +1541,14 @@ Window {
                         id: resCombo43
                         Layout.preferredWidth: 220
                         Layout.preferredHeight: 28
-                        model: sceneSettingsView.res43.map(function (r) {
+                        model: storyHubSettingsView.res43.map(function (r) {
                             return r.label;
                         })
                         currentIndex: 2
                         onCurrentIndexChanged: {
-                            if (sceneSettingsView._loading)
+                            if (storyHubSettingsView._loading)
                                 return;
-                            var entry = sceneSettingsView.res43[currentIndex];
+                            var entry = storyHubSettingsView.res43[currentIndex];
                             if (entry && entry.w !== -1) {
                                 storyManager.setResolution(entry.w, entry.h);
                                 customWidthField.text = entry.w.toString();
@@ -1616,7 +1616,7 @@ Window {
 
                 // ---- custom resolution row ----
                 RowLayout {
-                    visible: (aspectCombo.currentIndex === 0 && resCombo169.currentIndex === sceneSettingsView.res169.length - 1) || (aspectCombo.currentIndex === 1 && resCombo43.currentIndex === sceneSettingsView.res43.length - 1) || aspectCombo.currentIndex === 2
+                    visible: (aspectCombo.currentIndex === 0 && resCombo169.currentIndex === storyHubSettingsView.res169.length - 1) || (aspectCombo.currentIndex === 1 && resCombo43.currentIndex === storyHubSettingsView.res43.length - 1) || aspectCombo.currentIndex === 2
                     spacing: 10
                     Text {
                         text: "dimensions"
@@ -1725,7 +1725,7 @@ Window {
                         ]
                         delegate: Item {
                             id: fmtBtn
-                            property bool isActive: sceneSettingsView._timecodeFormat === modelData.key
+                            property bool isActive: storyHubSettingsView._timecodeFormat === modelData.key
                             property bool hovered: false
                             width: fmtLabel.implicitWidth + 20
                             height: 28
@@ -1776,7 +1776,7 @@ Window {
                     spacing: 8
 
                     Repeater {
-                        model: sceneSettingsView.cursorOptions
+                        model: storyHubSettingsView.cursorOptions
 
                         delegate: Rectangle {
                             id: cursorOptionRect
@@ -1800,12 +1800,12 @@ Window {
                                 }
                             }
 
-                            property bool isSelected: sceneSettingsView.selectedCursor === modelData.name
+                            property bool isSelected: storyHubSettingsView.selectedCursor === modelData.name
 
                             // background click selects this option; child MouseAreas intercept first
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: sceneSettingsView.selectedCursor = modelData.name
+                                onClicked: storyHubSettingsView.selectedCursor = modelData.name
                             }
 
                             Column {
@@ -1875,7 +1875,7 @@ Window {
                                                 }
 
                                                 Text {
-                                                    text: sceneSettingsView.cursorLabels[index]
+                                                    text: storyHubSettingsView.cursorLabels[index]
                                                     font.pixelSize: 10
                                                     color: cursorOptionRect.isSelected ? "#477B78" : "white"
                                                     horizontalAlignment: Text.AlignHCenter
@@ -1898,7 +1898,7 @@ Window {
                                     spacing: 10
 
                                     Repeater {
-                                        model: sceneSettingsView.cursorLabels
+                                        model: storyHubSettingsView.cursorLabels
 
                                         delegate: Column {
                                             spacing: 6
@@ -1920,7 +1920,7 @@ Window {
                                                 radius: 4
 
                                                 property int slotIndex: index
-                                                property string filePath: sceneSettingsView.cursorCustomPaths[index]
+                                                property string filePath: storyHubSettingsView.cursorCustomPaths[index]
 
                                                 Image {
                                                     anchors.fill: parent
@@ -1935,7 +1935,7 @@ Window {
                                                 MouseArea {
                                                     anchors.fill: parent
                                                     onClicked: {
-                                                        sceneSettingsView._cursorSlot = cursorDropZone.slotIndex;
+                                                        storyHubSettingsView._cursorSlot = cursorDropZone.slotIndex;
                                                         cursorIconFileDialog.open();
                                                     }
                                                 }
@@ -1944,9 +1944,9 @@ Window {
                                                     anchors.fill: parent
                                                     onDropped: drop => {
                                                         if (drop.hasUrls) {
-                                                            var paths = sceneSettingsView.cursorCustomPaths.slice();
+                                                            var paths = storyHubSettingsView.cursorCustomPaths.slice();
                                                             paths[cursorDropZone.slotIndex] = drop.urls[0].toString();
-                                                            sceneSettingsView.cursorCustomPaths = paths;
+                                                            storyHubSettingsView.cursorCustomPaths = paths;
                                                         }
                                                     }
                                                 }
@@ -1980,11 +1980,11 @@ Window {
                             id: dirDelegate
                             Layout.fillWidth: true
                             Layout.columnSpan: index === 0 ? 2 : 1
-                            Layout.maximumWidth: index === 0 ? sceneSettingsLayout.width : Math.floor((sceneSettingsLayout.width - 16) / 2)
+                            Layout.maximumWidth: index === 0 ? storyHubSettingsLayout.width : Math.floor((storyHubSettingsLayout.width - 16) / 2)
                             Layout.alignment: Qt.AlignTop
                             spacing: 6
                             property int dirIdx: [0, 1, 2, 4, 3][index]
-                            property var td: sceneSettingsView.dirTransitions[dirIdx]
+                            property var td: storyHubSettingsView.dirTransitions[dirIdx]
 
                             onTdChanged: {
                                 var s = td.speed || 1.0;
@@ -2042,7 +2042,7 @@ Window {
                                     ]
                                     delegate: Rectangle {
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: Math.round((sceneSettingsView.availableWidth - 40 - 16) / 2 / 5)
+                                        Layout.preferredHeight: Math.round((storyHubSettingsView.availableWidth - 40 - 16) / 2 / 5)
                                         radius: 4
                                         property bool isActive: dirDelegate.td.transition === modelData.key
                                         color: isActive ? "white" : "transparent"
@@ -2074,7 +2074,7 @@ Window {
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "transition", modelData.key)
+                                            onClicked: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "transition", modelData.key)
                                         }
                                     }
                                 }
@@ -2106,7 +2106,7 @@ Window {
                                     }
                                     onMoved: {
                                         var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0;
-                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "speed", Math.round(speed * 100) / 100);
+                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "speed", Math.round(speed * 100) / 100);
                                     }
                                     background: Rectangle {
                                         x: dSpeedSlider.leftPadding
@@ -2161,7 +2161,7 @@ Window {
                                         onEditingFinished: {
                                             var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0));
                                             text = speed.toFixed(1);
-                                            sceneSettingsView.setTransProp(dirDelegate.dirIdx, "speed", speed);
+                                            storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "speed", speed);
                                         }
                                     }
                                     Text {
@@ -2211,7 +2211,7 @@ Window {
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "pushDir", modelData)
+                                            onClicked: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "pushDir", modelData)
                                         }
                                     }
                                 }
@@ -2238,7 +2238,7 @@ Window {
                                     to: 0.5
                                     stepSize: 0
                                     Component.onCompleted: value = dirDelegate.td.wipeFeather || 0.0
-                                    onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(value * 1000) / 1000)
+                                    onMoved: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(value * 1000) / 1000)
                                     background: Rectangle {
                                         x: dFeatherSlider.leftPadding
                                         y: dFeatherSlider.topPadding + dFeatherSlider.availableHeight / 2 - height / 2
@@ -2292,7 +2292,7 @@ Window {
                                         onEditingFinished: {
                                             var pct = Math.min(100, Math.max(0, parseInt(text) || 0));
                                             text = pct.toString();
-                                            sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(pct / 200 * 1000) / 1000);
+                                            storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "wipeFeather", Math.round(pct / 200 * 1000) / 1000);
                                         }
                                     }
                                 }
@@ -2332,7 +2332,7 @@ Window {
                                         }
                                         MouseArea {
                                             anchors.fill: parent
-                                            onClicked: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "wipeDir", modelData)
+                                            onClicked: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "wipeDir", modelData)
                                         }
                                     }
                                 }
@@ -2377,7 +2377,7 @@ Window {
                                                 }
                                                 onMoved: {
                                                     var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0;
-                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", Math.round(speed * 100) / 100);
+                                                    storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", Math.round(speed * 100) / 100);
                                                 }
                                                 background: Rectangle {
                                                     x: dLookSpeedSlider.leftPadding
@@ -2432,7 +2432,7 @@ Window {
                                                     onEditingFinished: {
                                                         var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0));
                                                         text = speed.toFixed(1);
-                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", speed);
+                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookSpeed", speed);
                                                     }
                                                 }
                                                 Text {
@@ -2467,7 +2467,7 @@ Window {
                                                 to: 75
                                                 stepSize: 0
                                                 Component.onCompleted: value = dirDelegate.td.lookFov || 24.0
-                                                onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", Math.round(value * 10) / 10)
+                                                onMoved: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", Math.round(value * 10) / 10)
                                                 background: Rectangle {
                                                     x: dFovSlider.leftPadding
                                                     y: dFovSlider.topPadding + dFovSlider.availableHeight / 2 - height / 2
@@ -2521,7 +2521,7 @@ Window {
                                                     onEditingFinished: {
                                                         var v = Math.min(75, Math.max(10, parseInt(text) || 24));
                                                         text = v.toString();
-                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", v);
+                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookFov", v);
                                                     }
                                                 }
                                                 Text {
@@ -2556,7 +2556,7 @@ Window {
                                                 to: 3.0
                                                 stepSize: 0
                                                 Component.onCompleted: value = dirDelegate.td.lookOvershoot !== undefined ? dirDelegate.td.lookOvershoot : 1.0
-                                                onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", Math.round(value * 100) / 100)
+                                                onMoved: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", Math.round(value * 100) / 100)
                                                 background: Rectangle {
                                                     x: dOvershootSlider.leftPadding
                                                     y: dOvershootSlider.topPadding + dOvershootSlider.availableHeight / 2 - height / 2
@@ -2610,7 +2610,7 @@ Window {
                                                     onEditingFinished: {
                                                         var v = Math.min(3.0, Math.max(0.0, parseFloat(text) || 0.0));
                                                         text = v.toFixed(2);
-                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", v);
+                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookOvershoot", v);
                                                     }
                                                 }
                                             }
@@ -2636,7 +2636,7 @@ Window {
                                                 to: 0.5
                                                 stepSize: 0
                                                 Component.onCompleted: value = dirDelegate.td.lookShutter !== undefined ? dirDelegate.td.lookShutter : 0.10
-                                                onMoved: sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", Math.round(value * 1000) / 1000)
+                                                onMoved: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", Math.round(value * 1000) / 1000)
                                                 background: Rectangle {
                                                     x: dShutterSlider.leftPadding
                                                     y: dShutterSlider.topPadding + dShutterSlider.availableHeight / 2 - height / 2
@@ -2690,7 +2690,7 @@ Window {
                                                     onEditingFinished: {
                                                         var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0));
                                                         text = v.toFixed(2);
-                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", v);
+                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookShutter", v);
                                                     }
                                                 }
                                             }
@@ -2734,7 +2734,7 @@ Window {
                                                     onEditingFinished: {
                                                         var v = parseFloat(text) || 0.0;
                                                         text = v.toFixed(1);
-                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", v);
+                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", v);
                                                     }
                                                 }
                                                 Text {
@@ -2781,7 +2781,7 @@ Window {
                                                     onEditingFinished: {
                                                         var v = parseFloat(text) || 0.0;
                                                         text = v.toFixed(1);
-                                                        sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", v);
+                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", v);
                                                     }
                                                 }
                                                 Text {
@@ -2884,8 +2884,8 @@ Window {
                                                     var absCosy = Math.sqrt(ly * ly + lz * lz);
                                                     var sinPitch = absCosy > 0.0001 ? ly / (lz >= 0 ? absCosy : -absCosy) : 0.0;
                                                     var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, sinPitch))) * 1800.0 / Math.PI) / 10;
-                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", newYaw);
-                                                    sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", newPitch);
+                                                    storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", newYaw);
+                                                    storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", newPitch);
                                                     dYawField.text = newYaw.toFixed(1);
                                                     dPitchField.text = newPitch.toFixed(1);
                                                 }
@@ -2954,8 +2954,8 @@ Window {
                                                     MouseArea {
                                                         anchors.fill: parent
                                                         onClicked: {
-                                                            sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", modelData.yaw);
-                                                            sceneSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", modelData.pitch);
+                                                            storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookYaw", modelData.yaw);
+                                                            storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "lookPitch", modelData.pitch);
                                                             dYawField.text = modelData.yaw.toFixed(1);
                                                             dPitchField.text = modelData.pitch.toFixed(1);
                                                         }
@@ -2981,14 +2981,14 @@ Window {
             title: "Select cursor image"
             nameFilters: ["Image files (*.png *.jpg *.jpeg *.svg *.webp)"]
             onAccepted: {
-                var paths = sceneSettingsView.cursorCustomPaths.slice();
-                paths[sceneSettingsView._cursorSlot] = selectedFile.toString();
-                sceneSettingsView.cursorCustomPaths = paths;
+                var paths = storyHubSettingsView.cursorCustomPaths.slice();
+                paths[storyHubSettingsView._cursorSlot] = selectedFile.toString();
+                storyHubSettingsView.cursorCustomPaths = paths;
             }
         }
 
         GridLayout {
-            id: sceneMenuButtons
+            id: storyHubButtons
             x: 23
             y: 449
             columns: 2
@@ -3007,7 +3007,7 @@ Window {
 
                     property bool hovered: false
                     property bool togglable: modelData === "settings"
-                    property bool toggled: togglable && sceneMenuButtons.selectedButton === modelData
+                    property bool toggled: togglable && storyHubButtons.selectedButton === modelData
                     property bool pressed: !togglable && sceneMouseArea.pressed
 
                     Rectangle {
@@ -3032,7 +3032,7 @@ Window {
                         anchors.centerIn: parent
                         text: modelData
                         font.pixelSize: 14
-                        color: toggled ? sceneMenuButtons.activeIconColor : (sceneBtn.pressed ? sceneMenuButtons.activeIconColor : "white")
+                        color: toggled ? storyHubButtons.activeIconColor : (sceneBtn.pressed ? storyHubButtons.activeIconColor : "white")
                         Behavior on color {
                             ColorAnimation {
                                 duration: 100
@@ -3052,12 +3052,12 @@ Window {
                             sceneBtn.pressed = false
                         onClicked: {
                             if (togglable) {
-                                sceneMenuButtons.selectedButton = toggled ? "" : modelData;
+                                storyHubButtons.selectedButton = toggled ? "" : modelData;
                             } else {
                                 console.log("button", modelData, "clicked!");
                                 if (modelData === "exit story") {
-                                    scene2storyMenu.visible = true;
-                                    scene2storyMenuPlayer.play();
+                                    scene2launchScreen.visible = true;
+                                    scene2launchScreenPlayer.play();
                                 }
                             }
                         }
@@ -3072,7 +3072,7 @@ Window {
             height: 60
             anchors.right: parent.right
             anchors.rightMargin: 23
-            anchors.left: sceneMenuButtons.right
+            anchors.left: storyHubButtons.right
             anchors.leftMargin: 16
             text: storyManager.storyTitle
             color: "white"
@@ -3720,8 +3720,8 @@ Window {
                 }
                 activeContent.loadScene(elements);
                 nextStackOrder = activeContent.nextStackOrder;
-                for (var di = 0; di < sceneSettingsView.dirTransitions.length; di++)
-                    sceneSettingsView.applyTemplateTransitions(di);
+                for (var di = 0; di < storyHubSettingsView.dirTransitions.length; di++)
+                    storyHubSettingsView.applyTemplateTransitions(di);
                 navigationSettings.loadNavLinks(sceneId);
                 selectSettings.stableOrbitCache = ({});
                 selectSettings.elementTransitionDest = ({});
@@ -5527,10 +5527,10 @@ Window {
                         var slotIdx = labels.indexOf(slot);
                         if (slotIdx < 0)
                             return "";
-                        var mode = sceneSettingsView.selectedCursor;
+                        var mode = storyHubSettingsView.selectedCursor;
                         if (mode === "custom")
-                            return sceneSettingsView.cursorCustomPaths[slotIdx] || "";
-                        return "icons/" + sceneSettingsView.cursorOptions[mode === "angel" ? 0 : 1].icons[slotIdx];
+                            return storyHubSettingsView.cursorCustomPaths[slotIdx] || "";
+                        return "icons/" + storyHubSettingsView.cursorOptions[mode === "angel" ? 0 : 1].icons[slotIdx];
                     }
                     var tools = ["select", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"];
                     return tools.indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : "";
@@ -6224,7 +6224,7 @@ Window {
                                             xanimationduration = 1000;
                                             mainWindow.width = 960;
                                             mainWindow.x = sceneEditorEntryX;
-                                            sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
+                                            sceneEditor2storyHub.windowSizeCompleteTrigger = true;
                                         }
                                     });
                                 }
@@ -10952,7 +10952,7 @@ Window {
                                 var hasW = wSettingsArea.linkedSceneId !== -1;
                                 if (!hasN && !hasS && !hasE && !hasW)
                                     return;
-                                var dt = sceneSettingsView.dirTransitions;
+                                var dt = storyHubSettingsView.dirTransitions;
                                 // dirTransitions: 0=default, 1=north, 2=south, 3=east, 4=west
 
                                 function makeInteractivity(dirIdx, sceneId, sceneName) {
@@ -12778,7 +12778,7 @@ Window {
             xanimationduration = 1000;
             mainWindow.width = 960;
             mainWindow.x = sceneEditorEntryX;
-            sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
+            sceneEditor2storyHub.windowSizeCompleteTrigger = true;
         }
     }
 
@@ -12794,95 +12794,95 @@ Window {
     }
 
     Rectangle {
-        id: story2sceneMenu
+        id: story2storyHub
         width: parent.width
         height: parent.height
         visible: false
 
         Image {
-            id: storyMenuImage2
+            id: launchScreenImage2
             anchors.fill: parent
             source: "file:storymenu.jpg"
             fillMode: Image.PreserveAspectFit
         }
 
         MediaPlayer {
-            id: story2sceneMenuPlayer
+            id: story2storyHubPlayer
             source: "file:storymenu2scenemenu.mp4"
             autoPlay: false
             playbackRate: 1.5
-            videoOutput: story2sceneMenuVideoOutput
+            videoOutput: story2storyHubVideoOutput
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
-                    sceneMenu.visible = true;
-                    story2sceneMenu.visible = false;
-                    storyMenu.visible = false;
+                    storyHub.visible = true;
+                    story2storyHub.visible = false;
+                    launchScreen.visible = false;
                 }
             }
         }
 
         VideoOutput {
-            id: story2sceneMenuVideoOutput
+            id: story2storyHubVideoOutput
             anchors.fill: parent
         }
     }
 
     Rectangle {
-        id: scene2storyMenu
+        id: scene2launchScreen
         width: parent.width
         height: parent.height
         visible: false
 
         Image {
-            id: sceneMenuImage2
+            id: storyHubImage2
             anchors.fill: parent
             source: "file:scenemenu.jpg"
             fillMode: Image.PreserveAspectFit
         }
 
         MediaPlayer {
-            id: scene2storyMenuPlayer
+            id: scene2launchScreenPlayer
             source: "file:scenemenu2storymenu.mp4"
             autoPlay: false
             playbackRate: 1.5
-            videoOutput: scene2storyMenuVideoOutput
+            videoOutput: scene2launchScreenVideoOutput
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
                     viewport.activeContent.clear();
-                    storyMenu.visible = true;
-                    scene2storyMenu.visible = false;
-                    sceneMenu.visible = false;
+                    launchScreen.visible = true;
+                    scene2launchScreen.visible = false;
+                    storyHub.visible = false;
                 }
             }
         }
 
         VideoOutput {
-            id: scene2storyMenuVideoOutput
+            id: scene2launchScreenVideoOutput
             anchors.fill: parent
         }
     }
 
     Rectangle {
-        id: sceneMenu2sceneEditor
+        id: storyHub2sceneEditor
         width: parent.width
         height: parent.height
         visible: false
 
         Image {
-            id: sceneMenuImage3
+            id: storyHubImage3
             anchors.fill: parent
             source: "file:scenemenu.jpg"
             fillMode: Image.PreserveAspectFit
         }
 
         MediaPlayer {
-            id: sceneMenu2sceneEditorPlayer
+            id: storyHub2sceneEditorPlayer
             source: "file:scenemenu2sceneeditor.mp4"
             autoPlay: false
             playbackRate: 1.5
-            videoOutput: sceneMenu2sceneEditorVideoOutput
+            videoOutput: storyHub2sceneEditorVideoOutput
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
@@ -12892,8 +12892,8 @@ Window {
                     mainWindow.x = mainWindow.x - 202;
                     sceneEditor.visible = true;
                     viewportFadeOutAnim.start();
-                    sceneMenu2sceneEditor.visible = false;
-                    sceneMenu.visible = false;
+                    storyHub2sceneEditor.visible = false;
+                    storyHub.visible = false;
                     viewport.capturingThumbnail = false;
                     buttonGrid.selectedTool = "select";
                     sceneEditorButtons.conditionsOpen = false;
@@ -12908,7 +12908,7 @@ Window {
         }
 
         VideoOutput {
-            id: sceneMenu2sceneEditorVideoOutput
+            id: storyHub2sceneEditorVideoOutput
             anchors.fill: parent
         }
     }
@@ -12925,7 +12925,7 @@ Window {
             if (sceneEditor.visible) {
                 // Scene editor is open — capture thumbnail, save state, close scene,
                 // then load story once the close-scene transition finishes
-                // (see sceneEditor2sceneMenu handler for the final load step)
+                // (see sceneEditor2storyHub handler for the final load step)
                 pendingStoryPath = path;
                 var savedSceneId = mainWindow.currentSceneId;
                 viewport.captureAndSaveThumbnail(savedSceneId, function () {
@@ -12948,14 +12948,14 @@ Window {
                         xanimationduration = 1000;
                         mainWindow.width = 960;
                         mainWindow.x = sceneEditorEntryX;
-                        sceneEditor2sceneMenu.windowSizeCompleteTrigger = true;
+                        sceneEditor2storyHub.windowSizeCompleteTrigger = true;
                     }
                 });
-            } else if (storyMenu.visible) {
+            } else if (launchScreen.visible) {
                 // On story menu — load and animate to scene menu
                 if (storyManager.openStory(path)) {
-                    story2sceneMenu.visible = true;
-                    story2sceneMenuPlayer.play();
+                    story2storyHub.visible = true;
+                    story2storyHubPlayer.play();
                 }
             } else {
                 // On scene menu — just load; scene menu updates reactively
@@ -12979,14 +12979,14 @@ Window {
             else
                 ok = storyManager.saveStoryAs(selectedFile.toString());
             if (ok && triggerTransition && pendingAction === "new") {
-                story2sceneMenu.visible = true;
-                story2sceneMenuPlayer.play();
+                story2storyHub.visible = true;
+                story2storyHubPlayer.play();
             }
         }
     }
 
     Rectangle {
-        id: sceneEditor2sceneMenu
+        id: sceneEditor2storyHub
         width: parent.width
         height: parent.height
         color: "black"
@@ -12995,20 +12995,20 @@ Window {
         property bool windowSizeCompleteTrigger: false
 
         MediaPlayer {
-            id: sceneEditor2sceneMenuPlayer
+            id: sceneEditor2storyHubPlayer
             source: "file:sceneeditor2scenemenu.mp4"
             autoPlay: false
             playbackRate: 1.5
-            videoOutput: sceneEditor2sceneMenuVideoOutput
+            videoOutput: sceneEditor2storyHubVideoOutput
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
                     viewport.activeContent.clear();
                     sceneEditor.visible = false;
                     viewportBlackOverlay.opacity = 1;
-                    sceneEditor2sceneMenu.visible = false;
-                    sceneMenu.visible = true;
-                    sceneEditor2sceneMenu.windowSizeCompleteTrigger = false;
+                    sceneEditor2storyHub.visible = false;
+                    storyHub.visible = true;
+                    sceneEditor2storyHub.windowSizeCompleteTrigger = false;
                     if (openStoryDialog.pendingStoryPath !== "") {
                         storyManager.openStory(openStoryDialog.pendingStoryPath);
                         openStoryDialog.pendingStoryPath = "";
@@ -13018,7 +13018,7 @@ Window {
         }
 
         VideoOutput {
-            id: sceneEditor2sceneMenuVideoOutput
+            id: sceneEditor2storyHubVideoOutput
             anchors.fill: parent
         }
     }
