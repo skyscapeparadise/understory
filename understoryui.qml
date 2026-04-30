@@ -1320,12 +1320,22 @@ Window {
                 }
             }
 
+            property string _timecodeFormat: "24ndf"
+
+            function loadTimecodeFormat() {
+                _timecodeFormat = storyManager.getTimecodeFormat()
+            }
+
             Connections {
                 target: storyManager
                 function onStoryOpened() {
                     sceneSettingsView.loadResolution();
                     sceneSettingsView.loadStoryCursor();
                     sceneSettingsView.loadTransitions();
+                    sceneSettingsView.loadTimecodeFormat();
+                }
+                function onStoryChanged() {
+                    sceneSettingsView.loadTimecodeFormat();
                 }
             }
 
@@ -1683,6 +1693,70 @@ Window {
                         text: "px"
                         font.pixelSize: 13
                         color: "#aaaaaa"
+                    }
+                }
+
+                // ---- timecode heading ----
+                Text {
+                    text: "timecode"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: "white"
+                    topPadding: 8
+                    Layout.fillWidth: true
+                }
+
+                // ---- timecode format row ----
+                RowLayout {
+                    spacing: 10
+                    Text {
+                        text: "format"
+                        font.pixelSize: 13
+                        color: "white"
+                        Layout.preferredWidth: 120
+                    }
+                    Repeater {
+                        model: [
+                            { key: "24ndf",   label: "24 NDF" },
+                            { key: "25ndf",   label: "25 NDF" },
+                            { key: "2997df",  label: "29.97 DF" },
+                            { key: "2997ndf", label: "29.97 NDF" },
+                            { key: "30ndf",   label: "30 NDF" }
+                        ]
+                        delegate: Item {
+                            id: fmtBtn
+                            property bool isActive: sceneSettingsView._timecodeFormat === modelData.key
+                            property bool hovered: false
+                            width: fmtLabel.implicitWidth + 20
+                            height: 28
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: height / 2
+                                color: fmtBtn.isActive ? "white" : "transparent"
+                                border.width: 2
+                                border.color: fmtBtn.hovered ? "#80cfff" : "white"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                                Behavior on border.color { ColorAnimation { duration: 120 } }
+                            }
+
+                            Text {
+                                id: fmtLabel
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                font.pixelSize: 12
+                                color: fmtBtn.isActive ? "#477B78" : "white"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onEntered: fmtBtn.hovered = true
+                                onExited: fmtBtn.hovered = false
+                                onClicked: storyManager.setTimecodeFormat(modelData.key)
+                            }
+                        }
                     }
                 }
 

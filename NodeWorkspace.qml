@@ -116,6 +116,7 @@ Item {
     property real playheadTime: 0
     property real timelineScrollOffset: 0
     property bool isPlaying: false
+    property string timecodeFormat: "24ndf"
     property int activeWorkspaceTab: 0
     property var kbPressedKeys:     ({})
     property alias kbMappings:      leftPanel.kbMappings
@@ -131,7 +132,7 @@ Item {
     property real pixelsPerSecond: 60
     property bool draggingPlayhead: false
     property bool playheadHovered: false
-    property bool timelineAreaHovered: timelineMouseArea.containsMouse || transportHoverHandler.hovered
+    property bool timelineAreaHovered: timelineMouseArea.containsMouse || transportHoverHandler.hovered || (timecodeDisplay.hovered && !timecodeDisplay.editing)
     onTimelineAreaHoveredChanged: if (timelineAreaHovered) root.forceActiveFocus()
 
     onPixelsPerSecondChanged: timelineCanvas.requestPaint()
@@ -318,6 +319,10 @@ Item {
             chaptersModel.append({ chapterId: 0, chapterName: "1" })
             root.activeChapterId = 0
             root.nextChapterId = 1
+            root.timecodeFormat = storyManager.getTimecodeFormat()
+        }
+        function onStoryChanged() {
+            root.timecodeFormat = storyManager.getTimecodeFormat()
         }
     }
 
@@ -3001,7 +3006,7 @@ Item {
         id: timelineSection
         x: chapterPanel.width
         y: parent.height - 50
-        width: parent.width - 240 - chapterPanel.width
+        width: parent.width - 440 - chapterPanel.width
         height: 50
         color: "#141417"
         clip: true
@@ -3157,6 +3162,155 @@ Item {
                     timelineCanvas.requestPaint()
                     wheel.accepted = true
                 }
+            }
+        }
+    }
+
+    //
+    // SMPTE timecode clock
+    //
+    Rectangle {
+        id: timecodeDisplay
+        x: parent.width - 484
+        y: parent.height - 50
+        width: 200
+        height: 50
+        color: editing ? "#1a1a1f" : "#141417"
+        Behavior on color { ColorAnimation { duration: 80 } }
+
+        property bool editing: false
+        property bool hovered: clockMouseArea.containsMouse
+
+        Rectangle {
+            width: parent.width
+            height: 1
+            color: "#333"
+            anchors.top: parent.top
+        }
+
+        Rectangle {
+            width: 1
+            height: parent.height
+            color: "#333"
+            anchors.left: parent.left
+        }
+
+        function formatSMPTE(totalSeconds, fmt) {
+            function pad2(n) { return (n < 10 ? "0" : "") + Math.floor(n) }
+            var fps, isDF
+            switch (fmt) {
+                case "25ndf":   fps = 25;    isDF = false; break
+                case "2997df":  fps = 29.97; isDF = true;  break
+                case "2997ndf": fps = 29.97; isDF = false; break
+                case "30ndf":   fps = 30;    isDF = false; break
+                default:        fps = 24;    isDF = false; break
+            }
+            if (isDF) {
+                var tf = Math.round(totalSeconds * 30000 / 1001)
+                var d = Math.floor(tf / 17982)
+                var m = tf % 17982
+                var adj = tf + 18 * d + (m < 2 ? 0 : 2 * Math.floor((m - 2) / 1798))
+                return pad2(Math.floor(adj / 108000)) + ":" +
+                       pad2(Math.floor(adj / 1800) % 60) + ":" +
+                       pad2(Math.floor(adj / 30) % 60) + ";" +
+                       pad2(adj % 30)
+            } else {
+                var nomFps = Math.round(fps)
+                var tf = Math.floor(totalSeconds * fps)
+                return pad2(Math.floor(tf / (nomFps * 3600))) + ":" +
+                       pad2(Math.floor(tf / (nomFps * 60)) % 60) + ":" +
+                       pad2(Math.floor(tf / nomFps) % 60) + ":" +
+                       pad2(tf % nomFps)
+            }
+        }
+
+        // Inverse of formatSMPTE — returns seconds, or -1 if unparseable.
+        function parseSMPTE(tc, fmt) {
+            var parts = tc.replace(";", ":").split(":")
+            if (parts.length !== 4) return -1
+            var hh = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
+            var ss = parseInt(parts[2], 10), ff = parseInt(parts[3], 10)
+            if (isNaN(hh) || isNaN(mm) || isNaN(ss) || isNaN(ff)) return -1
+            if (fmt === "2997df") {
+                var totalMinutes = 60 * hh + mm
+                var frames = 30 * 3600 * hh + 30 * 60 * mm + 30 * ss + ff
+                            - 2 * (totalMinutes - Math.floor(totalMinutes / 10))
+                return frames * 1001 / 30000
+            } else {
+                var fps
+                switch (fmt) {
+                    case "25ndf":   fps = 25;    break
+                    case "2997ndf": fps = 29.97; break
+                    case "30ndf":   fps = 30;    break
+                    default:        fps = 24;    break
+                }
+                return ((hh * 3600 + mm * 60 + ss) * Math.round(fps) + ff) / fps
+            }
+        }
+
+        // Each character gets a fixed-width cell so digit positions never shift.
+        // Cell math: 8×20 + 3×10 = 190px in 200px panel → exactly 5px each side.
+        Row {
+            id: tcRow
+            anchors.centerIn: parent
+            anchors.horizontalCenterOffset: 1
+            spacing: 0
+            visible: !timecodeDisplay.editing
+            property string tc: timecodeDisplay.formatSMPTE(root.playheadTime, root.timecodeFormat)
+            Repeater {
+                model: 11
+                Text {
+                    width: (index === 2 || index === 5 || index === 8) ? 10 : 20
+                    height: 42
+                    text: tcRow.tc.charAt(index)
+                    font.pixelSize: 34
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    color: "white"
+                }
+            }
+        }
+
+        TextInput {
+            id: tcEdit
+            visible: timecodeDisplay.editing
+            anchors.fill: parent
+            anchors.margins: 4
+            font.pixelSize: 34
+            horizontalAlignment: TextInput.AlignHCenter
+            verticalAlignment: TextInput.AlignVCenter
+            color: "white"
+            selectionColor: "#477B78"
+            selectedTextColor: "white"
+            Keys.onReturnPressed: {
+                var t = timecodeDisplay.parseSMPTE(text, root.timecodeFormat)
+                if (t >= 0) {
+                    root.playheadTime = t
+                    timelineCanvas.requestPaint()
+                }
+                timecodeDisplay.editing = false
+                root.forceActiveFocus()
+            }
+            Keys.onEscapePressed: {
+                timecodeDisplay.editing = false
+                root.forceActiveFocus()
+            }
+            onActiveFocusChanged: {
+                if (!activeFocus) timecodeDisplay.editing = false
+            }
+        }
+
+        MouseArea {
+            id: clockMouseArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.IBeamCursor
+            visible: !timecodeDisplay.editing
+            onClicked: {
+                tcEdit.text = timecodeDisplay.formatSMPTE(root.playheadTime, root.timecodeFormat)
+                timecodeDisplay.editing = true
+                tcEdit.selectAll()
+                tcEdit.forceActiveFocus()
             }
         }
     }

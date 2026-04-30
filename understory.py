@@ -490,6 +490,44 @@ class StoryManager(QObject):
         except Exception as e:
             print(f"StoryManager.setResolution: {e}")
 
+    # ------------------------------------------------------------------ timecode format slots
+
+    @Slot(result=str)
+    def getTimecodeFormat(self):
+        if not self._conn:
+            return "24ndf"
+        try:
+            row = self._conn.execute("SELECT meta FROM story WHERE id = 1").fetchone()
+            if row and row[0]:
+                meta = json.loads(row[0])
+                return meta.get("timecodeFormat", "24ndf")
+            return "24ndf"
+        except Exception as e:
+            print(f"StoryManager.getTimecodeFormat: {e}")
+            return "24ndf"
+
+    @Slot(str)
+    def setTimecodeFormat(self, fmt):
+        if not self._conn:
+            return
+        try:
+            row = self._conn.execute("SELECT meta FROM story WHERE id = 1").fetchone()
+            old_meta = json.loads(row[0]) if (row and row[0]) else {}
+            old_fmt = old_meta.get("timecodeFormat", "24ndf")
+
+            def apply(f):
+                r = self._conn.execute("SELECT meta FROM story WHERE id = 1").fetchone()
+                meta = json.loads(r[0]) if (r and r[0]) else {}
+                meta["timecodeFormat"] = f
+                self._conn.execute("UPDATE story SET meta = ? WHERE id = 1", (json.dumps(meta),))
+                self._conn.commit()
+                self.storyChanged.emit()
+
+            apply(fmt)
+            self._push_command(lambda f=old_fmt: apply(f), lambda f=fmt: apply(f))
+        except Exception as e:
+            print(f"StoryManager.setTimecodeFormat: {e}")
+
     # ------------------------------------------------------------------ scene slots
 
     @Slot(result="QVariantList")
