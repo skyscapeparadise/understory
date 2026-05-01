@@ -669,6 +669,7 @@ class StoryManager(QObject):
 
             def apply(sid, ej):
                 data = json.loads(ej)
+                print(f"[understory] saveSceneElements: scene={sid} count={len(data)}")
                 self._conn.execute("DELETE FROM elements WHERE scene_id = ?", (sid,))
                 for el in data:
                     self._conn.execute(
@@ -694,7 +695,7 @@ class StoryManager(QObject):
                 lambda sid=scene_id, ej=elements_json: apply(sid, ej),
             )
         except Exception as e:
-            print(f"StoryManager.saveSceneElements: {e}")
+            print(f"StoryManager.saveSceneElements: ERROR scene={scene_id} {e}")
 
     @Slot(int, result=str)
     def loadSceneElements(self, scene_id):
@@ -706,9 +707,11 @@ class StoryManager(QObject):
                 "SELECT meta FROM elements WHERE scene_id = ? ORDER BY z_order",
                 (scene_id,),
             ).fetchall()
-            return json.dumps([json.loads(r[0]) for r in rows])
+            result = json.dumps([json.loads(r[0]) for r in rows])
+            print(f"[understory] loadSceneElements: scene={scene_id} count={len(rows)}")
+            return result
         except Exception as e:
-            print(f"StoryManager.loadSceneElements: {e}")
+            print(f"StoryManager.loadSceneElements: ERROR scene={scene_id} {e}")
             return "[]"
 
     @Slot(int, str)

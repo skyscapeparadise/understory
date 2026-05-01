@@ -63,6 +63,8 @@ Window {
                 shortcut: StandardKey.Save
                 enabled: storyManager.isOpen
                 onTriggered: {
+                    if (sceneEditor.visible && mainWindow.currentSceneId !== -1)
+                        storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements())
                     nodeWorkspace.saveToDb();
                     storyManager.saveStory();
                 }
@@ -3187,8 +3189,12 @@ Window {
             property real elementDragY: 0
 
             onElementDraggingChanged: {
-                if (!elementDragging && mainWindow.currentSceneId !== -1)
-                    storyManager.saveSceneElements(mainWindow.currentSceneId, collectSceneElements())
+                if (!elementDragging && mainWindow.currentSceneId !== -1) {
+                    var elems = collectSceneElements()
+                    var count = JSON.parse(elems).length
+                    console.log("[understory] onElementDraggingChanged save: scene=" + mainWindow.currentSceneId + " count=" + count)
+                    storyManager.saveSceneElements(mainWindow.currentSceneId, elems)
+                }
             }
 
             property bool textEditing: false
@@ -3710,14 +3716,17 @@ Window {
             // ------------------------------------------------------------------ scene persistence
 
             function loadSceneIntoViewport(sceneId) {
+                console.log("[understory] loadSceneIntoViewport: scene=" + sceneId)
                 clearSelection();
                 var raw = storyManager.loadSceneElements(sceneId);
                 var elements;
                 try {
                     elements = JSON.parse(raw);
                 } catch (e) {
+                    console.log("[understory] loadSceneIntoViewport: JSON.parse failed for scene=" + sceneId)
                     elements = [];
                 }
+                console.log("[understory] loadSceneIntoViewport: loading " + elements.length + " elements into scene=" + sceneId)
                 activeContent.loadScene(elements);
                 nextStackOrder = activeContent.nextStackOrder;
                 for (var di = 0; di < storyHubSettingsView.dirTransitions.length; di++)
@@ -5502,24 +5511,19 @@ Window {
                         var slot = "select", cpath = "";
                         if (viewport.hoveredAreaIndex >= 0) {
                             var hm = viewport.areasModel.get(viewport.hoveredAreaIndex);
-                            slot = hm.cursor || "select";
-                            cpath = hm.cursorPath || "";
+                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
                         } else if (viewport.hoveredTbIndex >= 0) {
                             var hm = viewport.textBoxesModel.get(viewport.hoveredTbIndex);
-                            slot = hm.cursor || "select";
-                            cpath = hm.cursorPath || "";
+                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
                         } else if (viewport.hoveredImageIndex >= 0) {
                             var hm = viewport.imagesModel.get(viewport.hoveredImageIndex);
-                            slot = hm.cursor || "select";
-                            cpath = hm.cursorPath || "";
+                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
                         } else if (viewport.hoveredVideoIndex >= 0) {
                             var hm = viewport.videosModel.get(viewport.hoveredVideoIndex);
-                            slot = hm.cursor || "select";
-                            cpath = hm.cursorPath || "";
+                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
                         } else if (viewport.hoveredShaderIndex >= 0) {
                             var hm = viewport.shadersModel.get(viewport.hoveredShaderIndex);
-                            slot = hm.cursor || "select";
-                            cpath = hm.cursorPath || "";
+                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
                         }
                         if (slot === "custom")
                             return cpath || "";
@@ -6207,7 +6211,9 @@ Window {
                                     viewport.captureAndSaveThumbnail(savedSceneId, function () {
                                         if (savedSceneId !== -1) {
                                             storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
-                                            storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
+                                            var elems = viewport.collectSceneElements()
+                                            console.log("[understory] close scene save: scene=" + savedSceneId + " count=" + JSON.parse(elems).length)
+                                            storyManager.saveSceneElements(savedSceneId, elems);
                                         }
                                         sceneScript.saveVariablesToDb();
                                         nodeWorkspace.saveToDb();
@@ -12850,6 +12856,7 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
+                    mainWindow.currentSceneId = -1;
                     viewport.activeContent.clear();
                     launchScreen.visible = true;
                     scene2launchScreen.visible = false;
@@ -13003,6 +13010,8 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
+                    console.log("[understory] sceneEditor→storyHub transition end: clearing viewport, currentSceneId=" + mainWindow.currentSceneId)
+                    mainWindow.currentSceneId = -1;
                     viewport.activeContent.clear();
                     sceneEditor.visible = false;
                     viewportBlackOverlay.opacity = 1;
