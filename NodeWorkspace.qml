@@ -2244,15 +2244,15 @@ Item {
                             }
 
                             var dangerFactor = Math.min(1.0, root.wobbleAmplitude / 15.0);
-                            var pr = Math.floor(0x99 + dangerFactor * (0xff - 0x99));
-                            var pg = Math.floor(0xaa + dangerFactor * (0x44 - 0xaa));
-                            var pb = Math.floor(0xff + dangerFactor * (0x44 - 0xff));
+                            var pr = Math.floor(0x5D + dangerFactor * (0xff - 0x5D));
+                            var pg = Math.floor(0xA9 + dangerFactor * (0x44 - 0xA9));
+                            var pb = Math.floor(0xA4 + dangerFactor * (0x44 - 0xA4));
                             ctx.strokeStyle = "rgb(" + pr + "," + pg + "," + pb + ")";
                             ctx.lineWidth = 2 + dangerFactor * 1;
                         } else {
                             ctx.moveTo(ax, ay);
                             ctx.lineTo(bx, by);
-                            ctx.strokeStyle = "#99aaff";
+                            ctx.strokeStyle = "#5DA9A4";
                             ctx.lineWidth = 2;
                         }
 
@@ -2292,7 +2292,7 @@ Item {
                     ctx.save();
                     ctx.lineWidth = 2;
                     ctx.setLineDash([4, 4]);
-                    ctx.strokeStyle = "#ff80ff";
+                    ctx.strokeStyle = "#80cfff";
                     ctx.beginPath();
                     ctx.moveTo(fnX, fnY);
                     ctx.lineTo(root.linkToX, root.linkToY);
