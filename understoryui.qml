@@ -3191,8 +3191,6 @@ Window {
             onElementDraggingChanged: {
                 if (!elementDragging && mainWindow.currentSceneId !== -1) {
                     var elems = collectSceneElements()
-                    var count = JSON.parse(elems).length
-                    console.log("[understory] onElementDraggingChanged save: scene=" + mainWindow.currentSceneId + " count=" + count)
                     storyManager.saveSceneElements(mainWindow.currentSceneId, elems)
                 }
             }
@@ -3716,17 +3714,14 @@ Window {
             // ------------------------------------------------------------------ scene persistence
 
             function loadSceneIntoViewport(sceneId) {
-                console.log("[understory] loadSceneIntoViewport: scene=" + sceneId)
                 clearSelection();
                 var raw = storyManager.loadSceneElements(sceneId);
                 var elements;
                 try {
                     elements = JSON.parse(raw);
                 } catch (e) {
-                    console.log("[understory] loadSceneIntoViewport: JSON.parse failed for scene=" + sceneId)
                     elements = [];
                 }
-                console.log("[understory] loadSceneIntoViewport: loading " + elements.length + " elements into scene=" + sceneId)
                 activeContent.loadScene(elements);
                 nextStackOrder = activeContent.nextStackOrder;
                 for (var di = 0; di < storyHubSettingsView.dirTransitions.length; di++)
@@ -6212,7 +6207,6 @@ Window {
                                         if (savedSceneId !== -1) {
                                             storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
                                             var elems = viewport.collectSceneElements()
-                                            console.log("[understory] close scene save: scene=" + savedSceneId + " count=" + JSON.parse(elems).length)
                                             storyManager.saveSceneElements(savedSceneId, elems);
                                         }
                                         sceneScript.saveVariablesToDb();
@@ -13010,7 +13004,6 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
-                    console.log("[understory] sceneEditor→storyHub transition end: clearing viewport, currentSceneId=" + mainWindow.currentSceneId)
                     mainWindow.currentSceneId = -1;
                     viewport.activeContent.clear();
                     sceneEditor.visible = false;
