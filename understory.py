@@ -369,6 +369,15 @@ class StoryManager(QObject):
                         "ALTER TABLE networks ADD COLUMN color TEXT NOT NULL DEFAULT '#2e2e33'"
                     )
                     conn.commit()
+            if "conversations" not in tables:
+                conn.executescript(
+                    "CREATE TABLE conversations ("
+                    "    id INTEGER PRIMARY KEY,"
+                    "    name TEXT NOT NULL DEFAULT '',"
+                    "    meta TEXT"
+                    ");"
+                )
+                conn.commit()
             if "variables" not in tables:
                 conn.executescript(
                     "CREATE TABLE variables ("
@@ -995,6 +1004,165 @@ class StoryManager(QObject):
             self._push_command(do_undo, do_redo)
         except Exception as e:
             print(f"StoryManager.deleteNetwork: {e}")
+
+    # ------------------------------------------------------------------ conversation slots
+
+    @Slot(result=int)
+    def ensureDefaultConversation(self):
+        """Returns the id of the first conversation tree, creating one if none exist."""
+        if not self._conn:
+            return -1
+        try:
+            row = self._conn.execute(
+                "SELECT id FROM conversations ORDER BY id LIMIT 1"
+            ).fetchone()
+            if row:
+                return row[0]
+            cur = self._conn.execute("INSERT INTO conversations (name) VALUES (?)", ("",))
+            self._conn.commit()
+            return cur.lastrowid
+        except Exception as e:
+            print(f"StoryManager.ensureDefaultConversation: {e}")
+            return -1
+
+    @Slot(result="QVariantList")
+    def getConversations(self):
+        """Returns list of {id, name} for all conversation trees in the story."""
+        if not self._conn:
+            return []
+        try:
+            rows = self._conn.execute(
+                "SELECT id, name FROM conversations ORDER BY id"
+            ).fetchall()
+            return [{"id": r[0], "name": r[1]} for r in rows]
+        except Exception as e:
+            print(f"StoryManager.getConversations: {e}")
+            return []
+
+    @Slot(int, result=str)
+    def loadConversationData(self, conv_id):
+        """Returns the JSON blob stored for a conversation tree."""
+        if not self._conn:
+            return "{}"
+        try:
+            row = self._conn.execute(
+                "SELECT meta FROM conversations WHERE id = ?", (conv_id,)
+            ).fetchone()
+            if row and row[0]:
+                return row[0]
+            return "{}"
+        except Exception as e:
+            print(f"StoryManager.loadConversationData: {e}")
+            return "{}"
+
+    @Slot(int, str)
+    def saveConversationData(self, conv_id, json_str):
+        """Writes and commits the JSON state blob for a conversation tree."""
+        if not self._conn:
+            return
+        try:
+            row = self._conn.execute(
+                "SELECT meta FROM conversations WHERE id = ?", (conv_id,)
+            ).fetchone()
+            old_json = row[0] if (row and row[0]) else "{}"
+
+            def apply(cid, js):
+                self._conn.execute(
+                    "UPDATE conversations SET meta = ? WHERE id = ?", (js, cid)
+                )
+                self._conn.commit()
+
+            apply(conv_id, json_str)
+            self._push_command(
+                lambda cid=conv_id, js=old_json: apply(cid, js),
+                lambda cid=conv_id, js=json_str: apply(cid, js),
+            )
+        except Exception as e:
+            print(f"StoryManager.saveConversationData: {e}")
+
+    @Slot(str, result=int)
+    def createConversation(self, name):
+        """Creates a new conversation tree and returns its id."""
+        if not self._conn:
+            return -1
+        try:
+            cur = self._conn.execute(
+                "INSERT INTO conversations (name) VALUES (?)", (name,)
+            )
+            conv_id = cur.lastrowid
+            self._conn.commit()
+
+            def do_undo(cid=conv_id):
+                self._conn.execute("DELETE FROM conversations WHERE id = ?", (cid,))
+                self._conn.commit()
+
+            def do_redo(cid=conv_id, n=name):
+                self._conn.execute(
+                    "INSERT INTO conversations (id, name) VALUES (?, ?)", (cid, n)
+                )
+                self._conn.commit()
+
+            self._push_command(do_undo, do_redo)
+            return conv_id
+        except Exception as e:
+            print(f"StoryManager.createConversation: {e}")
+            return -1
+
+    @Slot(int, str)
+    def renameConversation(self, conv_id, name):
+        """Rename a conversation tree."""
+        if not self._conn:
+            return
+        try:
+            row = self._conn.execute(
+                "SELECT name FROM conversations WHERE id = ?", (conv_id,)
+            ).fetchone()
+            old_name = row[0] if row else ""
+
+            def apply(cid, n):
+                self._conn.execute(
+                    "UPDATE conversations SET name = ? WHERE id = ?", (n, cid)
+                )
+                self._conn.commit()
+
+            apply(conv_id, name)
+            self._push_command(
+                lambda cid=conv_id, n=old_name: apply(cid, n),
+                lambda cid=conv_id, n=name: apply(cid, n),
+            )
+        except Exception as e:
+            print(f"StoryManager.renameConversation: {e}")
+
+    @Slot(int)
+    def deleteConversation(self, conv_id):
+        """Delete a conversation tree and its stored data."""
+        if not self._conn:
+            return
+        try:
+            row = self._conn.execute(
+                "SELECT name, meta FROM conversations WHERE id = ?", (conv_id,)
+            ).fetchone()
+            if not row:
+                return
+            old_name, old_meta = row
+
+            self._conn.execute("DELETE FROM conversations WHERE id = ?", (conv_id,))
+            self._conn.commit()
+
+            def do_undo(cid=conv_id, n=old_name, m=old_meta):
+                self._conn.execute(
+                    "INSERT INTO conversations (id, name, meta) VALUES (?, ?, ?)",
+                    (cid, n, m),
+                )
+                self._conn.commit()
+
+            def do_redo(cid=conv_id):
+                self._conn.execute("DELETE FROM conversations WHERE id = ?", (cid,))
+                self._conn.commit()
+
+            self._push_command(do_undo, do_redo)
+        except Exception as e:
+            print(f"StoryManager.deleteConversation: {e}")
 
     # ------------------------------------------------------------------ variable slots
 

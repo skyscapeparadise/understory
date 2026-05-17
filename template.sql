@@ -182,6 +182,13 @@ CREATE TABLE network_characters (
     PRIMARY KEY (network_id, character_id)
 );
 
+-- conversation trees (project-level dialogue graphs)
+CREATE TABLE conversations (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    meta TEXT  -- JSON blob: {nodes, links, zoom, panX, panY, nextNodeId}
+);
+
 -- editor state (not part of the story, but saved for UX continuity)
 CREATE TABLE editor_state (
     key TEXT PRIMARY KEY,

@@ -42,6 +42,14 @@ Item {
         id: chaptersModel
     }
 
+    // convNodesModel rows: { id:int, x:real, y:real, name:string, nodeType:string }
+    // nodeType: "enter" | "topic" | "exit"
+    ListModel { id: convNodesModel }
+    // convLinksModel rows: { from:int, to:int } — directed, from→to
+    ListModel { id: convLinksModel }
+    // convTreesModel rows: { treeId:int, treeName:string }
+    ListModel { id: convTreesModel }
+
     property int nextNodeId: 0
     property int activeChapterId: 0
     property int nextChapterId: 1
@@ -128,6 +136,7 @@ Item {
 
     onActiveWorkspaceTabChanged: {
         if (activeWorkspaceTab !== 4) kbPressedKeys = ({})
+        if (activeWorkspaceTab === 2) convRequestRedraw()
     }
     property real pixelsPerSecond: 60
     property bool draggingPlayhead: false
@@ -167,6 +176,39 @@ Item {
     onZoomChanged: requestRedraw()
     onPanXChanged: requestRedraw()
     onPanYChanged: requestRedraw()
+
+    // Conversation workspace state
+    property real convZoom:               1.0
+    property real convPanX:               0.0
+    property real convPanY:               0.0
+    property int  convNextNodeId:         0
+    property int  activeConvTreeId:       -1
+    property int  convSelectedNodeIndex:  -1
+
+    property bool convLinking:            false
+    property int  convLinkingFromIndex:   -1
+    property real convLinkToX:            0
+    property real convLinkToY:            0
+
+    property int  convWobblingLinkIndex:  -1
+    property real convWobblePhase:        0.0
+    property real convWobbleAmplitude:    0.0
+    property real convWobbleClickX:       0.0
+    property real convWobbleClickY:       0.0
+
+    property bool convSnapping:           false
+    property int  convSnappingLinkIndex:  -1
+    property real convSnapProgress:       0.0
+    property real convSnapX:              0.0
+    property real convSnapY:              0.0
+    property real convSnapFromX:          0.0
+    property real convSnapFromY:          0.0
+    property real convSnapToX:            0.0
+    property real convSnapToY:            0.0
+
+    onConvZoomChanged: convRequestRedraw()
+    onConvPanXChanged: convRequestRedraw()
+    onConvPanYChanged: convRequestRedraw()
 
     // linking preview state
     property bool linking: false
@@ -233,6 +275,40 @@ Item {
         NumberAnimation { id: zoomAnim; target: root; property: "zoom"; duration: 380; easing.type: Easing.InOutCubic }
         NumberAnimation { id: panXAnim; target: root; property: "panX"; duration: 380; easing.type: Easing.InOutCubic }
         NumberAnimation { id: panYAnim; target: root; property: "panY"; duration: 380; easing.type: Easing.InOutCubic }
+    }
+
+    ParallelAnimation {
+        id: convShowAllAnimation
+        NumberAnimation { id: convZoomAnim; target: root; property: "convZoom"; duration: 380; easing.type: Easing.InOutCubic }
+        NumberAnimation { id: convPanXAnim; target: root; property: "convPanX"; duration: 380; easing.type: Easing.InOutCubic }
+        NumberAnimation { id: convPanYAnim; target: root; property: "convPanY"; duration: 380; easing.type: Easing.InOutCubic }
+    }
+
+    function convShowAll() {
+        if (convNodesModel.count === 0) return
+        var minX = Infinity, maxX = -Infinity
+        var minY = Infinity, maxY = -Infinity
+        for (var i = 0; i < convNodesModel.count; i++) {
+            var n = convNodesModel.get(i)
+            minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x)
+            minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y)
+        }
+        var margin = 80
+        var contentW = (maxX - minX) + margin * 2
+        var contentH = (maxY - minY) + margin * 2
+        var sw = convStage.width, sh = convStage.height
+        var targetZoom
+        if (convNodesModel.count === 1 || contentW <= margin * 2 || contentH <= margin * 2) {
+            targetZoom = 1.0
+        } else {
+            targetZoom = Math.min(sw / contentW, sh / contentH)
+            targetZoom = Math.max(0.1, Math.min(targetZoom, 10.0))
+        }
+        var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+        convZoomAnim.to = targetZoom
+        convPanXAnim.to = sw / 2 - cx * targetZoom
+        convPanYAnim.to = sh / 2 - cy * targetZoom
+        convShowAllAnimation.start()
     }
 
     Timer {
@@ -303,6 +379,54 @@ Item {
         }
     }
 
+    Timer {
+        id: convWobbleTimer
+        interval: 16
+        repeat: true
+        running: root.convWobblingLinkIndex !== -1
+        onTriggered: {
+            root.convWobblePhase += 1.0
+            root.convWobbleAmplitude += (15.0 / (600 / 16))
+            if (root.convWobbleAmplitude >= 15.0) {
+                var toDelete = root.convWobblingLinkIndex
+                var lnk = convLinksModel.get(toDelete)
+                var nA = convNodesModel.get(lnk.from)
+                var nB = convNodesModel.get(lnk.to)
+                root.convSnapFromX = nA.x * root.convZoom + root.convPanX
+                root.convSnapFromY = nA.y * root.convZoom + root.convPanY
+                root.convSnapToX   = nB.x * root.convZoom + root.convPanX
+                root.convSnapToY   = nB.y * root.convZoom + root.convPanY
+                root.convSnapX     = root.convWobbleClickX
+                root.convSnapY     = root.convWobbleClickY
+                root.convSnappingLinkIndex = toDelete
+                root.convSnapProgress      = 0.0
+                root.convSnapping          = true
+                root.convCancelWobble()
+            } else {
+                root.convRequestRedraw()
+            }
+        }
+    }
+
+    Timer {
+        id: convSnapTimer
+        interval: 16
+        repeat: true
+        running: root.convSnapping
+        onTriggered: {
+            root.convSnapProgress += 16.0 / 250.0
+            if (root.convSnapProgress >= 1.0) {
+                var toDelete = root.convSnappingLinkIndex
+                root.convSnapping          = false
+                root.convSnappingLinkIndex = -1
+                root.convSnapProgress      = 0.0
+                root.convDeleteLink(toDelete)
+            } else {
+                root.convRequestRedraw()
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ persistence
 
     Connections {
@@ -320,6 +444,14 @@ Item {
             root.activeChapterId = 0
             root.nextChapterId = 1
             root.timecodeFormat = storyManager.getTimecodeFormat()
+
+            var convId = storyManager.ensureDefaultConversation()
+            var convs = storyManager.getConversations()
+            convTreesModel.clear()
+            for (var j = 0; j < convs.length; j++)
+                convTreesModel.append({ treeId: convs[j].id, treeName: convs[j].name })
+            root.activeConvTreeId = convId
+            root.loadConvFromDb(convId)
         }
         function onStoryChanged() {
             root.timecodeFormat = storyManager.getTimecodeFormat()
@@ -415,6 +547,266 @@ Item {
         root.saveToDb()
         root.networkId = newNetId
         root.loadFromDb(newNetId)
+    }
+
+    // ------------------------------------------------------------------ conversation persistence
+
+    function convRequestRedraw() { convCanvas.requestPaint() }
+
+    function collectConvTreeData() {
+        var nodes = []
+        for (var i = 0; i < convNodesModel.count; i++) {
+            var n = convNodesModel.get(i)
+            nodes.push({ id: n.id, x: n.x, y: n.y, name: n.name, nodeType: n.nodeType })
+        }
+        var links = []
+        for (var i = 0; i < convLinksModel.count; i++) {
+            var l = convLinksModel.get(i)
+            links.push({ from: l.from, to: l.to })
+        }
+        return JSON.stringify({
+            nodes: nodes, links: links,
+            zoom: root.convZoom, panX: root.convPanX, panY: root.convPanY,
+            nextNodeId: root.convNextNodeId
+        })
+    }
+
+    function saveConvToDb() {
+        if (root.activeConvTreeId !== -1)
+            storyManager.saveConversationData(root.activeConvTreeId, root.collectConvTreeData())
+    }
+
+    function loadConvFromDb(treeId) {
+        var raw = storyManager.loadConversationData(treeId)
+        var data
+        try { data = JSON.parse(raw) } catch(e) { data = {} }
+
+        convNodesModel.clear()
+        convLinksModel.clear()
+
+        var nodes = data.nodes || []
+        for (var i = 0; i < nodes.length; i++)
+            convNodesModel.append(nodes[i])
+
+        var links = data.links || []
+        for (var i = 0; i < links.length; i++)
+            convLinksModel.append(links[i])
+
+        root.convZoom = data.zoom !== undefined ? data.zoom : 1.0
+        root.convPanX = data.panX !== undefined ? data.panX : convStage.width  / 2
+        root.convPanY = data.panY !== undefined ? data.panY : convStage.height / 2
+        root.convNextNodeId = data.nextNodeId !== undefined ? data.nextNodeId : 0
+
+        // Every tree must have at least 1 enter and 1 exit node
+        var hasEnter = false, hasExit = false
+        for (var i = 0; i < convNodesModel.count; i++) {
+            var t = convNodesModel.get(i).nodeType
+            if (t === "enter") hasEnter = true
+            if (t === "exit")  hasExit  = true
+        }
+        if (!hasEnter) root.convAddNode(-80, 0, "enter")
+        if (!hasExit)  root.convAddNode( 80, 0, "exit")
+
+        root.convSelectedNodeIndex = -1
+        root.convRequestRedraw()
+    }
+
+    function switchToConvTree(treeId) {
+        if (treeId === root.activeConvTreeId) return
+        root.saveConvToDb()
+        root.activeConvTreeId = treeId
+        root.loadConvFromDb(treeId)
+    }
+
+    function createNewConvTree() {
+        root.saveConvToDb()
+        var newId = storyManager.createConversation("")
+        if (newId !== -1) {
+            convTreesModel.append({ treeId: newId, treeName: "" })
+            root.activeConvTreeId = newId
+            convNodesModel.clear()
+            convLinksModel.clear()
+            root.convZoom = 1.0
+            root.convPanX = convStage.width  / 2
+            root.convPanY = convStage.height / 2
+            root.convNextNodeId = 0
+            root.convAddNode(-80, 0, "enter")
+            root.convAddNode( 80, 0, "exit")
+            root.convRequestRedraw()
+        }
+    }
+
+    function deleteOrClearConvTree(treeId, idx) {
+        if (convTreesModel.count === 1) {
+            storyManager.saveConversationData(treeId, "{}")
+            convNodesModel.clear(); convLinksModel.clear()
+            root.convZoom = 1.0; root.convPanX = 0.0; root.convPanY = 0.0
+            root.convNextNodeId = 0
+            root.convAddNode(-80, 0, "enter")
+            root.convAddNode( 80, 0, "exit")
+            root.convRequestRedraw()
+        } else {
+            var wasActive = (root.activeConvTreeId === treeId)
+            storyManager.deleteConversation(treeId)
+            convTreesModel.remove(idx)
+            if (wasActive) {
+                var switchToId = convTreesModel.get(0).treeId
+                root.activeConvTreeId = switchToId
+                root.loadConvFromDb(switchToId)
+            }
+        }
+    }
+
+    function renameConvTreeInModel(treeId, name) {
+        storyManager.renameConversation(treeId, name)
+        for (var i = 0; i < convTreesModel.count; i++) {
+            if (convTreesModel.get(i).treeId === treeId) {
+                convTreesModel.setProperty(i, "treeName", name)
+                break
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ conversation helpers
+
+    function convAddNode(x, y, nodeType) {
+        var type = nodeType || "topic"
+        var baseNames = { "enter": "enter", "topic": "topic", "exit": "exit" }
+        var baseName = baseNames[type]
+        var count = 0
+        for (var i = 0; i < convNodesModel.count; i++)
+            if (convNodesModel.get(i).nodeType === type) count++
+        var name = count === 0 ? baseName : baseName + " " + (count + 1)
+        convNodesModel.append({ id: convNextNodeId, x: x, y: y, name: name, nodeType: type })
+        convNextNodeId++
+        convRequestRedraw()
+    }
+
+    function convRenameNode(idx, newName) {
+        if (idx >= 0 && idx < convNodesModel.count)
+            convNodesModel.setProperty(idx, "name", newName)
+    }
+
+    function convDeleteNode(idx) {
+        if (idx < 0 || idx >= convNodesModel.count) return
+        var nodeType = convNodesModel.get(idx).nodeType
+        if (nodeType === "enter" || nodeType === "exit") {
+            var count = 0
+            for (var i = 0; i < convNodesModel.count; i++)
+                if (convNodesModel.get(i).nodeType === nodeType) count++
+            if (count <= 1) return
+        }
+        if (convSelectedNodeIndex === idx)
+            root.convSelectedNodeIndex = -1
+        else if (convSelectedNodeIndex > idx)
+            root.convSelectedNodeIndex--
+        convLinking = false; convLinkingFromIndex = -1
+        convCancelWobble()
+        for (var i = convLinksModel.count - 1; i >= 0; i--) {
+            var L = convLinksModel.get(i)
+            if (L.from === idx || L.to === idx) {
+                convLinksModel.remove(i)
+            } else {
+                var nf = L.from > idx ? L.from - 1 : L.from
+                var nt = L.to   > idx ? L.to   - 1 : L.to
+                if (nf !== L.from || nt !== L.to) {
+                    convLinksModel.setProperty(i, "from", nf)
+                    convLinksModel.setProperty(i, "to",   nt)
+                }
+            }
+        }
+        convNodesModel.remove(idx)
+        convRequestRedraw()
+    }
+
+    function convMoveNode(idx, modelX, modelY) {
+        if (idx >= 0 && idx < convNodesModel.count) {
+            convNodesModel.setProperty(idx, "x", modelX)
+            convNodesModel.setProperty(idx, "y", modelY)
+            convRequestRedraw()
+        }
+    }
+
+    function convFindNodeAt(sceneX, sceneY) {
+        for (var i = convNodesModel.count - 1; i >= 0; i--) {
+            var item = convNodeRepeater.itemAt(i)
+            var nx = convNodesModel.get(i).x * root.convZoom + root.convPanX
+            var ny = convNodesModel.get(i).y * root.convZoom + root.convPanY
+            var w = item ? item.width / 2 : 20
+            var h = item ? item.height / 2 : 16
+            if (Math.abs(sceneX - nx) <= w && Math.abs(sceneY - ny) <= h) return i
+        }
+        return -1
+    }
+
+    function convFindLinkAt(sceneX, sceneY) {
+        for (var i = 0; i < convLinksModel.count; i++) {
+            var L = convLinksModel.get(i)
+            if (L.from < 0 || L.from >= convNodesModel.count) continue
+            if (L.to   < 0 || L.to   >= convNodesModel.count) continue
+            var nA = convNodesModel.get(L.from)
+            var nB = convNodesModel.get(L.to)
+            var ax = nA.x * root.convZoom + root.convPanX
+            var ay = nA.y * root.convZoom + root.convPanY
+            var bx = nB.x * root.convZoom + root.convPanX
+            var by = nB.y * root.convZoom + root.convPanY
+            var abx = bx - ax, aby = by - ay
+            var apx = sceneX - ax, apy = sceneY - ay
+            var len_sq = abx * abx + aby * aby
+            if (len_sq === 0) continue
+            var param = Math.max(0, Math.min(1, (apx * abx + apy * aby) / len_sq))
+            var dx = sceneX - (ax + param * abx)
+            var dy = sceneY - (ay + param * aby)
+            if (Math.sqrt(dx * dx + dy * dy) <= 15) return i
+        }
+        return -1
+    }
+
+    function convBeginLink(fromIdx, sceneX, sceneY) {
+        convLinking = true; convLinkingFromIndex = fromIdx
+        convLinkToX = sceneX; convLinkToY = sceneY
+        convRequestRedraw()
+    }
+
+    function convUpdateLink(sceneX, sceneY) {
+        if (!convLinking) return
+        convLinkToX = sceneX; convLinkToY = sceneY
+        convRequestRedraw()
+    }
+
+    function convEndLink(sceneX, sceneY) {
+        if (!convLinking) return
+        var targetIdx = convFindNodeAt(sceneX, sceneY)
+        if (targetIdx !== -1 && targetIdx !== convLinkingFromIndex) {
+            var exists = false
+            for (var i = 0; i < convLinksModel.count; i++) {
+                var L = convLinksModel.get(i)
+                if (L.from === convLinkingFromIndex && L.to === targetIdx) { exists = true; break }
+            }
+            if (!exists)
+                convLinksModel.append({ from: convLinkingFromIndex, to: targetIdx })
+        }
+        convLinking = false; convLinkingFromIndex = -1
+        convRequestRedraw()
+    }
+
+    function convDeleteLink(idx) {
+        if (idx >= 0 && idx < convLinksModel.count) {
+            convLinksModel.remove(idx)
+            convRequestRedraw()
+        }
+    }
+
+    function convBeginWobble(idx, clickX, clickY) {
+        convWobblingLinkIndex = idx
+        convWobblePhase = 0; convWobbleAmplitude = 0
+        convWobbleClickX = clickX; convWobbleClickY = clickY
+        convRequestRedraw()
+    }
+
+    function convCancelWobble() {
+        convWobblingLinkIndex = -1; convWobbleAmplitude = 0
+        convRequestRedraw()
     }
 
     function renameActiveNetworkInModel(name) {
@@ -913,6 +1305,83 @@ Item {
             anchors.left: parent.left
             anchors.leftMargin: 20
             visible: root.activeWorkspaceTab === 2
+        }
+
+        Item {
+            id: convPropsPanel
+            visible: root.activeWorkspaceTab === 2
+            anchors.top: conversationsHeading.bottom
+            anchors.topMargin: 16
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
+
+            Text {
+                anchors.centerIn: parent
+                text: "select a node\nto edit properties"
+                color: "#555555"
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignHCenter
+                visible: root.convSelectedNodeIndex < 0 ||
+                         root.convSelectedNodeIndex >= convNodesModel.count
+            }
+
+            Column {
+                visible: root.convSelectedNodeIndex >= 0 &&
+                         root.convSelectedNodeIndex < convNodesModel.count
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: 10
+
+                Text {
+                    text: {
+                        var idx = root.convSelectedNodeIndex
+                        if (idx < 0 || idx >= convNodesModel.count) return ""
+                        var t = convNodesModel.get(idx).nodeType
+                        return t === "enter" ? "entrance" : t === "exit" ? "exit" : "topic"
+                    }
+                    color: {
+                        var idx = root.convSelectedNodeIndex
+                        if (idx < 0 || idx >= convNodesModel.count) return "#555555"
+                        var t = convNodesModel.get(idx).nodeType
+                        return t === "enter" ? "#3DD68C" : t === "exit" ? "#ff7744" : "#aaaaaa"
+                    }
+                    font.pixelSize: 11
+                    font.bold: true
+                    font.capitalization: Font.AllUppercase
+                    font.letterSpacing: 1
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 32
+                    radius: 6
+                    color: "#2e2e33"
+
+                    TextInput {
+                        id: convNodeNameInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: "white"
+                        font.pixelSize: 13
+                        selectByMouse: true
+                        text: {
+                            var idx = root.convSelectedNodeIndex
+                            if (idx < 0 || idx >= convNodesModel.count) return ""
+                            return convNodesModel.get(idx).name
+                        }
+                        onEditingFinished: {
+                            root.convRenameNode(root.convSelectedNodeIndex, text)
+                            root.convRequestRedraw()
+                        }
+                    }
+                }
+            }
         }
 
         Text {
@@ -2647,6 +3116,276 @@ Item {
         visible: root.activeWorkspaceTab !== 0
     }
 
+    //
+    // Conversation workspace
+    //
+    Rectangle {
+        id: convStage
+        x: 360; y: 0
+        width: parent.width - 360 - 36
+        height: parent.height - 50
+        color: "#1a1a1d"
+        clip: true
+        focus: true
+        visible: root.activeWorkspaceTab === 2
+
+        PinchArea {
+            anchors.fill: parent
+            z: 0
+            onPinchUpdated: pinch => {
+                var oldZoom = root.convZoom
+                var zf = pinch.scale / pinch.previousScale
+                root.convZoom = Math.max(0.1, Math.min(root.convZoom * zf, 10.0))
+                var tx = (pinch.center.x - root.convPanX) / oldZoom
+                var ty = (pinch.center.y - root.convPanY) / oldZoom
+                root.convPanX = pinch.center.x - tx * root.convZoom
+                root.convPanY = pinch.center.y - ty * root.convZoom
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                property real lastPanX: 0
+                property real lastPanY: 0
+                property bool isPanning: false
+
+                onPressed: mouse => {
+                    if (mouse.button === Qt.RightButton) {
+                        var hitLink = root.convFindLinkAt(mouse.x, mouse.y)
+                        if (hitLink !== -1) root.convBeginWobble(hitLink, mouse.x, mouse.y)
+                    } else if (mouse.button === Qt.MiddleButton) {
+                        isPanning = true; lastPanX = mouse.x; lastPanY = mouse.y
+                    } else {
+                        convStage.forceActiveFocus()
+                        root.convSelectedNodeIndex = -1
+                    }
+                }
+                onPositionChanged: mouse => {
+                    if (isPanning) {
+                        root.convPanX += mouse.x - lastPanX; root.convPanY += mouse.y - lastPanY
+                        lastPanX = mouse.x; lastPanY = mouse.y
+                    } else if (root.convWobblingLinkIndex !== -1) {
+                        if (root.convFindLinkAt(mouse.x, mouse.y) !== root.convWobblingLinkIndex)
+                            root.convCancelWobble()
+                    }
+                }
+                onReleased: mouse => {
+                    if (mouse.button === Qt.RightButton) {
+                        if (root.convWobblingLinkIndex !== -1) root.convCancelWobble()
+                    } else if (mouse.button === Qt.MiddleButton) {
+                        isPanning = false
+                    }
+                }
+                onDoubleClicked: mouse => {
+                    if (mouse.button === Qt.LeftButton) {
+                        var hit = root.convFindNodeAt(mouse.x, mouse.y)
+                        if (hit === -1) {
+                            var mx = (mouse.x - root.convPanX) / root.convZoom
+                            var my = (mouse.y - root.convPanY) / root.convZoom
+                            root.convAddNode(mx, my, "topic")
+                        }
+                    }
+                }
+                onWheel: wheel => {
+                    if (wheel.modifiers & Qt.ControlModifier) {
+                        var delta = wheel.angleDelta.y
+                        if (delta === 0) delta = wheel.angleDelta.x
+                        var oldZoom = root.convZoom
+                        var zf = 1.0 + (delta / 1200.0)
+                        if (zf < 0.1) zf = 0.1
+                        root.convZoom = Math.max(0.1, Math.min(root.convZoom * zf, 10.0))
+                        var targetX = (wheel.x - root.convPanX) / oldZoom
+                        var targetY = (wheel.y - root.convPanY) / oldZoom
+                        root.convPanX = wheel.x - targetX * root.convZoom
+                        root.convPanY = wheel.y - targetY * root.convZoom
+                    } else {
+                        if (wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0) {
+                            root.convPanX += wheel.pixelDelta.x
+                            root.convPanY += wheel.pixelDelta.y
+                        } else {
+                            root.convPanX += wheel.angleDelta.x
+                            root.convPanY += wheel.angleDelta.y
+                        }
+                    }
+                    wheel.accepted = true
+                }
+            }
+        }
+
+        Canvas {
+            id: convCanvas
+            anchors.fill: parent
+            antialiasing: true
+            z: 1
+
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+
+                // Draw permanent links
+                for (var i = 0; i < convLinksModel.count; i++) {
+                    if (i === root.convSnappingLinkIndex) continue
+                    var L = convLinksModel.get(i)
+                    if (L.from < 0 || L.from >= convNodesModel.count) continue
+                    if (L.to   < 0 || L.to   >= convNodesModel.count) continue
+                    var nA = convNodesModel.get(L.from)
+                    var nB = convNodesModel.get(L.to)
+                    var ax = nA.x * root.convZoom + root.convPanX
+                    var ay = nA.y * root.convZoom + root.convPanY
+                    var bx = nB.x * root.convZoom + root.convPanX
+                    var by = nB.y * root.convZoom + root.convPanY
+
+                    ctx.beginPath()
+
+                    if (root.convWobblingLinkIndex === i) {
+                        var abx = bx - ax, aby = by - ay
+                        var wlen = Math.sqrt(abx * abx + aby * aby)
+                        if (wlen > 0) {
+                            var wnx = -aby / wlen, wny = abx / wlen
+                            ctx.moveTo(ax, ay)
+                            var segs = Math.floor(wlen / 4)
+                            for (var j = 1; j <= segs; j++) {
+                                var wt = j / segs
+                                var wx = ax + abx * wt, wy = ay + aby * wt
+                                var wave = Math.sin(wt * wlen * 0.1 - root.convWobblePhase) * root.convWobbleAmplitude
+                                wave *= Math.sin(wt * Math.PI)
+                                ctx.lineTo(wx + wnx * wave, wy + wny * wave)
+                            }
+                        } else {
+                            ctx.moveTo(ax, ay); ctx.lineTo(bx, by)
+                        }
+                        var df = Math.min(1.0, root.convWobbleAmplitude / 15.0)
+                        var pr = Math.floor(0x5D + df * (0xff - 0x5D))
+                        var pg = Math.floor(0xA9 + df * (0x44 - 0xA9))
+                        var pb = Math.floor(0xA4 + df * (0x44 - 0xA4))
+                        ctx.strokeStyle = "rgb(" + pr + "," + pg + "," + pb + ")"
+                        ctx.lineWidth = 2 + df
+                    } else {
+                        ctx.moveTo(ax, ay); ctx.lineTo(bx, by)
+                        ctx.strokeStyle = "#5DA9A4"
+                        ctx.lineWidth = 2
+                    }
+                    ctx.stroke()
+
+                    // Arrowhead at midpoint on straight links
+                    if (root.convWobblingLinkIndex !== i) {
+                        var ldx = bx - ax, ldy = by - ay
+                        var llen = Math.sqrt(ldx * ldx + ldy * ldy)
+                        if (llen > 0) {
+                            var lux = ldx / llen, luy = ldy / llen
+                            var lpx = -luy, lpy = lux
+                            var amx = (ax + bx) / 2, amy = (ay + by) / 2
+                            var as = 7
+                            ctx.fillStyle = "#5DA9A4"
+                            ctx.beginPath()
+                            ctx.moveTo(amx + lux * as, amy + luy * as)
+                            ctx.lineTo(amx - lux * (as * 0.5) + lpx * (as * 0.6),
+                                       amy - luy * (as * 0.5) + lpy * (as * 0.6))
+                            ctx.lineTo(amx - lux * (as * 0.5) - lpx * (as * 0.6),
+                                       amy - luy * (as * 0.5) - lpy * (as * 0.6))
+                            ctx.closePath()
+                            ctx.fill()
+                        }
+                    }
+                }
+
+                // Snap retraction stubs
+                if (root.convSnapping) {
+                    var eased = 1.0 - Math.pow(1.0 - root.convSnapProgress, 2.0)
+                    ctx.strokeStyle = "#ff4444"; ctx.lineWidth = 2
+                    ctx.beginPath()
+                    ctx.moveTo(root.convSnapFromX, root.convSnapFromY)
+                    ctx.lineTo(root.convSnapX + (root.convSnapFromX - root.convSnapX) * eased,
+                               root.convSnapY + (root.convSnapFromY - root.convSnapY) * eased)
+                    ctx.stroke()
+                    ctx.beginPath()
+                    ctx.moveTo(root.convSnapToX, root.convSnapToY)
+                    ctx.lineTo(root.convSnapX + (root.convSnapToX - root.convSnapX) * eased,
+                               root.convSnapY + (root.convSnapToY - root.convSnapY) * eased)
+                    ctx.stroke()
+                }
+
+                // Dashed temp link while dragging
+                if (root.convLinking && root.convLinkingFromIndex >= 0 &&
+                    root.convLinkingFromIndex < convNodesModel.count) {
+                    var fn = convNodesModel.get(root.convLinkingFromIndex)
+                    ctx.save()
+                    ctx.lineWidth = 2
+                    ctx.setLineDash([4, 4])
+                    ctx.strokeStyle = "#80cfff"
+                    ctx.beginPath()
+                    ctx.moveTo(fn.x * root.convZoom + root.convPanX,
+                               fn.y * root.convZoom + root.convPanY)
+                    ctx.lineTo(root.convLinkToX, root.convLinkToY)
+                    ctx.stroke()
+                    ctx.restore()
+                }
+            }
+        }
+
+        Repeater {
+            id: convNodeRepeater
+            model: convNodesModel
+
+            delegate: ConvNodeItem {
+                z: 2
+                nodeIndex: index
+                nodeType: model.nodeType
+
+                onDragMove: (mx, my) => root.convMoveNode(nodeIndex, mx, my)
+                onBeginLinkDrag: (idx, sx, sy) => root.convBeginLink(idx, sx, sy)
+                onContinueLinkDrag: (sx, sy) => root.convUpdateLink(sx, sy)
+                onEndLinkDrag: (sx, sy) => root.convEndLink(sx, sy)
+                onNodeSelected: root.convSelectedNodeIndex = nodeIndex
+                onNodeDeleted: root.convDeleteNode(nodeIndex)
+            }
+        }
+
+        Item {
+            id: convShowAllBtn
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 8
+            width: 36
+            height: 36
+            z: 10
+
+            property bool hovered: false
+
+            Rectangle {
+                anchors.fill: parent
+                radius: 12
+                color: "transparent"
+                border.width: 2
+                border.color: convShowAllBtn.hovered ? "#80cfff" : "white"
+                Behavior on border.color { ColorAnimation { duration: 150 } }
+            }
+
+            Image {
+                id: convShowAllIcon
+                anchors.centerIn: parent
+                width: 22; height: 22
+                fillMode: Image.PreserveAspectFit
+                source: "icons/showall.svg"
+                visible: false
+            }
+
+            ColorOverlay {
+                anchors.fill: convShowAllIcon
+                source: convShowAllIcon
+                color: "white"
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onEntered: convShowAllBtn.hovered = true
+                onExited:  convShowAllBtn.hovered = false
+                onClicked: root.convShowAll()
+            }
+        }
+    }
+
     KeyboardVisualizer {
         id: keyboardViz
         x: 360
@@ -2728,6 +3467,151 @@ Item {
                         anchors.fill: parent
                         onClicked: root.activeWorkspaceTab = index
                     }
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ Conversation tree bar
+    //
+    Item {
+        id: convTreeBar
+        visible: root.activeWorkspaceTab === 2
+        x: leftPanel.width + 8
+        y: 8
+        z: 20
+
+        Row {
+            id: convTreeBtnRow
+            spacing: 4
+
+            Repeater {
+                id: convTreeBtnRepeater
+                model: convTreesModel
+
+                delegate: Item {
+                    id: convTreeBtn
+                    property bool isActive: model.treeId === root.activeConvTreeId
+                    property bool isEditing: false
+                    property real deleteProgress: 0.0
+
+                    NumberAnimation {
+                        id: convTreeDeleteAnim
+                        target: convTreeBtn; property: "deleteProgress"
+                        to: 1.0; duration: 1200; easing.type: Easing.Linear
+                        onFinished: {
+                            if (convTreeBtn.deleteProgress >= 1.0)
+                                root.deleteOrClearConvTree(model.treeId, index)
+                        }
+                    }
+
+                    Text { id: convTreeNameMeasure; visible: false; text: model.treeName; font.pixelSize: 12 }
+                    property real labelW: Math.max(36, convTreeNameMeasure.contentWidth + 24)
+
+                    width:  isEditing ? Math.max(80, labelW) : (model.treeName !== "" ? labelW : 36)
+                    height: 36
+                    Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 12
+                        color: convTreeBtn.isActive ? "white" : "transparent"
+                        border.width: 2
+                        border.color: convTreeBtn.deleteProgress > 0
+                            ? Qt.rgba(1, 1 - convTreeBtn.deleteProgress, 1 - convTreeBtn.deleteProgress, 1)
+                            : "white"
+                        Behavior on color        { ColorAnimation { duration: 150 } }
+                        Behavior on border.color { ColorAnimation { duration: 80  } }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent; radius: 12
+                        color: "#ff4444"; opacity: convTreeBtn.deleteProgress * 0.75
+                        visible: convTreeBtn.deleteProgress > 0
+                    }
+
+                    // Name display
+                    Text {
+                        anchors.centerIn: parent
+                        text: model.treeName
+                        font.pixelSize: 12; font.bold: true
+                        color: convTreeBtn.isActive ? "#1a1a1d" : "white"
+                        visible: !convTreeBtn.isEditing && model.treeName !== ""
+                    }
+
+                    // Conversation icon (shown when unnamed)
+                    Image {
+                        id: convTreeIcon
+                        anchors.centerIn: parent
+                        width: 18; height: 18
+                        fillMode: Image.PreserveAspectFit
+                        source: "icons/conversation.svg"
+                        visible: false
+                    }
+                    ColorOverlay {
+                        anchors.fill: convTreeIcon
+                        source: convTreeIcon
+                        color: convTreeBtn.isActive ? "#1a1a1d" : "white"
+                        visible: !convTreeBtn.isEditing && model.treeName === ""
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    // Inline rename input
+                    TextInput {
+                        id: convTreeNameEdit
+                        anchors.centerIn: parent
+                        width: parent.width - 16
+                        horizontalAlignment: TextInput.AlignHCenter
+                        color: convTreeBtn.isActive ? "#1a1a1d" : "white"
+                        font.pixelSize: 12; font.bold: true
+                        visible: convTreeBtn.isEditing
+                        text: model.treeName
+                        selectByMouse: true
+                        onEditingFinished: {
+                            convTreeBtn.isEditing = false
+                            root.renameConvTreeInModel(model.treeId, text)
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: mouse => {
+                            if (mouse.button === Qt.LeftButton)
+                                root.switchToConvTree(model.treeId)
+                        }
+                        onDoubleClicked: mouse => {
+                            if (mouse.button === Qt.LeftButton && convTreeBtn.isActive) {
+                                convTreeBtn.isEditing = true
+                                convTreeNameEdit.forceActiveFocus()
+                                convTreeNameEdit.selectAll()
+                            }
+                        }
+                        onPressed: mouse => {
+                            if (mouse.button === Qt.RightButton) convTreeDeleteAnim.start()
+                        }
+                        onReleased: mouse => {
+                            if (mouse.button === Qt.RightButton) {
+                                convTreeDeleteAnim.stop(); convTreeBtn.deleteProgress = 0.0
+                            }
+                        }
+                    }
+                }
+            }
+
+            // "+" button
+            Item {
+                width: 36; height: 36
+                Rectangle {
+                    anchors.fill: parent; radius: 12
+                    color: "transparent"; border.width: 2; border.color: "white"
+                }
+                Text {
+                    anchors.centerIn: parent
+                    text: "+"; font.pixelSize: 18; font.bold: true; color: "white"
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.createNewConvTree()
                 }
             }
         }
@@ -3922,6 +4806,171 @@ Item {
             font.bold: true
             color: "#1a1a1d"
             visible: !root.draggingCircleImage
+        }
+    }
+
+    //
+    // Conversation node component
+    //
+    component ConvNodeItem: Item {
+        id: convNode
+
+        property int    nodeIndex: -1
+        property string nodeType:  "topic"   // "enter" | "topic" | "exit"
+        property bool   isEditing: false
+        property bool   isDeleting: false
+        property real   deleteProgress: 0.0
+
+        signal dragMove(real modelX, real modelY)
+        signal beginLinkDrag(int idx, real sceneX, real sceneY)
+        signal continueLinkDrag(real sceneX, real sceneY)
+        signal endLinkDrag(real sceneX, real sceneY)
+        signal nodeSelected()
+        signal nodeDeleted()
+
+        property string nodeFillColor:  nodeType === "enter" ? "#3DD68C" : nodeType === "exit" ? "#ff7744" : "#2e2e33"
+        property string nodeBorderColor: "#ffffff"
+        property string nodeTextColor:   nodeType === "topic" ? "#ffffff" : "#1a1a1d"
+
+        Timer {
+            id: convDeleteTimer
+            interval: 16; repeat: true
+            onTriggered: {
+                convNode.deleteProgress += 16.0 / 1200.0
+                if (convNode.deleteProgress >= 1.0) {
+                    running = false
+                    convNode.isDeleting = true
+                    convNode.nodeDeleted()
+                }
+            }
+        }
+
+        function modelX() { return convNodesModel.get(nodeIndex) ? convNodesModel.get(nodeIndex).x : 0 }
+        function modelY() { return convNodesModel.get(nodeIndex) ? convNodesModel.get(nodeIndex).y : 0 }
+        function screenX() { return modelX() * root.convZoom + root.convPanX }
+        function screenY() { return modelY() * root.convZoom + root.convPanY }
+
+        property real baseWidth: Math.max(40, convNameInput.contentWidth + 24)
+        property real baseHeight: 32
+
+        x: screenX() - width / 2
+        y: screenY() - height / 2
+        width:  isEditing ? baseWidth + 40 : baseWidth
+        height: baseHeight
+
+        Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+
+        scale: convMa.containsMouse && !isEditing ? 1.15 : 1.0
+        Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+
+        property bool draggingNode: false
+        property bool draggingLink: false
+        property real grabOffsetX: 0
+        property real grabOffsetY: 0
+
+        Rectangle {
+            id: convBgRect
+            anchors.fill: parent
+            radius: height / 2
+            color: convNode.nodeFillColor
+            border.width: convMa.containsMouse || convNode.isEditing ? 8 : 2
+            border.color: convNode.nodeBorderColor
+            Behavior on border.width { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+            Behavior on border.color { ColorAnimation { duration: 150 } }
+            Behavior on color        { ColorAnimation { duration: 150 } }
+
+            Rectangle {
+                anchors.fill: parent; radius: parent.radius
+                color: "#ff3333"; opacity: convNode.deleteProgress
+            }
+        }
+
+        TextInput {
+            id: convNameInput
+            anchors.centerIn: parent
+            text: {
+                var m = convNodesModel.get(nodeIndex)
+                return m ? m.name : ""
+            }
+            color: convNode.nodeTextColor
+            Behavior on color { ColorAnimation { duration: 150 } }
+            font.pixelSize: 12
+            enabled: convNode.isEditing
+            horizontalAlignment: TextInput.AlignHCenter
+            selectByMouse: true
+            onEditingFinished: {
+                if (!convNode.isDeleting) {
+                    convNode.isEditing = false
+                    root.convRenameNode(convNode.nodeIndex, text)
+                    root.convRequestRedraw()
+                }
+            }
+        }
+
+        MouseArea {
+            id: convMa
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+
+            onPressed: mouse => {
+                if (convNode.isDeleting) return
+                if (mouse.button === Qt.RightButton) {
+                    mouse.accepted = true
+                    convDeleteTimer.start()
+                    return
+                }
+                var sp = convMa.mapToItem(convStage, mouse.x, mouse.y)
+                root.convSelectedNodeIndex = convNode.nodeIndex
+                convNode.nodeSelected()
+                var cx = convNode.width / 2, cy = convNode.height / 2
+                var normX = (mouse.x - cx) / (convNode.width  / 2)
+                var normY = (mouse.y - cy) / (convNode.height / 2)
+                var dist  = Math.sqrt(normX * normX + normY * normY)
+                if (dist > 0.6) {
+                    convNode.draggingLink = true; convNode.draggingNode = false
+                    convNode.beginLinkDrag(convNode.nodeIndex, sp.x, sp.y)
+                } else {
+                    convNode.draggingNode = true; convNode.draggingLink = false
+                    convNode.grabOffsetX = sp.x - convNode.screenX()
+                    convNode.grabOffsetY = sp.y - convNode.screenY()
+                }
+                mouse.accepted = true
+            }
+
+            onPositionChanged: mouse => {
+                if (convNode.isDeleting) return
+                var sp = convMa.mapToItem(convStage, mouse.x, mouse.y)
+                if (convNode.draggingNode) {
+                    convNode.dragMove(
+                        (sp.x - convNode.grabOffsetX - root.convPanX) / root.convZoom,
+                        (sp.y - convNode.grabOffsetY - root.convPanY) / root.convZoom
+                    )
+                } else if (convNode.draggingLink) {
+                    convNode.continueLinkDrag(sp.x, sp.y)
+                }
+            }
+
+            onReleased: mouse => {
+                if (convNode.isDeleting) return
+                if (mouse.button === Qt.RightButton) {
+                    convDeleteTimer.stop(); convNode.deleteProgress = 0.0; return
+                }
+                if (convNode.draggingNode) {
+                    convNode.draggingNode = false
+                } else if (convNode.draggingLink) {
+                    var sp = convMa.mapToItem(convStage, mouse.x, mouse.y)
+                    convNode.draggingLink = false
+                    convNode.endLinkDrag(sp.x, sp.y)
+                }
+            }
+
+            onDoubleClicked: mouse => {
+                if (convNode.isDeleting || mouse.button === Qt.RightButton) return
+                convNode.draggingNode = false; convNode.draggingLink = false
+                convNode.isEditing = true
+                convNameInput.forceActiveFocus(); convNameInput.selectAll()
+            }
         }
     }
 
