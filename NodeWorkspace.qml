@@ -42,13 +42,15 @@ Item {
         id: chaptersModel
     }
 
-    // convNodesModel rows: { id:int, x:real, y:real, name:string, nodeType:string }
-    // nodeType: "enter" | "topic" | "exit"
+    // convNodesModel rows: { id:int, x:real, y:real, name:string, nodeType:string, sources:string }
+    // nodeType: "enter" | "topic" | "exit" — sources is a JSON array string
     ListModel { id: convNodesModel }
     // convLinksModel rows: { from:int, to:int } — directed, from→to
     ListModel { id: convLinksModel }
     // convTreesModel rows: { treeId:int, treeName:string }
     ListModel { id: convTreesModel }
+    // convNodeSourcesModel: live source rows for the currently selected node
+    ListModel { id: convNodeSourcesModel }
 
     property int nextNodeId: 0
     property int activeChapterId: 0
@@ -557,7 +559,7 @@ Item {
         var nodes = []
         for (var i = 0; i < convNodesModel.count; i++) {
             var n = convNodesModel.get(i)
-            nodes.push({ id: n.id, x: n.x, y: n.y, name: n.name, nodeType: n.nodeType })
+            nodes.push({ id: n.id, x: n.x, y: n.y, name: n.name, nodeType: n.nodeType, sources: n.sources || "[]" })
         }
         var links = []
         for (var i = 0; i < convLinksModel.count; i++) {
@@ -604,8 +606,10 @@ Item {
             if (t === "enter") hasEnter = true
             if (t === "exit")  hasExit  = true
         }
+        var wasEmpty = !hasEnter && !hasExit && convNodesModel.count === 0
         if (!hasEnter) root.convAddNode(-80, 0, "enter")
         if (!hasExit)  root.convAddNode( 80, 0, "exit")
+        if (wasEmpty)  convLinksModel.append({ from: 0, to: 1 })
 
         root.convSelectedNodeIndex = -1
         root.convRequestRedraw()
@@ -632,6 +636,7 @@ Item {
             root.convNextNodeId = 0
             root.convAddNode(-80, 0, "enter")
             root.convAddNode( 80, 0, "exit")
+            convLinksModel.append({ from: 0, to: 1 })
             root.convRequestRedraw()
         }
     }
@@ -644,6 +649,7 @@ Item {
             root.convNextNodeId = 0
             root.convAddNode(-80, 0, "enter")
             root.convAddNode( 80, 0, "exit")
+            convLinksModel.append({ from: 0, to: 1 })
             root.convRequestRedraw()
         } else {
             var wasActive = (root.activeConvTreeId === treeId)
@@ -677,7 +683,7 @@ Item {
         for (var i = 0; i < convNodesModel.count; i++)
             if (convNodesModel.get(i).nodeType === type) count++
         var name = count === 0 ? baseName : baseName + " " + (count + 1)
-        convNodesModel.append({ id: convNextNodeId, x: x, y: y, name: name, nodeType: type })
+        convNodesModel.append({ id: convNextNodeId, x: x, y: y, name: name, nodeType: type, sources: "[]" })
         convNextNodeId++
         convRequestRedraw()
     }
@@ -810,6 +816,44 @@ Item {
     function convCancelWobble() {
         convWobblingLinkIndex = -1; convWobbleAmplitude = 0
         convRequestRedraw()
+    }
+
+    function convLoadNodeSources(idx) {
+        convNodeSourcesModel.clear()
+        if (idx < 0 || idx >= convNodesModel.count) return
+        var raw = convNodesModel.get(idx).sources || "[]"
+        var arr
+        try { arr = JSON.parse(raw) } catch(e) { arr = [] }
+        for (var i = 0; i < arr.length; i++) {
+            convNodeSourcesModel.append({
+                srcCondition:    arr[i].srcCondition    || "else",
+                srcCondVar:      arr[i].srcCondVar      || "",
+                srcCondOp:       arr[i].srcCondOp       || "is",
+                srcCondVal:      arr[i].srcCondVal      || "",
+                srcWhereNetId:   arr[i].srcWhereNetId   !== undefined ? arr[i].srcWhereNetId : -1,
+                srcWhereCharName:arr[i].srcWhereCharName|| "",
+                srcWhereOp:      arr[i].srcWhereOp      || "is at",
+                srcWhereNodeName:arr[i].srcWhereNodeName|| "",
+                srcFilePath:     arr[i].srcFilePath     || ""
+            })
+        }
+    }
+
+    function convSaveNodeSources() {
+        var idx = root.convSelectedNodeIndex
+        if (idx < 0 || idx >= convNodesModel.count) return
+        var arr = []
+        for (var i = 0; i < convNodeSourcesModel.count; i++) {
+            var r = convNodeSourcesModel.get(i)
+            arr.push({
+                srcCondition: r.srcCondition, srcCondVar: r.srcCondVar,
+                srcCondOp: r.srcCondOp, srcCondVal: r.srcCondVal,
+                srcWhereNetId: r.srcWhereNetId, srcWhereCharName: r.srcWhereCharName,
+                srcWhereOp: r.srcWhereOp, srcWhereNodeName: r.srcWhereNodeName,
+                srcFilePath: r.srcFilePath
+            })
+        }
+        convNodesModel.setProperty(idx, "sources", JSON.stringify(arr))
     }
 
     function convChangeNodeType(idx, newType) {
@@ -1311,24 +1355,22 @@ Item {
             visible: root.activeWorkspaceTab === 1
         }
 
-        Text {
-            id: conversationsHeading
-            text: "conversations"
-            font.pixelSize: 24
-            font.bold: true
-            color: "white"
-            anchors.top: parent.top
-            anchors.topMargin: 20
-            anchors.left: parent.left
-            anchors.leftMargin: 20
-            visible: root.activeWorkspaceTab === 2
+        FileDialog {
+            id: convNodeSrcDialog
+            title: "select video"
+            nameFilters: ["Video files (*.mp4 *.mov *.avi *.mkv *.webm *.m4v *.mpg *.mpeg)"]
+            property int targetSourceIdx: -1
+            onAccepted: {
+                convNodeSourcesModel.setProperty(targetSourceIdx, "srcFilePath", selectedFile.toString())
+                root.convSaveNodeSources()
+            }
         }
 
         Item {
             id: convPropsPanel
             visible: root.activeWorkspaceTab === 2
-            anchors.top: conversationsHeading.bottom
-            anchors.topMargin: 16
+            anchors.top: parent.top
+            anchors.topMargin: 10
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -1345,157 +1387,596 @@ Item {
                          root.convSelectedNodeIndex >= convNodesModel.count
             }
 
-            Column {
-                id: convPropsColumn
+            ScrollView {
+                id: convPropsScrollView
                 visible: root.convSelectedNodeIndex >= 0 &&
                          root.convSelectedNodeIndex < convNodesModel.count
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                spacing: 10
+                anchors.fill: parent
+                clip: true
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-                // Whether the selected node's type can be changed without
-                // violating the "at least one enter and one exit" constraint.
-                property bool typeChangeable: {
-                    var idx = root.convSelectedNodeIndex
-                    if (idx < 0 || idx >= convNodesModel.count) return true
-                    var t = convNodesModel.get(idx).nodeType
-                    if (t === "topic") return true
-                    var count = 0
-                    for (var i = 0; i < convNodesModel.count; i++)
-                        if (convNodesModel.get(i).nodeType === t) count++
-                    return count > 1
-                }
+                Column {
+                    id: convPropsColumn
+                    width: convPropsScrollView.availableWidth
+                    spacing: 10
 
-                Text {
-                    text: {
+                    // Whether the selected node's type can be changed without
+                    // violating the "at least one enter and one exit" constraint.
+                    property bool typeChangeable: {
                         var idx = root.convSelectedNodeIndex
-                        if (idx < 0 || idx >= convNodesModel.count) return ""
+                        if (idx < 0 || idx >= convNodesModel.count) return true
                         var t = convNodesModel.get(idx).nodeType
-                        return t === "enter" ? "entrance" : t === "exit" ? "exit" : "topic"
-                    }
-                    color: {
-                        var idx = root.convSelectedNodeIndex
-                        if (idx < 0 || idx >= convNodesModel.count) return "#555555"
-                        var t = convNodesModel.get(idx).nodeType
-                        return t === "enter" ? "#3DD68C" : t === "exit" ? "#ff7744" : "#aaaaaa"
-                    }
-                    font.pixelSize: 11
-                    font.bold: true
-                    font.capitalization: Font.AllUppercase
-                    font.letterSpacing: 1
-                }
-
-                ComboBox {
-                    id: convNodeTypeCombo
-                    width: parent.width
-                    height: 32
-                    model: ["enter", "topic", "exit"]
-                    enabled: convPropsColumn.typeChangeable
-                    opacity: convPropsColumn.typeChangeable ? 1.0 : 0.35
-                    Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                    onActivated: index => {
-                        root.convChangeNodeType(root.convSelectedNodeIndex,
-                                                ["enter", "topic", "exit"][index])
+                        if (t === "topic") return true
+                        var count = 0
+                        for (var i = 0; i < convNodesModel.count; i++)
+                            if (convNodesModel.get(i).nodeType === t) count++
+                        return count > 1
                     }
 
-                    background: Rectangle {
-                        radius: 6
-                        color: "#2e2e33"
-                        border.width: 1
-                        border.color: convNodeTypeCombo.pressed ? "#80cfff" : "#555555"
-                        Behavior on border.color { ColorAnimation { duration: 150 } }
-                    }
+                    RowLayout {
+                        width: parent.width
+                        height: 22
 
-                    contentItem: Text {
-                        leftPadding: 10
-                        text: convNodeTypeCombo.displayText
-                        color: "white"
-                        font.pixelSize: 13
-                        verticalAlignment: Text.AlignVCenter
-                    }
-
-                    indicator: Text {
-                        x: convNodeTypeCombo.width - width - 10
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "▾"
-                        color: "#888888"
-                        font.pixelSize: 11
-                    }
-
-                    popup: Popup {
-                        y: convNodeTypeCombo.height + 2
-                        width: convNodeTypeCombo.width
-                        padding: 4
-
-                        background: Rectangle {
-                            radius: 6
-                            color: "#2e2e33"
-                            border.width: 1
-                            border.color: "#555555"
-                        }
-
-                        contentItem: ListView {
-                            clip: true
-                            implicitHeight: contentHeight
-                            model: convNodeTypeCombo.delegateModel
-                        }
-                    }
-
-                    delegate: ItemDelegate {
-                        width: convNodeTypeCombo.width - 8
-                        height: 30
-                        contentItem: Text {
-                            text: modelData
-                            color: "white"
-                            font.pixelSize: 13
+                        Text {
+                            Layout.fillWidth: true
+                            text: {
+                                var idx = root.convSelectedNodeIndex
+                                if (idx < 0 || idx >= convNodesModel.count) return ""
+                                var t = convNodesModel.get(idx).nodeType
+                                return t === "enter" ? "entrance" : t === "exit" ? "exit" : "topic"
+                            }
+                            color: {
+                                var idx = root.convSelectedNodeIndex
+                                if (idx < 0 || idx >= convNodesModel.count) return "#555555"
+                                var t = convNodesModel.get(idx).nodeType
+                                return t === "enter" ? "#3DD68C" : t === "exit" ? "#ff7744" : "#aaaaaa"
+                            }
+                            font.pixelSize: 11
+                            font.bold: true
+                            font.capitalization: Font.AllUppercase
+                            font.letterSpacing: 1
                             verticalAlignment: Text.AlignVCenter
                         }
-                        background: Rectangle {
-                            radius: 4
-                            color: hovered ? "#3a3a42" : "transparent"
+
+                        ComboBox {
+                            id: convNodeTypeCombo
+                            Layout.preferredWidth: 86
+                            Layout.preferredHeight: 22
+                            model: ["enter", "topic", "exit"]
+                            enabled: convPropsColumn.typeChangeable
+                            opacity: convPropsColumn.typeChangeable ? 1.0 : 0.35
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                            onActivated: index => {
+                                root.convChangeNodeType(root.convSelectedNodeIndex,
+                                                        ["enter", "topic", "exit"][index])
+                            }
+
+                            background: Rectangle {
+                                radius: 4
+                                color: "#2e2e33"
+                                border.width: 1
+                                border.color: convNodeTypeCombo.pressed ? "#80cfff" : "#555555"
+                                Behavior on border.color { ColorAnimation { duration: 150 } }
+                            }
+
+                            contentItem: Text {
+                                leftPadding: 8
+                                text: convNodeTypeCombo.displayText
+                                color: "white"
+                                font.pixelSize: 11
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            indicator: Text {
+                                x: convNodeTypeCombo.width - width - 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "▾"
+                                color: "#888888"
+                                font.pixelSize: 10
+                            }
+
+                            popup: Popup {
+                                y: convNodeTypeCombo.height + 2
+                                width: convNodeTypeCombo.width
+                                padding: 2
+
+                                background: Rectangle {
+                                    radius: 4
+                                    color: "#2e2e33"
+                                    border.width: 1
+                                    border.color: "#555555"
+                                }
+
+                                contentItem: ListView {
+                                    clip: true
+                                    implicitHeight: contentHeight
+                                    model: convNodeTypeCombo.delegateModel
+                                }
+                            }
+
+                            delegate: ItemDelegate {
+                                width: convNodeTypeCombo.width - 4
+                                height: 24
+                                contentItem: Text {
+                                    text: modelData
+                                    color: "white"
+                                    font.pixelSize: 11
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 6
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: hovered ? "#3a3a42" : "transparent"
+                                }
+                            }
                         }
                     }
-                }
 
-                // Sync ComboBox to whichever node is now selected
-                Connections {
-                    target: root
-                    function onConvSelectedNodeIndexChanged() {
-                        var idx = root.convSelectedNodeIndex
-                        if (idx >= 0 && idx < convNodesModel.count) {
-                            var t = convNodesModel.get(idx).nodeType
-                            convNodeTypeCombo.currentIndex = t === "enter" ? 0 : t === "exit" ? 2 : 1
-                        } else {
-                            convNodeTypeCombo.currentIndex = 1
-                        }
-                    }
-                }
-
-                Rectangle {
-                    width: parent.width
-                    height: 32
-                    radius: 6
-                    color: "#2e2e33"
-
-                    TextInput {
-                        id: convNodeNameInput
-                        anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
-                        verticalAlignment: TextInput.AlignVCenter
-                        color: "white"
-                        font.pixelSize: 13
-                        selectByMouse: true
-                        text: {
+                    // Sync ComboBox and source list to whichever node is now selected
+                    Connections {
+                        target: root
+                        function onConvSelectedNodeIndexChanged() {
                             var idx = root.convSelectedNodeIndex
-                            if (idx < 0 || idx >= convNodesModel.count) return ""
-                            return convNodesModel.get(idx).name
+                            if (idx >= 0 && idx < convNodesModel.count) {
+                                var t = convNodesModel.get(idx).nodeType
+                                convNodeTypeCombo.currentIndex = t === "enter" ? 0 : t === "exit" ? 2 : 1
+                            } else {
+                                convNodeTypeCombo.currentIndex = 1
+                            }
+                            root.convLoadNodeSources(idx)
                         }
-                        onEditingFinished: {
-                            root.convRenameNode(root.convSelectedNodeIndex, text)
-                            root.convRequestRedraw()
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 32
+                        radius: 6
+                        color: "#2e2e33"
+
+                        TextInput {
+                            id: convNodeNameInput
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            verticalAlignment: TextInput.AlignVCenter
+                            color: "white"
+                            font.pixelSize: 13
+                            selectByMouse: true
+                            text: {
+                                var idx = root.convSelectedNodeIndex
+                                if (idx < 0 || idx >= convNodesModel.count) return ""
+                                return convNodesModel.get(idx).name
+                            }
+                            Keys.onReturnPressed: focus = false
+                            Keys.onEscapePressed: focus = false
+                            onEditingFinished: {
+                                root.convRenameNode(root.convSelectedNodeIndex, text)
+                                root.convRequestRedraw()
+                            }
+                        }
+                    }
+
+                    // — sources ——————————————————————————————————————————————
+                    Text {
+                        text: "sources"
+                        font.pixelSize: 11
+                        font.bold: true
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 1
+                        color: "#555555"
+                    }
+
+                    // Empty state: show a black drop zone + "+" to add first source
+                    RowLayout {
+                        visible: convNodeSourcesModel.count === 0
+                        width: parent.width
+                        height: 26
+                        spacing: 4
+
+                        Rectangle {
+                            Layout.fillWidth: true; Layout.preferredHeight: 26
+                            color: "black"; radius: 4
+                            Image {
+                                id: convSrcEmptyIcon; anchors.centerIn: parent
+                                width: 20; height: 20
+                                source: "icons/dropvideo.svg"
+                                fillMode: Image.PreserveAspectFit; visible: false
+                            }
+                            ColorOverlay {
+                                anchors.fill: convSrcEmptyIcon; source: convSrcEmptyIcon
+                                color: "#666"
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 4
+                            property bool hov: false
+                            color: hov ? "white" : "transparent"
+                            border.color: "white"; border.width: 1
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                            Text {
+                                anchors.centerIn: parent; anchors.horizontalCenterOffset: -0.5
+                                text: "+"; font.pixelSize: 18; font.bold: true
+                                color: parent.hov ? "darkslategrey" : "white"
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                            }
+                            MouseArea {
+                                anchors.fill: parent; hoverEnabled: true
+                                onEntered: parent.hov = true; onExited: parent.hov = false
+                                onClicked: {
+                                    convNodeSourcesModel.append({
+                                        srcCondition: "else",
+                                        srcCondVar: "", srcCondOp: "is", srcCondVal: "",
+                                        srcWhereNetId: -1, srcWhereCharName: "",
+                                        srcWhereOp: "is at", srcWhereNodeName: "",
+                                        srcFilePath: ""
+                                    })
+                                    root.convSaveNodeSources()
+                                }
+                            }
+                        }
+                    }
+
+                    // Populated source rows
+                    Column {
+                        visible: convNodeSourcesModel.count > 0
+                        width: parent.width
+                        spacing: 4
+
+                        Repeater {
+                            model: convNodeSourcesModel
+                            delegate: Item {
+                                id: convSrcRow
+                                width: parent ? parent.width : 0
+                                height: convSrcInnerCol.height
+                                property int rowIdx: index
+                                property real deleteProgress: 0.0
+
+                                NumberAnimation {
+                                    id: convSrcDeleteAnim
+                                    target: convSrcRow; property: "deleteProgress"
+                                    to: 1.0; duration: 1200; easing.type: Easing.Linear
+                                    onFinished: {
+                                        if (convSrcRow.deleteProgress >= 1.0) {
+                                            convNodeSourcesModel.remove(convSrcRow.rowIdx)
+                                            root.convSaveNodeSources()
+                                        }
+                                    }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent; z: 10
+                                    acceptedButtons: Qt.RightButton
+                                    enabled: srcCondition !== "else"
+                                    onPressed: mouse => { convSrcRow.deleteProgress = 0; convSrcDeleteAnim.start() }
+                                    onReleased: mouse => { convSrcDeleteAnim.stop(); convSrcRow.deleteProgress = 0 }
+                                    onExited: { convSrcDeleteAnim.stop(); convSrcRow.deleteProgress = 0 }
+                                }
+                                Rectangle {
+                                    anchors.fill: parent; z: 9; radius: 4
+                                    color: "#ff4444"; enabled: false
+                                    opacity: convSrcRow.deleteProgress * 0.75
+                                    visible: convSrcRow.deleteProgress > 0
+                                }
+
+                                Column {
+                                    id: convSrcInnerCol
+                                    width: parent.width
+                                    spacing: 4
+
+                                    RowLayout {
+                                        visible: srcCondition !== "else"
+                                        width: parent.width
+                                        height: 26
+                                        spacing: 4
+
+                                        ComboBox {
+                                            id: convSrcCondCombo
+                                            Layout.preferredWidth: 62; Layout.preferredHeight: 26
+                                            model: {
+                                                var hv = storyManager.getVariables().length > 0
+                                                var hn = networksModel.count > 0
+                                                var opts = []
+                                                if (hv) opts.push("if")
+                                                if (hn) opts.push("where")
+                                                if (convSrcRow.rowIdx === convNodeSourcesModel.count - 1) opts.push("else")
+                                                if (opts.length === 0) opts.push("else")
+                                                return opts
+                                            }
+                                            currentIndex: Math.max(0, model.indexOf(srcCondition))
+                                            onActivated: function(ai) {
+                                                convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcCondition", convSrcCondCombo.model[ai])
+                                                root.convSaveNodeSources()
+                                            }
+                                            contentItem: Text { leftPadding: 6; rightPadding: 18; text: parent.displayText; font.pixelSize: 11; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                            indicator: Text { x: parent.width - width - 5; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 10; color: "white" }
+                                            HoverHandler { id: convSrcCondHover }
+                                            background: Rectangle { radius: 4; color: "transparent"; border.color: convSrcCondHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                            delegate: ItemDelegate { width: parent ? parent.width : 62; height: 22; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 6; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                            popup: Popup { y: parent.height + 2; width: parent.width; height: convSrcCondCombo.model.length * 22 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                            contentItem: ListView { clip: true; model: convSrcCondCombo.delegateModel; currentIndex: convSrcCondCombo.currentIndex } }
+                                        }
+
+                                        ComboBox {
+                                            id: convSrcCondVarCombo
+                                            visible: srcCondition === "if"
+                                            Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                            model: { var vars = storyManager.getVariables(); var names = [""]; for (var i = 0; i < vars.length; i++) if (vars[i].varName !== "") names.push(vars[i].varName); return names }
+                                            currentIndex: Math.max(0, model.indexOf(srcCondVar))
+                                            onActivated: function(ai) { convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcCondVar", convSrcCondVarCombo.model[ai] || ""); root.convSaveNodeSources() }
+                                            contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                            indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                            HoverHandler { id: convSrcCondVarHover }
+                                            background: Rectangle { radius: 4; color: "transparent"; border.color: convSrcCondVarHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                            delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                            popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(convSrcCondVarCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                            contentItem: ListView { clip: true; model: convSrcCondVarCombo.delegateModel; currentIndex: convSrcCondVarCombo.currentIndex } }
+                                        }
+
+                                        ComboBox {
+                                            id: convSrcCondOpCombo
+                                            visible: srcCondition === "if"
+                                            Layout.preferredWidth: 44; Layout.preferredHeight: 26
+                                            model: { var vars = storyManager.getVariables(); var vt = ""; for (var i = 0; i < vars.length; i++) { if (vars[i].varName === srcCondVar) { vt = vars[i].varType; break } } return (vt === "int" || vt === "float") ? ["is","not",">","<"] : ["is","not"] }
+                                            currentIndex: Math.max(0, model.indexOf(srcCondOp || "is"))
+                                            onActivated: function(ai) { convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcCondOp", convSrcCondOpCombo.model[ai]); root.convSaveNodeSources() }
+                                            contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                            indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                            HoverHandler { id: convSrcCondOpHover }
+                                            background: Rectangle { radius: 4; color: "transparent"; border.color: convSrcCondOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                            delegate: ItemDelegate { width: parent ? parent.width : 44; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                            popup: Popup { y: parent.height + 2; width: parent.width; height: convSrcCondOpCombo.model.length * 20 + 2; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                            contentItem: ListView { clip: true; model: convSrcCondOpCombo.delegateModel; currentIndex: convSrcCondOpCombo.currentIndex } }
+                                        }
+
+                                        Item {
+                                            visible: srcCondition === "if"
+                                            Layout.fillWidth: true; Layout.preferredHeight: 26
+                                            Rectangle {
+                                                anchors.fill: parent; radius: 4; color: "transparent"; border.color: "white"; border.width: 1
+                                                TextInput {
+                                                    anchors.left: parent.left; anchors.right: parent.right
+                                                    anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                    text: srcCondVal || ""
+                                                    Keys.onReturnPressed: focus = false
+                                                    Keys.onEscapePressed: focus = false
+                                                    onEditingFinished: { convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcCondVal", text); root.convSaveNodeSources() }
+                                                }
+                                            }
+                                        }
+
+                                        ComboBox {
+                                            id: convSrcWhereNetCombo
+                                            visible: srcCondition === "where"
+                                            Layout.preferredWidth: 44; Layout.preferredHeight: 26
+                                            model: {
+                                                var arr = []
+                                                for (var i = 0; i < networksModel.count; i++)
+                                                    arr.push({ id: networksModel.get(i).netId, name: networksModel.get(i).netName, color: networksModel.get(i).netColor })
+                                                return arr
+                                            }
+                                            currentIndex: {
+                                                var m = model; var id = srcWhereNetId
+                                                for (var i = 0; i < m.length; i++) { if (m[i].id === id) return i }
+                                                if (m.length > 0 && id < 0) {
+                                                    var _rid = convSrcRow.rowIdx; var _fid = m[0].id
+                                                    Qt.callLater(function() { convNodeSourcesModel.setProperty(_rid, "srcWhereNetId", _fid); root.convSaveNodeSources() })
+                                                }
+                                                return 0
+                                            }
+                                            onActivated: function(ai) {
+                                                var m = model
+                                                if (ai >= 0 && ai < m.length) {
+                                                    convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcWhereNetId", m[ai].id)
+                                                    convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcWhereCharName", "")
+                                                    convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcWhereNodeName", "")
+                                                    root.convSaveNodeSources()
+                                                }
+                                            }
+                                            contentItem: Item {
+                                                anchors.fill: parent
+                                                Item {
+                                                    id: convNetIconBox
+                                                    anchors.left: parent.left; anchors.leftMargin: 6
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    width: 14; height: 14
+                                                    Image { id: convNetIconImg; anchors.fill: parent; source: "icons/nodenetwork.svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                                    ColorOverlay {
+                                                        anchors.fill: parent; source: convNetIconImg
+                                                        color: { var m = convSrcWhereNetCombo.model; var idx = convSrcWhereNetCombo.currentIndex; if (idx < 0 || idx >= m.length) return "white"; var c = m[idx].color; return (c && c !== "#2e2e33") ? c : "white" }
+                                                    }
+                                                }
+                                                Text {
+                                                    anchors.left: convNetIconBox.right; anchors.leftMargin: 5
+                                                    anchors.right: parent.right; anchors.rightMargin: 16
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: { var m = convSrcWhereNetCombo.model; var idx = convSrcWhereNetCombo.currentIndex; if (idx < 0 || idx >= m.length) return ""; return m[idx].name || "" }
+                                                    font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                    visible: text !== ""
+                                                }
+                                            }
+                                            indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                            HoverHandler { id: convSrcWhereNetHover }
+                                            background: Rectangle { radius: 4; color: "transparent"; border.color: convSrcWhereNetHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                            delegate: ItemDelegate {
+                                                id: convNetDelegate
+                                                width: convSrcWhereNetCombo.popup.width; height: 26; padding: 0
+                                                contentItem: Item {
+                                                    anchors.fill: parent
+                                                    Item {
+                                                        id: convNetDelIconBox
+                                                        anchors.left: parent.left; anchors.leftMargin: 8
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        width: 14; height: 14
+                                                        Image { id: convNetDelIconImg; anchors.fill: parent; source: "icons/nodenetwork.svg"; fillMode: Image.PreserveAspectFit; visible: false }
+                                                        ColorOverlay { anchors.fill: parent; source: convNetDelIconImg; color: { var c = modelData ? modelData.color : ""; return (c && c !== "#2e2e33") ? c : "white" } }
+                                                    }
+                                                    Text {
+                                                        anchors.left: convNetDelIconBox.right; anchors.leftMargin: 6
+                                                        anchors.right: parent.right; anchors.rightMargin: 6
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        text: (modelData && modelData.name) ? modelData.name : ""
+                                                        font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                                    }
+                                                }
+                                                background: Rectangle { color: (convNetDelegate.highlighted || convNetDelegate.hovered) ? "#477B78" : "transparent" }
+                                            }
+                                            popup: Popup { y: parent.height + 2; width: Math.max(convSrcWhereNetCombo.width, 120); height: Math.min(networksModel.count * 26 + 2, 132); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                            contentItem: ListView { clip: true; model: convSrcWhereNetCombo.delegateModel; currentIndex: convSrcWhereNetCombo.currentIndex } }
+                                        }
+
+                                        ComboBox {
+                                            id: convSrcWhereCharCombo
+                                            visible: srcCondition === "where"
+                                            Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                            model: {
+                                                var netId = srcWhereNetId
+                                                if (netId === -1 && networksModel.count > 0) netId = networksModel.get(0).netId
+                                                if (netId === -1) return []
+                                                if (netId === root.networkId) {
+                                                    var live = []
+                                                    for (var ci = 0; ci < charactersModel.count; ci++) live.push(charactersModel.get(ci).charName)
+                                                    return live
+                                                }
+                                                return storyManager.getNetworkCharacterNames(netId)
+                                            }
+                                            currentIndex: {
+                                                var m = model; var n = srcWhereCharName
+                                                for (var i = 0; i < m.length; i++) { if (m[i] === n) return i }
+                                                if (m.length > 0) {
+                                                    var _rid = convSrcRow.rowIdx; var _fn = m[0]
+                                                    Qt.callLater(function() { convNodeSourcesModel.setProperty(_rid, "srcWhereCharName", _fn); root.convSaveNodeSources() })
+                                                }
+                                                return 0
+                                            }
+                                            onActivated: function(ai) { convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcWhereCharName", convSrcWhereCharCombo.model[ai] || ""); root.convSaveNodeSources() }
+                                            contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                            indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                            HoverHandler { id: convSrcWhereCharHover }
+                                            background: Rectangle { radius: 4; color: "transparent"; border.color: convSrcWhereCharHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                            delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                            popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(convSrcWhereCharCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                            contentItem: ListView { clip: true; model: convSrcWhereCharCombo.delegateModel; currentIndex: convSrcWhereCharCombo.currentIndex } }
+                                        }
+
+                                        ComboBox {
+                                            id: convSrcWhereOpCombo
+                                            visible: srcCondition === "where"
+                                            Layout.preferredWidth: 50; Layout.preferredHeight: 26
+                                            model: ["is at", "not at"]
+                                            currentIndex: srcWhereOp === "not at" ? 1 : 0
+                                            onActivated: function(ai) { convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcWhereOp", model[ai]); root.convSaveNodeSources() }
+                                            contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                            indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                            HoverHandler { id: convSrcWhereOpHover }
+                                            background: Rectangle { radius: 4; color: "transparent"; border.color: convSrcWhereOpHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                            delegate: ItemDelegate { width: parent ? parent.width : 50; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                            popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 50); height: 42; padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                            contentItem: ListView { clip: true; model: convSrcWhereOpCombo.delegateModel; currentIndex: convSrcWhereOpCombo.currentIndex } }
+                                        }
+
+                                        ComboBox {
+                                            id: convSrcWhereNodeCombo
+                                            visible: srcCondition === "where"
+                                            Layout.fillWidth: true; Layout.preferredWidth: 0; Layout.minimumWidth: 0; Layout.preferredHeight: 26
+                                            model: {
+                                                var netId = srcWhereNetId
+                                                if (netId === -1 && networksModel.count > 0) netId = networksModel.get(0).netId
+                                                if (netId === -1) return []
+                                                if (netId === root.networkId) {
+                                                    var live = []
+                                                    for (var ni = 0; ni < nodesModel.count; ni++) live.push(nodesModel.get(ni).name)
+                                                    return live
+                                                }
+                                                return storyManager.getNetworkNodeNames(netId)
+                                            }
+                                            currentIndex: { var m = model; var n = srcWhereNodeName; for (var i = 0; i < m.length; i++) { if (m[i] === n) return i } if (m.length > 0) { var _rid = convSrcRow.rowIdx; var _fn = m[0]; Qt.callLater(function() { convNodeSourcesModel.setProperty(_rid, "srcWhereNodeName", _fn); root.convSaveNodeSources() }) } return 0 }
+                                            onActivated: function(ai) { convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcWhereNodeName", convSrcWhereNodeCombo.model[ai] || ""); root.convSaveNodeSources() }
+                                            contentItem: Text { leftPadding: 4; rightPadding: 14; text: parent.displayText; font.pixelSize: 10; color: "white"; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                            indicator: Text { x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter; text: "▾"; font.pixelSize: 9; color: "white" }
+                                            HoverHandler { id: convSrcWhereNodeHover }
+                                            background: Rectangle { radius: 4; color: "transparent"; border.color: convSrcWhereNodeHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                            delegate: ItemDelegate { width: parent ? parent.width : 60; height: 20; padding: 0; contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                            background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" } }
+                                            popup: Popup { y: parent.height + 2; width: Math.max(parent.width, 80); height: Math.min(convSrcWhereNodeCombo.model.length * 20 + 2, 102); padding: 1; background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                            contentItem: ListView { clip: true; model: convSrcWhereNodeCombo.delegateModel; currentIndex: convSrcWhereNodeCombo.currentIndex } }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        width: parent.width
+                                        height: 26
+                                        spacing: 4
+
+                                        Rectangle {
+                                            visible: srcCondition === "else"
+                                            Layout.preferredWidth: 62; Layout.preferredHeight: 26
+                                            color: "transparent"; radius: 4; border.color: "white"; border.width: 1
+                                            Text { anchors.centerIn: parent; text: "else"; font.pixelSize: 11; color: "white"; verticalAlignment: Text.AlignVCenter }
+                                        }
+
+                                        Rectangle {
+                                            Layout.fillWidth: true; Layout.preferredHeight: 26
+                                            color: "black"; radius: 4
+                                            Image {
+                                                id: convMultiSrcIcon; anchors.centerIn: parent; width: 20; height: 20
+                                                source: "icons/dropvideo.svg"; fillMode: Image.PreserveAspectFit; visible: false
+                                            }
+                                            ColorOverlay {
+                                                anchors.fill: convMultiSrcIcon; source: convMultiSrcIcon; color: "#666"
+                                                opacity: srcFilePath !== "" ? 0.3 : 1.0
+                                                Behavior on opacity { NumberAnimation { duration: 100 } }
+                                            }
+                                            Text {
+                                                anchors.fill: parent; anchors.margins: 4
+                                                text: srcFilePath.replace(/.*\//, ""); color: "white"; font.pixelSize: 10
+                                                elide: Text.ElideMiddle; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: { convNodeSrcDialog.targetSourceIdx = convSrcRow.rowIdx; convNodeSrcDialog.open() }
+                                            }
+                                            DropArea {
+                                                anchors.fill: parent
+                                                onDropped: drop => {
+                                                    if (drop.hasUrls) {
+                                                        convNodeSourcesModel.setProperty(convSrcRow.rowIdx, "srcFilePath", drop.urls[0].toString())
+                                                        root.convSaveNodeSources()
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            visible: convSrcRow.rowIdx === convNodeSourcesModel.count - 1
+                                            Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 4
+                                            property bool hov: false
+                                            color: hov ? "white" : "transparent"; border.color: "white"; border.width: 1
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                            Text { anchors.centerIn: parent; anchors.horizontalCenterOffset: -0.5; text: "+"; font.pixelSize: 18; font.bold: true; color: parent.hov ? "darkslategrey" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
+                                            MouseArea {
+                                                anchors.fill: parent; hoverEnabled: true
+                                                onEntered: parent.hov = true; onExited: parent.hov = false
+                                                onClicked: {
+                                                    convNodeSourcesModel.insert(convNodeSourcesModel.count - 1, {
+                                                        srcCondition: "if", srcCondVar: "", srcCondOp: "is", srcCondVal: "",
+                                                        srcWhereNetId: -1, srcWhereCharName: "", srcWhereOp: "is at", srcWhereNodeName: "",
+                                                        srcFilePath: ""
+                                                    })
+                                                    root.convSaveNodeSources()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
