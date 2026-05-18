@@ -867,6 +867,12 @@ Item {
             if (count <= 1) return
         }
         convNodesModel.setProperty(idx, "nodeType", newType)
+        // enter nodes can't be targets; exit nodes can't be sources — prune stale links
+        for (var j = convLinksModel.count - 1; j >= 0; j--) {
+            var lnk = convLinksModel.get(j)
+            if (newType === "enter" && lnk.to   === idx) convLinksModel.remove(j)
+            else if (newType === "exit"  && lnk.from === idx) convLinksModel.remove(j)
+        }
         convRequestRedraw()
     }
 
