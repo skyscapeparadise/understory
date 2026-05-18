@@ -778,13 +778,16 @@ Item {
         if (!convLinking) return
         var targetIdx = convFindNodeAt(sceneX, sceneY)
         if (targetIdx !== -1 && targetIdx !== convLinkingFromIndex) {
-            var exists = false
-            for (var i = 0; i < convLinksModel.count; i++) {
-                var L = convLinksModel.get(i)
-                if (L.from === convLinkingFromIndex && L.to === targetIdx) { exists = true; break }
+            var targetType = convNodesModel.get(targetIdx).nodeType
+            if (targetType !== "enter") {
+                var exists = false
+                for (var i = 0; i < convLinksModel.count; i++) {
+                    var L = convLinksModel.get(i)
+                    if (L.from === convLinkingFromIndex && L.to === targetIdx) { exists = true; break }
+                }
+                if (!exists)
+                    convLinksModel.append({ from: convLinkingFromIndex, to: targetIdx })
             }
-            if (!exists)
-                convLinksModel.append({ from: convLinkingFromIndex, to: targetIdx })
         }
         convLinking = false; convLinkingFromIndex = -1
         convRequestRedraw()
@@ -806,6 +809,20 @@ Item {
 
     function convCancelWobble() {
         convWobblingLinkIndex = -1; convWobbleAmplitude = 0
+        convRequestRedraw()
+    }
+
+    function convChangeNodeType(idx, newType) {
+        if (idx < 0 || idx >= convNodesModel.count) return
+        var currentType = convNodesModel.get(idx).nodeType
+        if (currentType === newType) return
+        if (currentType === "enter" || currentType === "exit") {
+            var count = 0
+            for (var i = 0; i < convNodesModel.count; i++)
+                if (convNodesModel.get(i).nodeType === currentType) count++
+            if (count <= 1) return
+        }
+        convNodesModel.setProperty(idx, "nodeType", newType)
         convRequestRedraw()
     }
 
@@ -1329,12 +1346,26 @@ Item {
             }
 
             Column {
+                id: convPropsColumn
                 visible: root.convSelectedNodeIndex >= 0 &&
                          root.convSelectedNodeIndex < convNodesModel.count
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
                 spacing: 10
+
+                // Whether the selected node's type can be changed without
+                // violating the "at least one enter and one exit" constraint.
+                property bool typeChangeable: {
+                    var idx = root.convSelectedNodeIndex
+                    if (idx < 0 || idx >= convNodesModel.count) return true
+                    var t = convNodesModel.get(idx).nodeType
+                    if (t === "topic") return true
+                    var count = 0
+                    for (var i = 0; i < convNodesModel.count; i++)
+                        if (convNodesModel.get(i).nodeType === t) count++
+                    return count > 1
+                }
 
                 Text {
                     text: {
@@ -1353,6 +1384,93 @@ Item {
                     font.bold: true
                     font.capitalization: Font.AllUppercase
                     font.letterSpacing: 1
+                }
+
+                ComboBox {
+                    id: convNodeTypeCombo
+                    width: parent.width
+                    height: 32
+                    model: ["enter", "topic", "exit"]
+                    enabled: convPropsColumn.typeChangeable
+                    opacity: convPropsColumn.typeChangeable ? 1.0 : 0.35
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                    onActivated: index => {
+                        root.convChangeNodeType(root.convSelectedNodeIndex,
+                                                ["enter", "topic", "exit"][index])
+                    }
+
+                    background: Rectangle {
+                        radius: 6
+                        color: "#2e2e33"
+                        border.width: 1
+                        border.color: convNodeTypeCombo.pressed ? "#80cfff" : "#555555"
+                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                    }
+
+                    contentItem: Text {
+                        leftPadding: 10
+                        text: convNodeTypeCombo.displayText
+                        color: "white"
+                        font.pixelSize: 13
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    indicator: Text {
+                        x: convNodeTypeCombo.width - width - 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "▾"
+                        color: "#888888"
+                        font.pixelSize: 11
+                    }
+
+                    popup: Popup {
+                        y: convNodeTypeCombo.height + 2
+                        width: convNodeTypeCombo.width
+                        padding: 4
+
+                        background: Rectangle {
+                            radius: 6
+                            color: "#2e2e33"
+                            border.width: 1
+                            border.color: "#555555"
+                        }
+
+                        contentItem: ListView {
+                            clip: true
+                            implicitHeight: contentHeight
+                            model: convNodeTypeCombo.delegateModel
+                        }
+                    }
+
+                    delegate: ItemDelegate {
+                        width: convNodeTypeCombo.width - 8
+                        height: 30
+                        contentItem: Text {
+                            text: modelData
+                            color: "white"
+                            font.pixelSize: 13
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        background: Rectangle {
+                            radius: 4
+                            color: hovered ? "#3a3a42" : "transparent"
+                        }
+                    }
+                }
+
+                // Sync ComboBox to whichever node is now selected
+                Connections {
+                    target: root
+                    function onConvSelectedNodeIndexChanged() {
+                        var idx = root.convSelectedNodeIndex
+                        if (idx >= 0 && idx < convNodesModel.count) {
+                            var t = convNodesModel.get(idx).nodeType
+                            convNodeTypeCombo.currentIndex = t === "enter" ? 0 : t === "exit" ? 2 : 1
+                        } else {
+                            convNodeTypeCombo.currentIndex = 1
+                        }
+                    }
                 }
 
                 Rectangle {
@@ -4828,9 +4946,17 @@ Item {
         signal nodeSelected()
         signal nodeDeleted()
 
-        property string nodeFillColor:  nodeType === "enter" ? "#3DD68C" : nodeType === "exit" ? "#ff7744" : "#2e2e33"
+        property string nodeFillColor:   nodeType === "enter" ? "#3DD68C" : nodeType === "exit" ? "#ff7744" : "#2e2e33"
         property string nodeBorderColor: "#ffffff"
         property string nodeTextColor:   nodeType === "topic" ? "#ffffff" : "#1a1a1d"
+
+        property bool canDelete: {
+            if (nodeType === "topic") return true
+            var count = 0
+            for (var i = 0; i < convNodesModel.count; i++)
+                if (convNodesModel.get(i).nodeType === nodeType) count++
+            return count > 1
+        }
 
         Timer {
             id: convDeleteTimer
@@ -4917,7 +5043,7 @@ Item {
                 if (convNode.isDeleting) return
                 if (mouse.button === Qt.RightButton) {
                     mouse.accepted = true
-                    convDeleteTimer.start()
+                    if (convNode.canDelete) convDeleteTimer.start()
                     return
                 }
                 var sp = convMa.mapToItem(convStage, mouse.x, mouse.y)
@@ -4927,7 +5053,7 @@ Item {
                 var normX = (mouse.x - cx) / (convNode.width  / 2)
                 var normY = (mouse.y - cy) / (convNode.height / 2)
                 var dist  = Math.sqrt(normX * normX + normY * normY)
-                if (dist > 0.6) {
+                if (dist > 0.6 && convNode.nodeType !== "exit") {
                     convNode.draggingLink = true; convNode.draggingNode = false
                     convNode.beginLinkDrag(convNode.nodeIndex, sp.x, sp.y)
                 } else {
