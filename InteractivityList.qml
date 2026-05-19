@@ -155,17 +155,18 @@ Item {
             spacing: 4
 
             Text {
-                text: "interactivity"
+                text: root.hideTabs ? "actions" : "interactivity"
                 font.pixelSize: 11
                 font.capitalization: Font.AllUppercase
                 font.letterSpacing: 1
                 color: "white"
+                opacity: root.hideTabs ? 0.7 : 1.0
                 verticalAlignment: Text.AlignVCenter
                 Layout.rightMargin: 4
             }
 
             Repeater {
-                model: ["click", "hover"]
+                model: root.hideTabs ? [] : ["click", "hover"]
                 delegate: Rectangle {
                     Layout.preferredWidth: 36
                     Layout.preferredHeight: 18
@@ -240,8 +241,8 @@ Item {
                 Item {
                     id: interactivityDelegate
                     width: parent ? parent.width : 0
-                    height: itemTrigger === root.currentTab ? innerCol.height : 0
-                    visible: itemTrigger === root.currentTab
+                    height: (itemTrigger === root.currentTab || root.hideTabs) ? innerCol.height : 0
+                    visible: itemTrigger === root.currentTab || root.hideTabs
                     property int listIdx: index
                     property real deleteProgress: 0.0
                     property string condVarType: {
@@ -1986,4 +1987,5 @@ Item {
     }
 
     property string currentTab: "click"
+    property bool hideTabs: false
 }

@@ -6189,10 +6189,13 @@ Window {
 
                             onClicked: {
                                 if (togglable) {
-                                    if (modelData === "conditions")
+                                    if (modelData === "conditions") {
                                         sceneEditorButtons.conditionsOpen = !sceneEditorButtons.conditionsOpen;
-                                    else if (modelData === "variables")
+                                        if (sceneEditorButtons.conditionsOpen) sceneEditorButtons.variablesOpen = false;
+                                    } else if (modelData === "variables") {
                                         sceneEditorButtons.variablesOpen = !sceneEditorButtons.variablesOpen;
+                                        if (sceneEditorButtons.variablesOpen) sceneEditorButtons.conditionsOpen = false;
+                                    }
                                 } else if (modelData === "story map") {
                                     var opening = !sceneEditorButtons.timelineOpen;
                                     sceneEditorButtons.timelineOpen = opening;
@@ -11528,6 +11531,355 @@ Window {
                     border.color: "white"
                     border.width: 2
 
+                    // ── State ───────────────────────────────────────────────
+                    property int activeConditionId: -1
+                    property int nextCondId: 1
+                    property int conditionsRevision: 0
+                    property int prevConditionSceneId: -1
+
+                    ListModel { id: conditionsModel }
+                    ListModel { id: conditionActionsModel }
+
+                    Connections {
+                        target: conditionsModel
+                        function onCountChanged()   { sceneSettings.conditionsRevision++ }
+                        function onDataChanged()    { sceneSettings.conditionsRevision++ }
+                        function onRowsInserted()   { sceneSettings.conditionsRevision++ }
+                        function onRowsRemoved()    { sceneSettings.conditionsRevision++ }
+                        function onModelReset()     { sceneSettings.conditionsRevision++ }
+                    }
+
+                    function findCondIdx(id) {
+                        for (var i = 0; i < conditionsModel.count; i++) {
+                            if (conditionsModel.get(i).condId === id) return i
+                        }
+                        return -1
+                    }
+
+                    // ── Serialize / load helpers ─────────────────────────────
+                    function serializeActions(mdl) {
+                        var items = []
+                        for (var i = 0; i < mdl.count; i++) {
+                            var e = mdl.get(i)
+                            items.push({
+                                itemTrigger: e.itemTrigger, itemAction: e.itemAction,
+                                itemCommand: e.itemCommand, itemTransition: e.itemTransition,
+                                itemTransitionSpeed: e.itemTransitionSpeed,
+                                itemWipeFeather: e.itemWipeFeather, itemWipeDirection: e.itemWipeDirection,
+                                itemPushDirection: e.itemPushDirection,
+                                itemLookYaw: e.itemLookYaw, itemLookPitch: e.itemLookPitch,
+                                itemLookFovMM: e.itemLookFovMM, itemLookOvershoot: e.itemLookOvershoot,
+                                itemLookShutter: e.itemLookShutter,
+                                itemTargetSceneId: e.itemTargetSceneId, itemTargetSceneName: e.itemTargetSceneName,
+                                itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
+                                itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
+                                itemVideoPath: e.itemVideoPath, itemVideoTarget: e.itemVideoTarget,
+                                itemUpdateVar: e.itemUpdateVar, itemUpdateOp: e.itemUpdateOp,
+                                itemUpdateVal: e.itemUpdateVal,
+                                itemWhereNetworkId: e.itemWhereNetworkId, itemWhereCharName: e.itemWhereCharName,
+                                itemWhereOp: e.itemWhereOp, itemWhereNodeName: e.itemWhereNodeName,
+                                itemWhenChapterId: e.itemWhenChapterId, itemWhenOp: e.itemWhenOp,
+                                itemWhenSeconds: e.itemWhenSeconds, itemWhenFormat: e.itemWhenFormat,
+                                itemWhenTC: e.itemWhenTC
+                            })
+                        }
+                        return JSON.stringify(items)
+                    }
+
+                    function loadActionsInto(mdl, json) {
+                        mdl.clear()
+                        var items = []
+                        try { items = JSON.parse(json || "[]") } catch(e) {}
+                        for (var i = 0; i < items.length; i++) {
+                            var e = items[i]
+                            mdl.append({
+                                itemTrigger: e.itemTrigger || "condition",
+                                itemAction: e.itemAction || "cue",
+                                itemCommand: e.itemCommand || "jump",
+                                itemTransition: e.itemTransition || "cut",
+                                itemTransitionSpeed: e.itemTransitionSpeed !== undefined ? e.itemTransitionSpeed : 1.0,
+                                itemWipeFeather: e.itemWipeFeather !== undefined ? e.itemWipeFeather : 0.0,
+                                itemWipeDirection: e.itemWipeDirection || "right",
+                                itemPushDirection: e.itemPushDirection || "right",
+                                itemLookYaw: e.itemLookYaw !== undefined ? e.itemLookYaw : 90.0,
+                                itemLookPitch: e.itemLookPitch !== undefined ? e.itemLookPitch : 0.0,
+                                itemLookFovMM: e.itemLookFovMM !== undefined ? e.itemLookFovMM : 24.0,
+                                itemLookOvershoot: e.itemLookOvershoot !== undefined ? e.itemLookOvershoot : 1.0,
+                                itemLookShutter: e.itemLookShutter !== undefined ? e.itemLookShutter : 0.10,
+                                itemTargetSceneId: e.itemTargetSceneId !== undefined ? e.itemTargetSceneId : -1,
+                                itemTargetSceneName: e.itemTargetSceneName || "",
+                                itemConditionVar: e.itemConditionVar || "",
+                                itemConditionOp: e.itemConditionOp || "is",
+                                itemConditionVal: e.itemConditionVal || "",
+                                itemSoundPath: e.itemSoundPath || "",
+                                itemVideoPath: e.itemVideoPath || "",
+                                itemVideoTarget: e.itemVideoTarget || "fill",
+                                itemUpdateVar: e.itemUpdateVar || "",
+                                itemUpdateOp: e.itemUpdateOp || "=",
+                                itemUpdateVal: e.itemUpdateVal || "",
+                                itemWhereNetworkId: e.itemWhereNetworkId !== undefined ? e.itemWhereNetworkId : -1,
+                                itemWhereCharName: e.itemWhereCharName || "",
+                                itemWhereOp: e.itemWhereOp || "is at",
+                                itemWhereNodeName: e.itemWhereNodeName || "",
+                                itemWhenChapterId: e.itemWhenChapterId !== undefined ? e.itemWhenChapterId : -1,
+                                itemWhenOp: e.itemWhenOp || "=",
+                                itemWhenSeconds: e.itemWhenSeconds !== undefined ? e.itemWhenSeconds : 0.0,
+                                itemWhenFormat: e.itemWhenFormat || "",
+                                itemWhenTC: e.itemWhenTC || ""
+                            })
+                        }
+                    }
+
+                    function saveActiveCondition() {
+                        if (sceneSettings.activeConditionId < 0) return
+                        var idx = findCondIdx(sceneSettings.activeConditionId)
+                        if (idx >= 0)
+                            conditionsModel.setProperty(idx, "condActionsJson", serializeActions(conditionActionsModel))
+                    }
+
+                    function saveConditionsToDb() {
+                        var targetId = sceneSettings.prevConditionSceneId >= 0
+                            ? sceneSettings.prevConditionSceneId : mainWindow.currentSceneId
+                        if (targetId < 0) return
+                        var out = []
+                        for (var i = 0; i < conditionsModel.count; i++) {
+                            var c = conditionsModel.get(i)
+                            out.push({
+                                condId: c.condId, condType: c.condType,
+                                condWhenChapterId: c.condWhenChapterId, condWhenOp: c.condWhenOp,
+                                condWhenSeconds: c.condWhenSeconds, condWhenFormat: c.condWhenFormat,
+                                condWhenTC: c.condWhenTC,
+                                condIfVar: c.condIfVar, condIfOp: c.condIfOp, condIfVal: c.condIfVal,
+                                condWhereNetworkId: c.condWhereNetworkId, condWhereCharName: c.condWhereCharName,
+                                condWhereOp: c.condWhereOp, condWhereNodeName: c.condWhereNodeName,
+                                condActionsJson: c.condActionsJson
+                            })
+                        }
+                        storyManager.setEditorState("scene_" + targetId + "_conditions", JSON.stringify(out))
+                    }
+
+                    function loadConditionsFromDb() {
+                        conditionsModel.clear()
+                        conditionActionsModel.clear()
+                        sceneSettings.activeConditionId = -1
+                        if (mainWindow.currentSceneId < 0) return
+                        sceneSettings.prevConditionSceneId = mainWindow.currentSceneId
+                        var raw = storyManager.getEditorState("scene_" + mainWindow.currentSceneId + "_conditions")
+                        var arr = []
+                        try { arr = JSON.parse(raw || "[]") } catch(e) {}
+                        var maxId = 0
+                        for (var i = 0; i < arr.length; i++) {
+                            var c = arr[i]
+                            if ((c.condId || 0) > maxId) maxId = c.condId
+                            conditionsModel.append({
+                                condId: c.condId || (i + 1),
+                                condType: c.condType || "when",
+                                condWhenChapterId: c.condWhenChapterId !== undefined ? c.condWhenChapterId : -1,
+                                condWhenOp: c.condWhenOp || "=",
+                                condWhenSeconds: c.condWhenSeconds !== undefined ? c.condWhenSeconds : 0.0,
+                                condWhenFormat: c.condWhenFormat || "",
+                                condWhenTC: c.condWhenTC || "",
+                                condIfVar: c.condIfVar || "",
+                                condIfOp: c.condIfOp || "is",
+                                condIfVal: c.condIfVal || "",
+                                condWhereNetworkId: c.condWhereNetworkId !== undefined ? c.condWhereNetworkId : -1,
+                                condWhereCharName: c.condWhereCharName || "",
+                                condWhereOp: c.condWhereOp || "is at",
+                                condWhereNodeName: c.condWhereNodeName || "",
+                                condActionsJson: c.condActionsJson || "[]",
+                                condPrevPassed: false
+                            })
+                        }
+                        sceneSettings.nextCondId = maxId + 1
+                    }
+
+                    Connections {
+                        target: storyManager
+                        function onStoryOpened() { sceneSettings.loadConditionsFromDb() }
+                    }
+
+                    Connections {
+                        target: mainWindow
+                        function onCurrentSceneIdChanged() {
+                            sceneSettings.saveActiveCondition()
+                            sceneSettings.saveConditionsToDb()
+                            sceneSettings.loadConditionsFromDb()
+                        }
+                    }
+
+                    onVisibleChanged: {
+                        if (!visible) {
+                            saveActiveCondition()
+                            saveConditionsToDb()
+                        }
+                    }
+
+                    // ── Evaluation ───────────────────────────────────────────
+                    function formatCondTC(totalSeconds, fmt) {
+                        function pad2(n) { return (n < 10 ? "0" : "") + Math.floor(n) }
+                        var fps, isDF
+                        switch (fmt) {
+                            case "25ndf":   fps = 25;    isDF = false; break
+                            case "2997df":  fps = 29.97; isDF = true;  break
+                            case "2997ndf": fps = 29.97; isDF = false; break
+                            case "30ndf":   fps = 30;    isDF = false; break
+                            default:        fps = 24;    isDF = false; break
+                        }
+                        if (isDF) {
+                            var tf = Math.round(totalSeconds * 30000 / 1001)
+                            var d = Math.floor(tf / 17982)
+                            var m = tf % 17982
+                            var adj = tf + 18 * d + (m < 2 ? 0 : 2 * Math.floor((m - 2) / 1798))
+                            return pad2(Math.floor(adj / 108000)) + ":" +
+                                   pad2(Math.floor(adj / 1800) % 60) + ":" +
+                                   pad2(Math.floor(adj / 30) % 60) + ";" +
+                                   pad2(adj % 30)
+                        } else {
+                            var nomFps = Math.round(fps)
+                            var tf2 = Math.floor(totalSeconds * fps)
+                            return pad2(Math.floor(tf2 / (nomFps * 3600))) + ":" +
+                                   pad2(Math.floor(tf2 / (nomFps * 60)) % 60) + ":" +
+                                   pad2(Math.floor(tf2 / nomFps) % 60) + ":" +
+                                   pad2(tf2 % nomFps)
+                        }
+                    }
+
+                    function parseCondTC(tc, fmt) {
+                        var parts = tc.replace(";", ":").split(":")
+                        if (parts.length !== 4) return -1
+                        var hh = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
+                        var ss = parseInt(parts[2], 10), ff = parseInt(parts[3], 10)
+                        if (isNaN(hh) || isNaN(mm) || isNaN(ss) || isNaN(ff)) return -1
+                        if (fmt === "2997df") {
+                            var totalMinutes = 60 * hh + mm
+                            var frames = 30 * 3600 * hh + 30 * 60 * mm + 30 * ss + ff
+                                        - 2 * (totalMinutes - Math.floor(totalMinutes / 10))
+                            return frames * 1001 / 30000
+                        } else {
+                            var fps
+                            switch (fmt) {
+                                case "25ndf":   fps = 25;    break
+                                case "2997ndf": fps = 29.97; break
+                                case "30ndf":   fps = 30;    break
+                                default:        fps = 24;    break
+                            }
+                            return ((hh * 3600 + mm * 60 + ss) * Math.round(fps) + ff) / fps
+                        }
+                    }
+
+                    function getCondTCDisplay(cond) {
+                        if (!cond) return formatCondTC(0, nodeWorkspace.timecodeFormat)
+                        var secs = cond.condWhenSeconds || 0
+                        var fmt  = cond.condWhenFormat  || ""
+                        var tc   = cond.condWhenTC      || ""
+                        if (fmt === nodeWorkspace.timecodeFormat && tc !== "") return tc
+                        return formatCondTC(secs, nodeWorkspace.timecodeFormat)
+                    }
+
+                    function evaluateCondition(cond) {
+                        if (cond.condType === "when") {
+                            var chId = cond.condWhenChapterId
+                            if (chId >= 0 && nodeWorkspace.activeChapterId !== chId) return false
+                            var cur = nodeWorkspace.playheadTime
+                            var op = cond.condWhenOp
+                            var target = cond.condWhenSeconds
+                            if (op === "<") return cur < target
+                            if (op === ">") return cur > target
+                            return Math.abs(cur - target) <= 3.0 / 25.0
+                        }
+                        return false
+                    }
+
+                    function fireConditionActions(actionsJson) {
+                        var items = []
+                        try { items = JSON.parse(actionsJson || "[]") } catch(e) {}
+                        var pendingJump = null
+                        var hasCueVideo = false
+                        var lastCondPassed = false
+                        for (var i = 0; i < items.length; i++) {
+                            var it = items[i]
+                            var shouldExec = false
+                            if (it.itemAction === "cue") {
+                                shouldExec = true
+                            } else if (it.itemAction === "if") {
+                                lastCondPassed = false; shouldExec = false
+                            } else if (it.itemAction === "else") {
+                                shouldExec = !lastCondPassed
+                            } else if (it.itemAction === "where") {
+                                lastCondPassed = false; shouldExec = false
+                            } else if (it.itemAction === "when") {
+                                lastCondPassed = false; shouldExec = false
+                            }
+                            if (!shouldExec) continue
+                            if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
+                                viewport.playCueVideo(it.itemVideoPath)
+                                hasCueVideo = true
+                            } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
+                                if (!pendingJump) pendingJump = it
+                            } else if (it.itemCommand === "update" && it.itemUpdateVar !== "") {
+                                for (var j = 0; j < variablesModel.count; j++) {
+                                    var vrow = variablesModel.get(j)
+                                    if (vrow.varName === it.itemUpdateVar) {
+                                        var newVal
+                                        if (vrow.varType === "number") {
+                                            var numCur = parseFloat(vrow.varValue) || 0
+                                            var numDelta = parseFloat(it.itemUpdateVal) || 0
+                                            if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
+                                            else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
+                                            else newVal = it.itemUpdateVal
+                                        } else {
+                                            newVal = it.itemUpdateVal
+                                        }
+                                        variablesModel.setProperty(j, "varValue", newVal)
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                        if (pendingJump) {
+                            var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
+                            if (hasCueVideo) viewport.cueVideoHasJump = true
+                            viewport.jumpToScene(pendingJump.itemTargetSceneId,
+                                                 pendingJump.itemTransition    || "cut", ms,
+                                                 pendingJump.itemWipeFeather   || 0.0,
+                                                 pendingJump.itemWipeDirection || "right",
+                                                 pendingJump.itemPushDirection || "right",
+                                                 pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
+                                                 pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
+                                                 pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
+                                                 pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
+                                                 pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
+                        }
+                    }
+
+                    function evaluateAllConditions() {
+                        if (buttonGrid.selectedTool !== "simulate") return
+                        for (var i = 0; i < conditionsModel.count; i++) {
+                            var cond = conditionsModel.get(i)
+                            var passed = evaluateCondition(cond)
+                            var prevPassed = cond.condPrevPassed
+                            if (passed && !prevPassed) {
+                                var actionsJson = cond.condActionsJson
+                                if (cond.condId === sceneSettings.activeConditionId)
+                                    actionsJson = serializeActions(conditionActionsModel)
+                                fireConditionActions(actionsJson)
+                            }
+                            conditionsModel.setProperty(i, "condPrevPassed", passed)
+                        }
+                    }
+
+                    Connections {
+                        target: nodeWorkspace
+                        function onPlayheadTimeChanged() { sceneSettings.evaluateAllConditions() }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        z: -1
+                        onClicked: sceneSettings.forceActiveFocus()
+                    }
+
+                    // ── Header ───────────────────────────────────────────────
                     Text {
                         id: conditionsSettingsHeading
                         text: "scene conditions"
@@ -11538,6 +11890,680 @@ Window {
                         anchors.topMargin: 20
                         anchors.left: parent.left
                         anchors.leftMargin: 20
+                    }
+
+                    Rectangle {
+                        id: addConditionBtn
+                        width: 26; height: 26
+                        anchors.top: parent.top
+                        anchors.topMargin: 17
+                        anchors.right: parent.right
+                        anchors.rightMargin: 12
+                        radius: 4
+                        property bool hovered: false
+                        color: hovered ? "white" : "transparent"
+                        border.color: "white"
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 100 } }
+                        Text {
+                            anchors.centerIn: parent
+                            text: "+"
+                            font.pixelSize: 18
+                            font.bold: true
+                            color: parent.hovered ? "darkcyan" : "white"
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: parent.hovered = true
+                            onExited: parent.hovered = false
+                            onClicked: {
+                                sceneSettings.saveActiveCondition()
+                                var newId = sceneSettings.nextCondId++
+                                conditionsModel.append({
+                                    condId: newId, condType: "when",
+                                    condWhenChapterId: -1, condWhenOp: "=", condWhenSeconds: 0.0,
+                                    condWhenFormat: "", condWhenTC: "",
+                                    condIfVar: "", condIfOp: "is", condIfVal: "",
+                                    condWhereNetworkId: -1, condWhereCharName: "", condWhereOp: "is at",
+                                    condWhereNodeName: "", condActionsJson: "[]", condPrevPassed: false
+                                })
+                                sceneSettings.activeConditionId = newId
+                                conditionActionsModel.clear()
+                            }
+                        }
+                    }
+
+                    // ── Conditions list ──────────────────────────────────────
+                    ScrollView {
+                        id: conditionsScrollView
+                        anchors.top: conditionsSettingsHeading.bottom
+                        anchors.topMargin: 8
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        height: Math.min(conditionsModel.count * 32 + 8, sceneSettings.height * 0.38)
+                        clip: true
+
+                        Column {
+                            width: conditionsScrollView.availableWidth
+                            spacing: 4
+
+                            Repeater {
+                                id: conditionsRepeater
+                                model: conditionsModel
+
+                                delegate: Item {
+                                    id: condDelegate
+                                    width: parent ? parent.width : 0
+                                    height: 26
+                                    property int delegateIndex: index
+                                    property real deleteProgress: 0.0
+                                    property bool isActive: condId === sceneSettings.activeConditionId
+
+                                    NumberAnimation {
+                                        id: condDeleteAnim
+                                        target: condDelegate
+                                        property: "deleteProgress"
+                                        to: 1.0
+                                        duration: 1200
+                                        easing.type: Easing.Linear
+                                        onFinished: {
+                                            if (condDelegate.deleteProgress >= 1.0) {
+                                                if (condId === sceneSettings.activeConditionId) {
+                                                    sceneSettings.activeConditionId = -1
+                                                    conditionActionsModel.clear()
+                                                }
+                                                conditionsModel.remove(condDelegate.delegateIndex)
+                                            }
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        z: 10
+                                        onPressed: function(mouse) {
+                                            if (mouse.button === Qt.RightButton) {
+                                                condDelegate.deleteProgress = 0
+                                                condDeleteAnim.start()
+                                            }
+                                        }
+                                        onReleased: function(mouse) {
+                                            if (mouse.button === Qt.RightButton) {
+                                                condDeleteAnim.stop()
+                                                condDelegate.deleteProgress = 0
+                                            }
+                                        }
+                                        onExited: {
+                                            condDeleteAnim.stop()
+                                            condDelegate.deleteProgress = 0
+                                        }
+                                        onClicked: function(mouse) {
+                                            if (mouse.button === Qt.LeftButton && condId !== sceneSettings.activeConditionId) {
+                                                sceneSettings.saveActiveCondition()
+                                                sceneSettings.activeConditionId = condId
+                                                sceneSettings.loadActionsInto(conditionActionsModel, condActionsJson)
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 4
+                                        color: "#ff4444"
+                                        opacity: condDelegate.deleteProgress * 0.75
+                                        visible: condDelegate.deleteProgress > 0
+                                        z: 9
+                                    }
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 4
+                                        color: condDelegate.isActive ? Qt.rgba(1,1,1,0.22) : Qt.rgba(1,1,1,0.07)
+                                        border.color: condDelegate.isActive ? "white" : Qt.rgba(1,1,1,0.3)
+                                        border.width: 1
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 6
+                                            anchors.rightMargin: 6
+                                            spacing: 4
+
+                                            Text {
+                                                text: condType
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                color: "white"
+                                                opacity: 0.75
+                                                Layout.preferredWidth: 32
+                                            }
+
+                                            Text {
+                                                text: {
+                                                    if (condType === "when") {
+                                                        var chName = ""
+                                                        if (condWhenChapterId >= 0) {
+                                                            for (var i = 0; i < nodeWorkspace.chaptersModel.count; i++) {
+                                                                var ch = nodeWorkspace.chaptersModel.get(i)
+                                                                if (ch.chapterId === condWhenChapterId) { chName = ch.chapterName; break }
+                                                            }
+                                                        }
+                                                        var tc = condWhenTC !== "" ? condWhenTC : "00:00:00:00"
+                                                        return (chName !== "" ? chName + " " : "") + condWhenOp + " " + tc
+                                                    } else if (condType === "if") {
+                                                        return condIfVar + " " + condIfOp + " " + condIfVal
+                                                    } else if (condType === "where") {
+                                                        return condWhereCharName + " " + condWhereOp + " " + condWhereNodeName
+                                                    }
+                                                    return ""
+                                                }
+                                                font.pixelSize: 10
+                                                color: "white"
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+
+                                            Text {
+                                                property int actionCount: {
+                                                    try { return JSON.parse(condActionsJson || "[]").length } catch(e) { return 0 }
+                                                }
+                                                text: actionCount + (actionCount === 1 ? " action" : " actions")
+                                                font.pixelSize: 9
+                                                color: "white"
+                                                opacity: 0.55
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Item { width: 1; height: 2 }
+                        }
+                    }
+
+                    // ── Selected condition params ─────────────────────────────
+                    Rectangle {
+                        id: condParamsArea
+                        visible: sceneSettings.activeConditionId >= 0
+                        anchors.top: conditionsScrollView.bottom
+                        anchors.topMargin: 6
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        height: visible ? 32 : 0
+                        color: Qt.rgba(1,1,1,0.1)
+                        radius: 4
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 6
+                            anchors.rightMargin: 6
+                            spacing: 4
+
+                            // Condition type picker
+                            ComboBox {
+                                id: condTypeCombo
+                                Layout.preferredWidth: 60
+                                Layout.preferredHeight: 22
+                                model: ["when", "if", "where"]
+                                Component.onCompleted: {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx >= 0) currentIndex = model.indexOf(conditionsModel.get(idx).condType)
+                                }
+                                Connections {
+                                    target: sceneSettings
+                                    function onActiveConditionIdChanged() {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        condTypeCombo.currentIndex = idx >= 0
+                                            ? Math.max(0, condTypeCombo.model.indexOf(conditionsModel.get(idx).condType))
+                                            : 0
+                                    }
+                                }
+                                onActivated: function(i) {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx >= 0) conditionsModel.setProperty(idx, "condType", model[i])
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 14
+                                    text: parent.displayText
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                HoverHandler { id: condTypeComboHover }
+                                background: Rectangle {
+                                    radius: 4; color: "transparent"
+                                    border.color: condTypeComboHover.hovered ? "#80cfff" : "white"; border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+                                }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 60; height: 20; padding: 0
+                                    contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#2a6060" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: parent.width; padding: 1
+                                    height: condTypeCombo.model.length * 20 + 2
+                                    background: Rectangle { color: "#0d4040"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: condTypeCombo.delegateModel; currentIndex: condTypeCombo.currentIndex }
+                                }
+                            }
+
+                            // ── when-specific controls ──
+                            ComboBox {
+                                id: condWhenChapterCombo
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    return idx >= 0 && conditionsModel.get(idx).condType === "when"
+                                }
+                                Layout.preferredWidth: 52
+                                Layout.preferredHeight: 22
+                                model: {
+                                    var arr = []
+                                    for (var i = 0; i < nodeWorkspace.chaptersModel.count; i++) {
+                                        var ch = nodeWorkspace.chaptersModel.get(i)
+                                        arr.push({ id: ch.chapterId, name: ch.chapterName })
+                                    }
+                                    return arr
+                                }
+                                Component.onCompleted: {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx < 0) return
+                                    var chId = conditionsModel.get(idx).condWhenChapterId
+                                    for (var i = 0; i < condWhenChapterCombo.model.length; i++) {
+                                        if (condWhenChapterCombo.model[i].id === chId) { currentIndex = i; return }
+                                    }
+                                    currentIndex = condWhenChapterCombo.model.length > 0 ? 0 : -1
+                                }
+                                Connections {
+                                    target: sceneSettings
+                                    function onActiveConditionIdChanged() {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        if (idx < 0) { condWhenChapterCombo.currentIndex = -1; return }
+                                        var chId = conditionsModel.get(idx).condWhenChapterId
+                                        for (var i = 0; i < condWhenChapterCombo.model.length; i++) {
+                                            if (condWhenChapterCombo.model[i].id === chId) { condWhenChapterCombo.currentIndex = i; return }
+                                        }
+                                        condWhenChapterCombo.currentIndex = condWhenChapterCombo.model.length > 0 ? 0 : -1
+                                    }
+                                }
+                                onActivated: function(i) {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx >= 0 && i >= 0 && i < model.length)
+                                        conditionsModel.setProperty(idx, "condWhenChapterId", model[i].id)
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 12
+                                    text: {
+                                        var i = condWhenChapterCombo.currentIndex
+                                        var m = condWhenChapterCombo.model
+                                        return (i >= 0 && i < m.length) ? (m[i].name || "") : ""
+                                    }
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 3; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                HoverHandler { id: condWhenChapterComboHover }
+                                background: Rectangle {
+                                    radius: 4; color: "transparent"
+                                    border.color: condWhenChapterComboHover.hovered ? "#80cfff" : "white"; border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+                                }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 52; height: 20; padding: 0
+                                    contentItem: Text { text: (modelData && modelData.name) ? modelData.name : ""; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#2a6060" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: Math.max(condWhenChapterCombo.width, 80); padding: 1
+                                    height: Math.min(condWhenChapterCombo.model.length * 20 + 2, 102)
+                                    background: Rectangle { color: "#0d4040"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: condWhenChapterCombo.delegateModel; currentIndex: condWhenChapterCombo.currentIndex }
+                                }
+                            }
+
+                            ComboBox {
+                                id: condWhenOpCombo
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    return idx >= 0 && conditionsModel.get(idx).condType === "when"
+                                }
+                                Layout.preferredWidth: 36
+                                Layout.preferredHeight: 22
+                                model: ["<", "=", ">"]
+                                Component.onCompleted: {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx < 0) return
+                                    var op = conditionsModel.get(idx).condWhenOp || "="
+                                    var i = model.indexOf(op)
+                                    currentIndex = i >= 0 ? i : 1
+                                }
+                                Connections {
+                                    target: sceneSettings
+                                    function onActiveConditionIdChanged() {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        if (idx < 0) return
+                                        var op = conditionsModel.get(idx).condWhenOp || "="
+                                        var i = condWhenOpCombo.model.indexOf(op)
+                                        condWhenOpCombo.currentIndex = i >= 0 ? i : 1
+                                    }
+                                }
+                                onActivated: function(i) {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx >= 0) conditionsModel.setProperty(idx, "condWhenOp", model[i])
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 10; text: parent.displayText
+                                    font.pixelSize: 11; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 3; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                HoverHandler { id: condWhenOpComboHover }
+                                background: Rectangle {
+                                    radius: 4; color: "transparent"
+                                    border.color: condWhenOpComboHover.hovered ? "#80cfff" : "white"; border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+                                }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 36; height: 20; padding: 0
+                                    contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#2a6060" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: parent.width; height: 62; padding: 1
+                                    background: Rectangle { color: "#0d4040"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: condWhenOpCombo.delegateModel; currentIndex: condWhenOpCombo.currentIndex }
+                                }
+                            }
+
+                            Rectangle {
+                                id: condWhenTcBox
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    return idx >= 0 && conditionsModel.get(idx).condType === "when"
+                                }
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 22
+                                color: "transparent"
+                                border.color: condWhenTcInput.activeFocus ? "#80cfff" : "white"
+                                border.width: 1
+                                radius: 4
+                                Behavior on border.color { ColorAnimation { duration: 100 } }
+
+                                TextInput {
+                                    id: condWhenTcInput
+                                    anchors.left: parent.left; anchors.right: parent.right
+                                    anchors.leftMargin: 4; anchors.rightMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                    Component.onCompleted: {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        text = idx >= 0
+                                            ? sceneSettings.getCondTCDisplay(conditionsModel.get(idx))
+                                            : sceneSettings.formatCondTC(0, nodeWorkspace.timecodeFormat)
+                                    }
+                                    Connections {
+                                        target: sceneSettings
+                                        function onActiveConditionIdChanged() {
+                                            if (!condWhenTcInput.activeFocus) {
+                                                var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                                condWhenTcInput.text = idx >= 0
+                                                    ? sceneSettings.getCondTCDisplay(conditionsModel.get(idx))
+                                                    : sceneSettings.formatCondTC(0, nodeWorkspace.timecodeFormat)
+                                            }
+                                        }
+                                    }
+                                    Connections {
+                                        target: nodeWorkspace
+                                        function onTimecodeFormatChanged() {
+                                            if (!condWhenTcInput.activeFocus) {
+                                                var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                                condWhenTcInput.text = idx >= 0
+                                                    ? sceneSettings.getCondTCDisplay(conditionsModel.get(idx))
+                                                    : sceneSettings.formatCondTC(0, nodeWorkspace.timecodeFormat)
+                                            }
+                                        }
+                                    }
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        text = idx >= 0
+                                            ? sceneSettings.getCondTCDisplay(conditionsModel.get(idx))
+                                            : sceneSettings.formatCondTC(0, nodeWorkspace.timecodeFormat)
+                                        focus = false
+                                    }
+                                    onEditingFinished: {
+                                        var secs = sceneSettings.parseCondTC(text, nodeWorkspace.timecodeFormat)
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        if (secs >= 0 && idx >= 0) {
+                                            conditionsModel.setProperty(idx, "condWhenSeconds", secs)
+                                            conditionsModel.setProperty(idx, "condWhenFormat", nodeWorkspace.timecodeFormat)
+                                            conditionsModel.setProperty(idx, "condWhenTC", text)
+                                        }
+                                        text = idx >= 0
+                                            ? sceneSettings.getCondTCDisplay(conditionsModel.get(idx))
+                                            : sceneSettings.formatCondTC(0, nodeWorkspace.timecodeFormat)
+                                    }
+                                }
+                            }
+
+                            // ── if-specific controls ──
+                            ComboBox {
+                                id: condIfVarCombo
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    return idx >= 0 && conditionsModel.get(idx).condType === "if"
+                                }
+                                Layout.preferredWidth: 70
+                                Layout.preferredHeight: 22
+                                model: {
+                                    var arr = []
+                                    for (var i = 0; i < variablesModel.count; i++) {
+                                        var n = variablesModel.get(i).varName
+                                        if (n !== "") arr.push(n)
+                                    }
+                                    return arr
+                                }
+                                Component.onCompleted: {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx < 0) return
+                                    currentIndex = Math.max(0, model.indexOf(conditionsModel.get(idx).condIfVar))
+                                }
+                                Connections {
+                                    target: sceneSettings
+                                    function onActiveConditionIdChanged() {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        condIfVarCombo.currentIndex = idx >= 0
+                                            ? Math.max(0, condIfVarCombo.model.indexOf(conditionsModel.get(idx).condIfVar))
+                                            : 0
+                                    }
+                                }
+                                onActivated: function(i) {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx >= 0 && i >= 0 && i < model.length)
+                                        conditionsModel.setProperty(idx, "condIfVar", model[i])
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 14; text: parent.displayText
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                HoverHandler { id: condIfVarComboHover }
+                                background: Rectangle {
+                                    radius: 4; color: "transparent"
+                                    border.color: condIfVarComboHover.hovered ? "#80cfff" : "white"; border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+                                }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 70; height: 20; padding: 0
+                                    contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#2a6060" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: Math.max(condIfVarCombo.width, 80); padding: 1
+                                    height: Math.min(condIfVarCombo.model.length * 20 + 2, 102)
+                                    background: Rectangle { color: "#0d4040"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: condIfVarCombo.delegateModel; currentIndex: condIfVarCombo.currentIndex }
+                                }
+                            }
+
+                            ComboBox {
+                                id: condIfOpCombo
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    return idx >= 0 && conditionsModel.get(idx).condType === "if"
+                                }
+                                Layout.preferredWidth: 58
+                                Layout.preferredHeight: 22
+                                model: ["is", "is not", "<", ">"]
+                                Component.onCompleted: {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx < 0) return
+                                    var op = conditionsModel.get(idx).condIfOp || "is"
+                                    currentIndex = Math.max(0, model.indexOf(op))
+                                }
+                                Connections {
+                                    target: sceneSettings
+                                    function onActiveConditionIdChanged() {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        if (idx < 0) return
+                                        var op = conditionsModel.get(idx).condIfOp || "is"
+                                        condIfOpCombo.currentIndex = Math.max(0, condIfOpCombo.model.indexOf(op))
+                                    }
+                                }
+                                onActivated: function(i) {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx >= 0) conditionsModel.setProperty(idx, "condIfOp", model[i])
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 12; text: parent.displayText
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 3; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                HoverHandler { id: condIfOpComboHover }
+                                background: Rectangle {
+                                    radius: 4; color: "transparent"
+                                    border.color: condIfOpComboHover.hovered ? "#80cfff" : "white"; border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+                                }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 58; height: 20; padding: 0
+                                    contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#2a6060" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: Math.max(condIfOpCombo.width, 60); padding: 1
+                                    height: condIfOpCombo.model.length * 20 + 2
+                                    background: Rectangle { color: "#0d4040"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: condIfOpCombo.delegateModel; currentIndex: condIfOpCombo.currentIndex }
+                                }
+                            }
+
+                            Rectangle {
+                                id: condIfValBox
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    return idx >= 0 && conditionsModel.get(idx).condType === "if"
+                                }
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 22
+                                color: "transparent"
+                                border.color: condIfValInput.activeFocus ? "#80cfff" : "white"
+                                border.width: 1
+                                radius: 4
+                                Behavior on border.color { ColorAnimation { duration: 100 } }
+
+                                TextInput {
+                                    id: condIfValInput
+                                    anchors.left: parent.left; anchors.right: parent.right
+                                    anchors.leftMargin: 4; anchors.rightMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                    Component.onCompleted: {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        text = idx >= 0 ? (conditionsModel.get(idx).condIfVal || "") : ""
+                                    }
+                                    Connections {
+                                        target: sceneSettings
+                                        function onActiveConditionIdChanged() {
+                                            var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                            condIfValInput.text = idx >= 0 ? (conditionsModel.get(idx).condIfVal || "") : ""
+                                        }
+                                    }
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        text = idx >= 0 ? (conditionsModel.get(idx).condIfVal || "") : ""
+                                        focus = false
+                                    }
+                                    onEditingFinished: {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        if (idx >= 0) conditionsModel.setProperty(idx, "condIfVal", text)
+                                    }
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true; visible: {
+                                sceneSettings.conditionsRevision
+                                var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                return idx < 0 || conditionsModel.get(idx).condType === "where"
+                            }}
+                        }
+                    }
+
+                    // ── Action list ───────────────────────────────────────────
+                    ScrollView {
+                        id: condActionsScrollView
+                        visible: sceneSettings.activeConditionId >= 0
+                        anchors.top: condParamsArea.bottom
+                        anchors.topMargin: 6
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        anchors.bottomMargin: 8
+                        clip: true
+
+                        InteractivityList {
+                            id: conditionActionsList
+                            width: condActionsScrollView.availableWidth
+                            interactivityModel: conditionActionsModel
+                            hideTabs: true
+                            currentTab: "condition"
+                            variablesModel: variablesModel
+                            scenePickerButtons: sceneEditorButtons
+                            networksModel: nodeWorkspace.networksModel
+                            chaptersModel: nodeWorkspace.chaptersModel
+                            timecodeFormat: nodeWorkspace.timecodeFormat
+                        }
                     }
                 }
 
