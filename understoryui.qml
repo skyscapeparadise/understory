@@ -4345,6 +4345,8 @@ Window {
                 viewportRef: viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 0
+                chapterPlayheadTime: nodeWorkspace.playheadTime
+                activeChapterId: nodeWorkspace.activeChapterId
                 // Foreground: fully opaque.  Staging during dissolve: fades 0→1.
                 // During wipe/slide/look: both layers stay at opacity 1 so FBO textures have full color,
                 // but hideSource:true on the ShaderEffectSources hides them from the scene.
@@ -4408,6 +4410,8 @@ Window {
                 viewportRef: viewport
                 buttonGridRef: buttonGrid
                 isInteractive: viewport.foregroundLayer === 1
+                chapterPlayheadTime: nodeWorkspace.playheadTime
+                activeChapterId: nodeWorkspace.activeChapterId
                 opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 1 ? 1.0 : viewport.dissolving ? viewport.dissolveOpacity : 0.0
 
                 Connections {
@@ -10215,6 +10219,8 @@ Window {
                                 variablesModel: variablesModel
                                 scenePickerButtons: sceneEditorButtons
                                 networksModel: nodeWorkspace.networksModel
+                                chaptersModel: nodeWorkspace.chaptersModel
+                                timecodeFormat: nodeWorkspace.timecodeFormat
                             }
 
                             Item {

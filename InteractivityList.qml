@@ -33,6 +33,93 @@ Item {
         return list
     }
 
+    property var chaptersModel
+    property string timecodeFormat: "24ndf"
+    property int chaptersRevision: 0
+    Connections {
+        target: root.chaptersModel
+        function onCountChanged()  { root.chaptersRevision++ }
+        function onDataChanged()   { root.chaptersRevision++ }
+        function onRowsInserted()  { root.chaptersRevision++ }
+        function onRowsRemoved()   { root.chaptersRevision++ }
+        function onModelReset()    { root.chaptersRevision++ }
+    }
+    property var chaptersArray: {
+        chaptersRevision
+        var list = []
+        if (root.chaptersModel) {
+            for (var i = 0; i < root.chaptersModel.count; i++) {
+                var ch = root.chaptersModel.get(i)
+                list.push({ id: ch.chapterId, name: ch.chapterName })
+            }
+        }
+        return list
+    }
+
+    function formatTimecode(totalSeconds) {
+        function pad2(n) { return (n < 10 ? "0" : "") + Math.floor(n) }
+        var fmt = root.timecodeFormat
+        var fps, isDF
+        switch (fmt) {
+            case "25ndf":   fps = 25;    isDF = false; break
+            case "2997df":  fps = 29.97; isDF = true;  break
+            case "2997ndf": fps = 29.97; isDF = false; break
+            case "30ndf":   fps = 30;    isDF = false; break
+            default:        fps = 24;    isDF = false; break
+        }
+        if (isDF) {
+            var tf = Math.round(totalSeconds * 30000 / 1001)
+            var d = Math.floor(tf / 17982)
+            var m = tf % 17982
+            var adj = tf + 18 * d + (m < 2 ? 0 : 2 * Math.floor((m - 2) / 1798))
+            return pad2(Math.floor(adj / 108000)) + ":" +
+                   pad2(Math.floor(adj / 1800) % 60) + ":" +
+                   pad2(Math.floor(adj / 30) % 60) + ";" +
+                   pad2(adj % 30)
+        } else {
+            var nomFps = Math.round(fps)
+            var tf = Math.floor(totalSeconds * fps)
+            return pad2(Math.floor(tf / (nomFps * 3600))) + ":" +
+                   pad2(Math.floor(tf / (nomFps * 60)) % 60) + ":" +
+                   pad2(Math.floor(tf / nomFps) % 60) + ":" +
+                   pad2(tf % nomFps)
+        }
+    }
+
+    function getWhenDisplayText(listIdx) {
+        var raw = root.interactivityModel.get(listIdx)
+        if (!raw) return root.formatTimecode(0)
+        var secs = (raw.itemWhenSeconds !== undefined) ? raw.itemWhenSeconds : 0
+        var fmt  = (raw.itemWhenFormat  !== undefined) ? raw.itemWhenFormat  : ""
+        var tc   = (raw.itemWhenTC      !== undefined) ? raw.itemWhenTC      : ""
+        if (fmt === root.timecodeFormat && tc !== "") return tc
+        return root.formatTimecode(secs)
+    }
+
+    function parseTimecode(tc) {
+        var parts = tc.replace(";", ":").split(":")
+        if (parts.length !== 4) return -1
+        var hh = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
+        var ss = parseInt(parts[2], 10), ff = parseInt(parts[3], 10)
+        if (isNaN(hh) || isNaN(mm) || isNaN(ss) || isNaN(ff)) return -1
+        var fmt = root.timecodeFormat
+        if (fmt === "2997df") {
+            var totalMinutes = 60 * hh + mm
+            var frames = 30 * 3600 * hh + 30 * 60 * mm + 30 * ss + ff
+                        - 2 * (totalMinutes - Math.floor(totalMinutes / 10))
+            return frames * 1001 / 30000
+        } else {
+            var fps
+            switch (fmt) {
+                case "25ndf":   fps = 25;    break
+                case "2997ndf": fps = 29.97; break
+                case "30ndf":   fps = 30;    break
+                default:        fps = 24;    break
+            }
+            return ((hh * 3600 + mm * 60 + ss) * Math.round(fps) + ff) / fps
+        }
+    }
+
     implicitHeight: listCol.height
 
     Platform.FileDialog {
@@ -139,7 +226,7 @@ Item {
                                 defaultCommand = "sound"; insertIdx = i; break
                             }
                         }
-                        var newItem = { itemTrigger: tab, itemAction: "cue", itemCommand: defaultCommand, itemTransition: "cut", itemTransitionSpeed: 0.4, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.0, itemLookShutter: 0.10, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemVideoPath: "", itemVideoTarget: "fill", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "", itemWhereNetworkId: -1, itemWhereCharName: "", itemWhereOp: "is at", itemWhereNodeName: "" }
+                        var newItem = { itemTrigger: tab, itemAction: "cue", itemCommand: defaultCommand, itemTransition: "cut", itemTransitionSpeed: 0.4, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.0, itemLookShutter: 0.10, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemVideoPath: "", itemVideoTarget: "fill", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "", itemWhereNetworkId: -1, itemWhereCharName: "", itemWhereOp: "is at", itemWhereNodeName: "", itemWhenChapterId: -1, itemWhenOp: "=", itemWhenSeconds: 0.0, itemWhenFormat: "", itemWhenTC: "" }
                         if (insertIdx >= 0) root.interactivityModel.insert(insertIdx, newItem)
                         else root.interactivityModel.append(newItem)
                     }
@@ -245,9 +332,11 @@ Item {
                                         if (root.variablesModel.get(i).varName !== "") { hasVars = true; break }
                                     }
                                     var hasNetworks = root.networksModel && root.networksModel.count > 0
-                                    if (!hasVars && !hasNetworks) return ["cue"]
+                                    var hasChapters = root.chaptersModel && root.chaptersModel.count > 0
+                                    if (!hasVars && !hasNetworks && !hasChapters) return ["cue"]
                                     var opts = ["cue"]
                                     if (hasVars) opts.push("if")
+                                    if (hasChapters) opts.push("when")
                                     if (hasNetworks) opts.push("where")
                                     var thisIdx = interactivityDelegate.listIdx
                                     var thisTrigger = itemTrigger
@@ -740,6 +829,139 @@ Item {
                             }
 
                             ComboBox {
+                                id: whenChapterCombo
+                                visible: itemAction === "when"
+                                Layout.preferredWidth: 44
+                                Layout.preferredHeight: 26
+                                model: root.chaptersArray
+                                currentIndex: {
+                                    var arr = root.chaptersArray
+                                    var raw = root.interactivityModel.get(interactivityDelegate.listIdx)
+                                    var id = (raw && raw.itemWhenChapterId !== undefined) ? raw.itemWhenChapterId : -1
+                                    for (var i = 0; i < arr.length; i++) {
+                                        if (arr[i].id === id) return i
+                                    }
+                                    return 0
+                                }
+                                onActivated: function(idx) {
+                                    var arr = root.chaptersArray
+                                    if (idx < 0 || idx >= arr.length) return
+                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhenChapterId", arr[idx].id)
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 14
+                                    text: {
+                                        var arr = root.chaptersArray
+                                        var idx = whenChapterCombo.currentIndex
+                                        if (idx < 0 || idx >= arr.length) return ""
+                                        return arr[idx].name || ""
+                                    }
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 4; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                HoverHandler { id: whenChapterComboHover }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: whenChapterComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 44; height: 20; padding: 0
+                                    contentItem: Text { text: (modelData && modelData.name) ? modelData.name : ""; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2
+                                    width: Math.max(whenChapterCombo.width, 80)
+                                    height: Math.min(root.chaptersArray.length * 20 + 2, 102); padding: 1
+                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: whenChapterCombo.delegateModel; currentIndex: whenChapterCombo.currentIndex }
+                                }
+                            }
+
+                            ComboBox {
+                                id: whenOpCombo
+                                visible: itemAction === "when"
+                                Layout.preferredWidth: 36
+                                Layout.preferredHeight: 26
+                                model: ["<", "=", ">"]
+                                currentIndex: {
+                                    var raw = root.interactivityModel.get(interactivityDelegate.listIdx)
+                                    var op = (raw && raw.itemWhenOp !== undefined) ? raw.itemWhenOp : "="
+                                    var idx = model.indexOf(op)
+                                    return idx < 0 ? 1 : idx
+                                }
+                                onActivated: function(idx) {
+                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhenOp", model[idx])
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 12; text: parent.displayText
+                                    font.pixelSize: 11; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 3; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                HoverHandler { id: whenOpComboHover }
+                                background: Rectangle { radius: 4; color: "transparent"; border.color: whenOpComboHover.hovered ? "#80cfff" : "white"; border.width: 1; Behavior on border.color { ColorAnimation { duration: 100 } } }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 36; height: 20; padding: 0
+                                    contentItem: Text { text: modelData; font.pixelSize: 11; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#477B78" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: parent.width; height: 62; padding: 1
+                                    background: Rectangle { color: "#162020"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: whenOpCombo.delegateModel; currentIndex: whenOpCombo.currentIndex }
+                                }
+                            }
+
+                            Rectangle {
+                                id: whenTcBox
+                                visible: itemAction === "when"
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 0
+                                Layout.minimumWidth: 0
+                                Layout.preferredHeight: 26
+                                color: "transparent"
+                                border.color: whenTcInput.activeFocus ? "#80cfff" : "white"
+                                border.width: 1
+                                radius: 4
+                                Behavior on border.color { ColorAnimation { duration: 100 } }
+
+                                TextInput {
+                                    id: whenTcInput
+                                    anchors.left: parent.left; anchors.right: parent.right
+                                    anchors.leftMargin: 4; anchors.rightMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                    Component.onCompleted: text = root.getWhenDisplayText(interactivityDelegate.listIdx)
+                                    Connections {
+                                        target: root
+                                        function onTimecodeFormatChanged() {
+                                            if (!whenTcInput.activeFocus)
+                                                whenTcInput.text = root.getWhenDisplayText(interactivityDelegate.listIdx)
+                                        }
+                                    }
+                                    Keys.onReturnPressed: focus = false
+                                    Keys.onEscapePressed: {
+                                        text = root.getWhenDisplayText(interactivityDelegate.listIdx)
+                                        focus = false
+                                    }
+                                    onEditingFinished: {
+                                        var secs = root.parseTimecode(text)
+                                        if (secs >= 0) {
+                                            root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhenSeconds", secs)
+                                            root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhenFormat", root.timecodeFormat)
+                                            root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemWhenTC", text)
+                                        }
+                                        text = root.getWhenDisplayText(interactivityDelegate.listIdx)
+                                    }
+                                }
+                            }
+
+                            ComboBox {
                                 id: commandCombo
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 0
@@ -803,9 +1025,9 @@ Item {
 
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: (itemAction === "if" || itemAction === "where") ? 26 : 0
-                                Layout.minimumWidth: (itemAction === "if" || itemAction === "where") ? 26 : 0
-                                Layout.maximumWidth: (itemAction === "if" || itemAction === "where") ? 26 : 10000
+                                Layout.preferredWidth: (itemAction === "if" || itemAction === "where" || itemAction === "when") ? 26 : 0
+                                Layout.minimumWidth: (itemAction === "if" || itemAction === "where" || itemAction === "when") ? 26 : 0
+                                Layout.maximumWidth: (itemAction === "if" || itemAction === "where" || itemAction === "when") ? 26 : 10000
                                 Layout.preferredHeight: 26
                                 visible: itemCommand === "jump"
                                 radius: 4

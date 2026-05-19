@@ -60,6 +60,21 @@ Item {
     ListModel { id: shadersModelInst }
     readonly property alias shadersModel: shadersModelInst
 
+    // ── Timeline state (bound by viewport from NodeWorkspace) ───────────────
+    property real chapterPlayheadTime: 0
+    property int  activeChapterId: -1
+
+    function evaluateWhenCondition(it) {
+        var chapterId  = (it.itemWhenChapterId !== undefined) ? it.itemWhenChapterId : -1
+        var op         = it.itemWhenOp || "="
+        var targetSecs = (it.itemWhenSeconds  !== undefined) ? it.itemWhenSeconds   : 0
+        if (chapterId >= 0 && sceneContent.activeChapterId !== chapterId) return false
+        var cur = sceneContent.chapterPlayheadTime
+        if (op === "<") return cur < targetSecs
+        if (op === ">") return cur > targetSecs
+        return Math.abs(cur - targetSecs) <= 3.0 / 25.0
+    }
+
     // ── Scene management ────────────────────────────────────────────────────
 
     function clear() {
@@ -245,7 +260,9 @@ Item {
                 itemVideoPath: e.itemVideoPath, itemVideoTarget: e.itemVideoTarget,
                 itemUpdateVar: e.itemUpdateVar, itemUpdateOp: e.itemUpdateOp, itemUpdateVal: e.itemUpdateVal,
                 itemWhereNetworkId: e.itemWhereNetworkId, itemWhereCharName: e.itemWhereCharName,
-                itemWhereOp: e.itemWhereOp, itemWhereNodeName: e.itemWhereNodeName
+                itemWhereOp: e.itemWhereOp, itemWhereNodeName: e.itemWhereNodeName,
+                itemWhenChapterId: e.itemWhenChapterId, itemWhenOp: e.itemWhenOp,
+                itemWhenSeconds: e.itemWhenSeconds, itemWhenFormat: e.itemWhenFormat, itemWhenTC: e.itemWhenTC
             })
         }
         return JSON.stringify(items)
@@ -285,7 +302,12 @@ Item {
                 itemWhereNetworkId:  e.itemWhereNetworkId  !== undefined ? e.itemWhereNetworkId : -1,
                 itemWhereCharName:   e.itemWhereCharName   || "",
                 itemWhereOp:         e.itemWhereOp         || "is at",
-                itemWhereNodeName:   e.itemWhereNodeName   || ""
+                itemWhereNodeName:   e.itemWhereNodeName   || "",
+                itemWhenChapterId:   e.itemWhenChapterId   !== undefined ? e.itemWhenChapterId : -1,
+                itemWhenOp:          e.itemWhenOp          || "=",
+                itemWhenSeconds:     e.itemWhenSeconds      !== undefined ? e.itemWhenSeconds  : 0.0,
+                itemWhenFormat:      e.itemWhenFormat       || "",
+                itemWhenTC:          e.itemWhenTC           || ""
             })
         }
     }
@@ -390,10 +412,26 @@ Item {
                             try { items = JSON.parse(json) } catch(e) {}
                             var pendingJump = null
                             var hasCueVideo = false
+                            var lastCondPassed = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemAction !== "cue") continue
+                                var shouldExec = false
+                                if (it.itemAction === "cue") {
+                                    shouldExec = true
+                                } else if (it.itemAction === "if") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "else") {
+                                    shouldExec = !lastCondPassed
+                                } else if (it.itemAction === "where") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "when") {
+                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
+                                    shouldExec = lastCondPassed
+                                }
+                                if (!shouldExec) continue
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
@@ -1472,10 +1510,26 @@ Item {
                             try { items = JSON.parse(json) } catch(e) {}
                             var pendingJump = null
                             var hasCueVideo = false
+                            var lastCondPassed = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemAction !== "cue") continue
+                                var shouldExec = false
+                                if (it.itemAction === "cue") {
+                                    shouldExec = true
+                                } else if (it.itemAction === "if") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "else") {
+                                    shouldExec = !lastCondPassed
+                                } else if (it.itemAction === "where") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "when") {
+                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
+                                    shouldExec = lastCondPassed
+                                }
+                                if (!shouldExec) continue
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
@@ -2079,10 +2133,26 @@ Item {
                             try { items = JSON.parse(json) } catch(e) {}
                             var pendingJump = null
                             var hasCueVideo = false
+                            var lastCondPassed = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemAction !== "cue") continue
+                                var shouldExec = false
+                                if (it.itemAction === "cue") {
+                                    shouldExec = true
+                                } else if (it.itemAction === "if") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "else") {
+                                    shouldExec = !lastCondPassed
+                                } else if (it.itemAction === "where") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "when") {
+                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
+                                    shouldExec = lastCondPassed
+                                }
+                                if (!shouldExec) continue
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
@@ -2891,10 +2961,26 @@ Item {
                             try { items = JSON.parse(json) } catch(e) {}
                             var pendingJump = null
                             var hasCueVideo = false
+                            var lastCondPassed = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemAction !== "cue") continue
+                                var shouldExec = false
+                                if (it.itemAction === "cue") {
+                                    shouldExec = true
+                                } else if (it.itemAction === "if") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "else") {
+                                    shouldExec = !lastCondPassed
+                                } else if (it.itemAction === "where") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "when") {
+                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
+                                    shouldExec = lastCondPassed
+                                }
+                                if (!shouldExec) continue
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
@@ -3537,10 +3623,26 @@ Item {
                             try { items = JSON.parse(json) } catch(e) {}
                             var pendingJump = null
                             var hasCueVideo = false
+                            var lastCondPassed = false
                             for (var i = 0; i < items.length; i++) {
                                 var it = items[i]
                                 if (it.itemTrigger !== trigger) continue
-                                if (it.itemAction !== "cue") continue
+                                var shouldExec = false
+                                if (it.itemAction === "cue") {
+                                    shouldExec = true
+                                } else if (it.itemAction === "if") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "else") {
+                                    shouldExec = !lastCondPassed
+                                } else if (it.itemAction === "where") {
+                                    lastCondPassed = false
+                                    shouldExec = false
+                                } else if (it.itemAction === "when") {
+                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
+                                    shouldExec = lastCondPassed
+                                }
+                                if (!shouldExec) continue
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
