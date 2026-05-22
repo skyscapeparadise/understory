@@ -22,8 +22,9 @@ Item {
     // ── External references ─────────────────────────────────────────────────
     // Pass the viewport and buttonGrid items so delegates can bind to their
     // properties without needing them to be in scope via id lookup.
-    property var viewportRef:   null
-    property var buttonGridRef: null
+    property var viewportRef:    null
+    property var buttonGridRef:  null
+    property var variablesModel: null
 
     // ── Layer mode ──────────────────────────────────────────────────────────
     // false = staging: all mouse events suppressed, tool overlays hidden.
@@ -435,6 +436,24 @@ Item {
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
+                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
+                                    for (var j = 0; j < variablesModel.count; j++) {
+                                        var vrow = variablesModel.get(j)
+                                        if (vrow.varName === it.itemUpdateVar) {
+                                            var newVal
+                                            if (vrow.varType === "number") {
+                                                var numCur = parseFloat(vrow.varValue) || 0
+                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
+                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
+                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
+                                                else newVal = it.itemUpdateVal
+                                            } else {
+                                                newVal = it.itemUpdateVal
+                                            }
+                                            variablesModel.setProperty(j, "varValue", newVal)
+                                            break
+                                        }
+                                    }
                                 } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
                                     if (!pendingJump) pendingJump = it
                                 }
@@ -1533,6 +1552,24 @@ Item {
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
+                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
+                                    for (var j = 0; j < variablesModel.count; j++) {
+                                        var vrow = variablesModel.get(j)
+                                        if (vrow.varName === it.itemUpdateVar) {
+                                            var newVal
+                                            if (vrow.varType === "number") {
+                                                var numCur = parseFloat(vrow.varValue) || 0
+                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
+                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
+                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
+                                                else newVal = it.itemUpdateVal
+                                            } else {
+                                                newVal = it.itemUpdateVal
+                                            }
+                                            variablesModel.setProperty(j, "varValue", newVal)
+                                            break
+                                        }
+                                    }
                                 } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
                                     if (!pendingJump) pendingJump = it
                                 }
@@ -2156,6 +2193,24 @@ Item {
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
+                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
+                                    for (var j = 0; j < variablesModel.count; j++) {
+                                        var vrow = variablesModel.get(j)
+                                        if (vrow.varName === it.itemUpdateVar) {
+                                            var newVal
+                                            if (vrow.varType === "number") {
+                                                var numCur = parseFloat(vrow.varValue) || 0
+                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
+                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
+                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
+                                                else newVal = it.itemUpdateVal
+                                            } else {
+                                                newVal = it.itemUpdateVal
+                                            }
+                                            variablesModel.setProperty(j, "varValue", newVal)
+                                            break
+                                        }
+                                    }
                                 } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
                                     if (!pendingJump) pendingJump = it
                                 }
@@ -2984,6 +3039,24 @@ Item {
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
+                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
+                                    for (var j = 0; j < variablesModel.count; j++) {
+                                        var vrow = variablesModel.get(j)
+                                        if (vrow.varName === it.itemUpdateVar) {
+                                            var newVal
+                                            if (vrow.varType === "number") {
+                                                var numCur = parseFloat(vrow.varValue) || 0
+                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
+                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
+                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
+                                                else newVal = it.itemUpdateVal
+                                            } else {
+                                                newVal = it.itemUpdateVal
+                                            }
+                                            variablesModel.setProperty(j, "varValue", newVal)
+                                            break
+                                        }
+                                    }
                                 } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
                                     if (!pendingJump) pendingJump = it
                                 }
@@ -3646,6 +3719,24 @@ Item {
                                 if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
                                     viewportRef.playCueVideo(it.itemVideoPath)
                                     hasCueVideo = true
+                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
+                                    for (var j = 0; j < variablesModel.count; j++) {
+                                        var vrow = variablesModel.get(j)
+                                        if (vrow.varName === it.itemUpdateVar) {
+                                            var newVal
+                                            if (vrow.varType === "number") {
+                                                var numCur = parseFloat(vrow.varValue) || 0
+                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
+                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
+                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
+                                                else newVal = it.itemUpdateVal
+                                            } else {
+                                                newVal = it.itemUpdateVal
+                                            }
+                                            variablesModel.setProperty(j, "varValue", newVal)
+                                            break
+                                        }
+                                    }
                                 } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
                                     if (!pendingJump) pendingJump = it
                                 }

@@ -4344,6 +4344,7 @@ Window {
                 z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking) && viewport.foregroundLayer !== 0) ? 11 : 10
                 viewportRef: viewport
                 buttonGridRef: buttonGrid
+                variablesModel: variablesModel
                 isInteractive: viewport.foregroundLayer === 0
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
@@ -4409,6 +4410,7 @@ Window {
                 z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking) && viewport.foregroundLayer !== 1) ? 11 : 10
                 viewportRef: viewport
                 buttonGridRef: buttonGrid
+                variablesModel: variablesModel
                 isInteractive: viewport.foregroundLayer === 1
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
