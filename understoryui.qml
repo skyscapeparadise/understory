@@ -11792,6 +11792,30 @@ Window {
                         return false
                     }
 
+                    function evaluateItemCondition(it) {
+                        if (!it.itemConditionVar) return false
+                        for (var j = 0; j < variablesModel.count; j++) {
+                            var vrow = variablesModel.get(j)
+                            if (vrow.varName !== it.itemConditionVar) continue
+                            var cur = vrow.varValue || ""
+                            var test = it.itemConditionVal || ""
+                            var op = it.itemConditionOp || "is"
+                            if (vrow.varType === "number") {
+                                var a = parseFloat(cur) || 0
+                                var b = parseFloat(test) || 0
+                                if (op === ">")   return a > b
+                                if (op === "<")   return a < b
+                                if (op === "not") return a !== b
+                                return a === b
+                            } else {
+                                if (vrow.varType === "true or false" && test === "") test = "true"
+                                if (op === "not") return cur !== test
+                                return cur === test
+                            }
+                        }
+                        return false
+                    }
+
                     function fireConditionActions(actionsJson) {
                         var items = []
                         try { items = JSON.parse(actionsJson || "[]") } catch(e) {}
@@ -11804,7 +11828,7 @@ Window {
                             if (it.itemAction === "cue") {
                                 shouldExec = true
                             } else if (it.itemAction === "if") {
-                                lastCondPassed = false; shouldExec = false
+                                lastCondPassed = evaluateItemCondition(it); shouldExec = lastCondPassed
                             } else if (it.itemAction === "else") {
                                 shouldExec = !lastCondPassed
                             } else if (it.itemAction === "where") {

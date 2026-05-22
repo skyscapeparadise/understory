@@ -76,6 +76,30 @@ Item {
         return Math.abs(cur - targetSecs) <= 3.0 / 25.0
     }
 
+    function evaluateIfCondition(it) {
+        if (!it.itemConditionVar || !variablesModel) return false
+        for (var j = 0; j < variablesModel.count; j++) {
+            var vrow = variablesModel.get(j)
+            if (vrow.varName !== it.itemConditionVar) continue
+            var cur = vrow.varValue || ""
+            var test = it.itemConditionVal || ""
+            var op = it.itemConditionOp || "is"
+            if (vrow.varType === "number") {
+                var a = parseFloat(cur) || 0
+                var b = parseFloat(test) || 0
+                if (op === ">")   return a > b
+                if (op === "<")   return a < b
+                if (op === "not") return a !== b
+                return a === b
+            } else {
+                if (vrow.varType === "true or false" && test === "") test = "true"
+                if (op === "not") return cur !== test
+                return cur === test
+            }
+        }
+        return false
+    }
+
     // ── Scene management ────────────────────────────────────────────────────
 
     function clear() {
@@ -421,8 +445,8 @@ Item {
                                 if (it.itemAction === "cue") {
                                     shouldExec = true
                                 } else if (it.itemAction === "if") {
-                                    lastCondPassed = false
-                                    shouldExec = false
+                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
+                                    shouldExec = lastCondPassed
                                 } else if (it.itemAction === "else") {
                                     shouldExec = !lastCondPassed
                                 } else if (it.itemAction === "where") {
@@ -1537,8 +1561,8 @@ Item {
                                 if (it.itemAction === "cue") {
                                     shouldExec = true
                                 } else if (it.itemAction === "if") {
-                                    lastCondPassed = false
-                                    shouldExec = false
+                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
+                                    shouldExec = lastCondPassed
                                 } else if (it.itemAction === "else") {
                                     shouldExec = !lastCondPassed
                                 } else if (it.itemAction === "where") {
@@ -2178,8 +2202,8 @@ Item {
                                 if (it.itemAction === "cue") {
                                     shouldExec = true
                                 } else if (it.itemAction === "if") {
-                                    lastCondPassed = false
-                                    shouldExec = false
+                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
+                                    shouldExec = lastCondPassed
                                 } else if (it.itemAction === "else") {
                                     shouldExec = !lastCondPassed
                                 } else if (it.itemAction === "where") {
@@ -3024,8 +3048,8 @@ Item {
                                 if (it.itemAction === "cue") {
                                     shouldExec = true
                                 } else if (it.itemAction === "if") {
-                                    lastCondPassed = false
-                                    shouldExec = false
+                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
+                                    shouldExec = lastCondPassed
                                 } else if (it.itemAction === "else") {
                                     shouldExec = !lastCondPassed
                                 } else if (it.itemAction === "where") {
@@ -3704,8 +3728,8 @@ Item {
                                 if (it.itemAction === "cue") {
                                     shouldExec = true
                                 } else if (it.itemAction === "if") {
-                                    lastCondPassed = false
-                                    shouldExec = false
+                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
+                                    shouldExec = lastCondPassed
                                 } else if (it.itemAction === "else") {
                                     shouldExec = !lastCondPassed
                                 } else if (it.itemAction === "where") {

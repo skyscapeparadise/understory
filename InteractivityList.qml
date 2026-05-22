@@ -245,7 +245,10 @@ Item {
                     visible: itemTrigger === root.currentTab || root.hideTabs
                     property int listIdx: index
                     property real deleteProgress: 0.0
+                    property bool _ready: false
+                    Component.onCompleted: _ready = true
                     property string condVarType: {
+                        _ready
                         var v = itemConditionVar
                         if (!v || v === "") return ""
                         for (var i = 0; i < root.variablesModel.count; i++) {
@@ -254,6 +257,7 @@ Item {
                         return ""
                     }
                     property string updateVarType: {
+                        _ready
                         var v = itemUpdateVar
                         if (!v || v === "") return ""
                         for (var i = 0; i < root.variablesModel.count; i++) {
@@ -441,7 +445,7 @@ Item {
                                     var op = root.interactivityModel.get(itemIdx).itemConditionOp
                                     if (varType !== "number" && (op === ">" || op === "<"))
                                         root.interactivityModel.setProperty(itemIdx, "itemConditionOp", "is")
-                                    root.interactivityModel.setProperty(itemIdx, "itemConditionVal", "")
+                                    root.interactivityModel.setProperty(itemIdx, "itemConditionVal", varType === "true or false" ? "true" : "")
                                 }
                                 contentItem: Text {
                                     leftPadding: 4; rightPadding: 14
@@ -546,6 +550,10 @@ Item {
                                     visible: interactivityDelegate.condVarType === "true or false"
                                     model: ["true", "false"]
                                     currentIndex: (itemConditionVal === "false") ? 1 : 0
+                                    onVisibleChanged: {
+                                        if (visible && itemConditionVal === "")
+                                            root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemConditionVal", "true")
+                                    }
                                     onActivated: function(idx) {
                                         root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemConditionVal", idx === 0 ? "true" : "false")
                                     }
