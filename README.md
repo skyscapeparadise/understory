@@ -1,8 +1,8 @@
-<img width="1072" alt="Screenshot 2025-05-02 at 12 35 33 PM" src="https://github.com/user-attachments/assets/c86d01d7-5572-41d7-80f9-32251609c2fc" />
+<img width="1072" alt="may2026screenshot" src="https://github.com/user-attachments/assets/1d5a951c-9155-4c24-b3a1-36562ba8ee43" />
 
 # understory
 
-A visual authoring tool for interactive multimedia — no programming required.
+a constructive tool for creating interactive multimedia stories — no programming required
 
 **understory** is for anyone who has ever wanted to make something you can actually walk around inside — a film where the viewer chooses their own path, a game built entirely out of video, a navigable world made from your own footage. If you can drop a clip into a timeline, you can make something with understory.
 
