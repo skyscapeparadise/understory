@@ -30,7 +30,7 @@ Built by [Rain Multimedia](https://www.rainmultimedia.net/) and released as free
 
 - Python (any version supported by the current PySide6 release; Python 3.14+ recommended)
 - [PySide6](https://pypi.org/project/PySide6/) — includes Qt Quick, Qt Multimedia, and all required Qt modules
-- [pysdl3](https://pypi.org/project/pysdl3/) *(optional)* — required for gamepad and controller input
+- [pysdl3](https://pypi.org/project/pysdl3/) — required for gamepad and controller input
 
 ```
 pip install PySide6 pysdl3
