@@ -2900,7 +2900,7 @@ Item {
                 border.width: 1
                 border.color: "#444"
 
-                property var templateModel: ["none", "default", "north", "south", "east", "west"]
+                property var templateModel: ["none", "default", "north", "south", "east", "west", "quit"]
                 property int currentIndex: {
                     if (!keyboardViz.selectedKeyData) return 0
                     var saved = leftPanel.kbMappings[keyboardViz.selectedKeyData.kc]
@@ -3046,7 +3046,7 @@ Item {
                 border.width: 1
                 border.color: "#444"
 
-                property var templateModel: ["none", "default", "north", "south", "east", "west"]
+                property var templateModel: ["none", "default", "north", "south", "east", "west", "quit"]
                 property int currentIndex: {
                     if (!controllerViz.selectedButtonData) return 0
                     var saved = leftPanel.ctrlMappings[controllerViz.selectedButtonData.kc]

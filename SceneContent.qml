@@ -26,6 +26,14 @@ Item {
     property var buttonGridRef:  null
     property var variablesModel: null
 
+    // Scale factor from story-resolution coordinates to the 960×540 editor
+    // viewport.  In the editor this equals mainWindow.editorScale (e.g. 0.5 for
+    // 1920×1080 stories); in preview/simulate it is still the editor value, but
+    // handles are only shown in the editor so preview behaviour is unchanged.
+    // All hardcoded handle pixel sizes are divided by this factor so they appear
+    // as a fixed visual size (e.g. 28 editor-pixels) regardless of story resolution.
+    property real editorScaleFactor: viewportRef ? viewportRef.editorScale : 1.0
+
     // ── Layer mode ──────────────────────────────────────────────────────────
     // false = staging: all mouse events suppressed, tool overlays hidden.
     property bool isInteractive: true
@@ -358,10 +366,10 @@ Item {
                 delegate: Item {
                     id: areaDelegate
                     // expanded 28px on all sides so 56x56 handle items stay within parent bounds
-                    x: model.x1 - 28
-                    y: model.y1 - 28
-                    width: model.x2 - model.x1 + 56
-                    height: model.y2 - model.y1 + 56
+                    x: model.x1 - 28 / sceneContent.editorScaleFactor
+                    y: model.y1 - 28 / sceneContent.editorScaleFactor
+                    width: model.x2 - model.x1 + 56 / sceneContent.editorScaleFactor
+                    height: model.y2 - model.y1 + 56 / sceneContent.editorScaleFactor
                     z: 100 + model.stackOrder
 
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
@@ -382,10 +390,10 @@ Item {
                     // Hidden during simulate mode, shader transitions, and thumbnail capture —
                     // areas are invisible hotspots in those contexts, not editor decorations.
                     Rectangle {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         visible: isInteractive &&
                                  buttonGridRef.selectedTool !== "simulate" &&
                                  !viewportRef.wiping && !viewportRef.sliding && !viewportRef.looking &&
@@ -423,9 +431,9 @@ Item {
                     // which viewportCursorArea already maintains correctly.
                     MouseArea {
                         id: areaSimulateMouseArea
-                        x: 28; y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor; y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
                         hoverEnabled: false
                         z: 3
@@ -516,10 +524,10 @@ Item {
 
                     // Move: covers shape interior only, leaving handle regions free
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: areaDelegate.isSelect
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
@@ -550,10 +558,10 @@ Item {
                             viewportRef.elementDragX = pt.x;
                             viewportRef.elementDragY = pt.y;
                             if (!areaDelegate.isActive || model.locked) return;
-                            var dx = pt.x - areaDelegate.pressVpX, dy = pt.y - areaDelegate.pressVpY;
+                            var dx = (pt.x - areaDelegate.pressVpX) / sceneContent.editorScaleFactor, dy = (pt.y - areaDelegate.pressVpY) / sceneContent.editorScaleFactor;
                             var w = areaDelegate.origX2 - areaDelegate.origX1, h = areaDelegate.origY2 - areaDelegate.origY1;
-                            var nx1 = Math.max(0, Math.min(areaDelegate.origX1 + dx, viewportRef.width - w));
-                            var ny1 = Math.max(0, Math.min(areaDelegate.origY1 + dy, viewportRef.height - h));
+                            var nx1 = Math.max(0, Math.min(areaDelegate.origX1 + dx, viewportRef.contentWidth - w));
+                            var ny1 = Math.max(0, Math.min(areaDelegate.origY1 + dy, viewportRef.contentHeight - h));
                             areasModel.setProperty(index, "x1", nx1);
                             areasModel.setProperty(index, "y1", ny1);
                             areasModel.setProperty(index, "x2", nx1 + w);
@@ -572,10 +580,10 @@ Item {
 
                     // Relayer: hover to highlight, drag to change z-order
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "relayer"
                         hoverEnabled: true
                         z: 2
@@ -613,10 +621,10 @@ Item {
 
                     // Delete (destroy tool): click-and-hold to remove
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: buttonGridRef.selectedTool === "destroy"
                         z: 3
                         onPressed: {
@@ -634,15 +642,15 @@ Item {
                     Item {
                         x: 0
                         y: 0
-                        width: 56
-                        height: 56
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -665,8 +673,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(areaDelegate.origX1 + pt.x - areaDelegate.pressVpX, model.x2 - 20));
-                                var ny1 = Math.max(0, Math.min(areaDelegate.origY1 + pt.y - areaDelegate.pressVpY, model.y2 - 20));
+                                var nx1 = Math.max(0, Math.min(areaDelegate.origX1 + (pt.x - areaDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(areaDelegate.origY1 + (pt.y - areaDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = model.x2 - nx1, nH = model.y2 - ny1;
                                     if (nW / nH > areaDelegate.origAspect) {
@@ -685,17 +693,17 @@ Item {
                     }
                     // Top-mid
                     Item {
-                        x: parent.width / 2 - 14
-                        y: 14
-                        width: 28
-                        height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor
+                        y: 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -714,24 +722,24 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                areasModel.setProperty(index, "y1", Math.max(0, Math.min(areaDelegate.origY1 + pt.y - areaDelegate.pressVpY, model.y2 - 20)));
+                                areasModel.setProperty(index, "y1", Math.max(0, Math.min(areaDelegate.origY1 + (pt.y - areaDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
                     }
                     // Top-right
                     Item {
-                        x: parent.width - 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor
                         y: 0
-                        width: 56
-                        height: 56
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -754,8 +762,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(areaDelegate.origX2 + pt.x - areaDelegate.pressVpX, model.x1 + 20));
-                                var ny1 = Math.max(0, Math.min(areaDelegate.origY1 + pt.y - areaDelegate.pressVpY, model.y2 - 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(areaDelegate.origX2 + (pt.x - areaDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(areaDelegate.origY1 + (pt.y - areaDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = nx2 - model.x1, nH = model.y2 - ny1;
                                     if (nW / nH > areaDelegate.origAspect) {
@@ -774,17 +782,17 @@ Item {
                     }
                     // Right-mid
                     Item {
-                        x: parent.width - 42
-                        y: parent.height / 2 - 14
-                        width: 28
-                        height: 28
+                        x: parent.width - 42 / sceneContent.editorScaleFactor
+                        y: parent.height / 2 - 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -803,24 +811,24 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                areasModel.setProperty(index, "x2", Math.min(viewportRef.width, Math.max(areaDelegate.origX2 + pt.x - areaDelegate.pressVpX, model.x1 + 20)));
+                                areasModel.setProperty(index, "x2", Math.min(viewportRef.contentWidth, Math.max(areaDelegate.origX2 + (pt.x - areaDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
                     }
                     // Bottom-right
                     Item {
-                        x: parent.width - 56
-                        y: parent.height - 56
-                        width: 56
-                        height: 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor
+                        y: parent.height - 56 / sceneContent.editorScaleFactor
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -843,8 +851,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(areaDelegate.origX2 + pt.x - areaDelegate.pressVpX, model.x1 + 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(areaDelegate.origY2 + pt.y - areaDelegate.pressVpY, model.y1 + 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(areaDelegate.origX2 + (pt.x - areaDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(areaDelegate.origY2 + (pt.y - areaDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = nx2 - model.x1, nH = ny2 - model.y1;
                                     if (nW / nH > areaDelegate.origAspect) {
@@ -863,17 +871,17 @@ Item {
                     }
                     // Bottom-mid
                     Item {
-                        x: parent.width / 2 - 14
-                        y: parent.height - 42
-                        width: 28
-                        height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor
+                        y: parent.height - 42 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -892,7 +900,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                areasModel.setProperty(index, "y2", Math.min(viewportRef.height, Math.max(areaDelegate.origY2 + pt.y - areaDelegate.pressVpY, model.y1 + 20)));
+                                areasModel.setProperty(index, "y2", Math.min(viewportRef.contentHeight, Math.max(areaDelegate.origY2 + (pt.y - areaDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -900,16 +908,16 @@ Item {
                     // Bottom-left
                     Item {
                         x: 0
-                        y: parent.height - 56
-                        width: 56
-                        height: 56
+                        y: parent.height - 56 / sceneContent.editorScaleFactor
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -932,8 +940,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(areaDelegate.origX1 + pt.x - areaDelegate.pressVpX, model.x2 - 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(areaDelegate.origY2 + pt.y - areaDelegate.pressVpY, model.y1 + 20));
+                                var nx1 = Math.max(0, Math.min(areaDelegate.origX1 + (pt.x - areaDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(areaDelegate.origY2 + (pt.y - areaDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = model.x2 - nx1, nH = ny2 - model.y1;
                                     if (nW / nH > areaDelegate.origAspect) {
@@ -952,17 +960,17 @@ Item {
                     }
                     // Left-mid
                     Item {
-                        x: 14
-                        y: parent.height / 2 - 14
-                        width: 28
-                        height: 28
+                        x: 14 / sceneContent.editorScaleFactor
+                        y: parent.height / 2 - 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -981,7 +989,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                areasModel.setProperty(index, "x1", Math.max(0, Math.min(areaDelegate.origX1 + pt.x - areaDelegate.pressVpX, model.x2 - 20)));
+                                areasModel.setProperty(index, "x1", Math.max(0, Math.min(areaDelegate.origX1 + (pt.x - areaDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -995,10 +1003,10 @@ Item {
                 delegate: Item {
                     id: tbDelegate
                     // expanded 28px on all sides so 56x56 handle items stay within parent bounds
-                    x: model.x1 - 28
-                    y: model.y1 - 28
-                    width: model.x2 - model.x1 + 56
-                    height: model.y2 - model.y1 + 56
+                    x: model.x1 - 28 / sceneContent.editorScaleFactor
+                    y: model.y1 - 28 / sceneContent.editorScaleFactor
+                    width: model.x2 - model.x1 + 56 / sceneContent.editorScaleFactor
+                    height: model.y2 - model.y1 + 56 / sceneContent.editorScaleFactor
                     z: 100 + model.stackOrder
 
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
@@ -1021,10 +1029,10 @@ Item {
 
                     // Visual border (inset by 28px to match model coordinates)
                     Rectangle {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         color: tbDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, viewportRef.deleteProgress * 0.6) : "transparent"
                         border.color: tbDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((tbDelegate.isActive || tbDelegate.isRelayerHovered) ? "white" : "#666666")
                         border.width: tbDelegate.isRelayerHovered ? 2 : 1
@@ -1059,10 +1067,10 @@ Item {
                     // Interior MouseArea: disabled when editing so TextEdit handles its own mouse events.
                     // When not editing: double-click to enter edit mode, drag to move (select tool only).
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: !tbDelegate.editing
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
@@ -1099,10 +1107,10 @@ Item {
                             viewportRef.elementDragX = pt.x;
                             viewportRef.elementDragY = pt.y;
                             if (tbDelegate.isActive && tbDelegate.isSelect && !model.locked) {
-                                var dx = pt.x - tbDelegate.pressVpX, dy = pt.y - tbDelegate.pressVpY;
+                                var dx = (pt.x - tbDelegate.pressVpX) / sceneContent.editorScaleFactor, dy = (pt.y - tbDelegate.pressVpY) / sceneContent.editorScaleFactor;
                                 var w = tbDelegate.origX2 - tbDelegate.origX1, h = tbDelegate.origY2 - tbDelegate.origY1;
-                                var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + dx, viewportRef.width - w));
-                                var ny1 = Math.max(0, Math.min(tbDelegate.origY1 + dy, viewportRef.height - h));
+                                var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + dx, viewportRef.contentWidth - w));
+                                var ny1 = Math.max(0, Math.min(tbDelegate.origY1 + dy, viewportRef.contentHeight - h));
                                 textBoxesModel.setProperty(index, "x1", nx1);
                                 textBoxesModel.setProperty(index, "y1", ny1);
                                 textBoxesModel.setProperty(index, "x2", nx1 + w);
@@ -1122,10 +1130,10 @@ Item {
 
                     // Relayer: hover to highlight, drag to change z-order
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "relayer"
                         hoverEnabled: true
                         z: 2
@@ -1163,10 +1171,10 @@ Item {
 
                     // Delete (destroy tool): click-and-hold to remove
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: buttonGridRef.selectedTool === "destroy"
                         z: 3
                         onPressed: {
@@ -1184,15 +1192,15 @@ Item {
                     Item {
                         x: 0
                         y: 0
-                        width: 56
-                        height: 56
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1215,8 +1223,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + pt.x - tbDelegate.pressVpX, model.x2 - 20));
-                                var ny1 = Math.max(0, Math.min(tbDelegate.origY1 + pt.y - tbDelegate.pressVpY, model.y2 - 20));
+                                var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + (pt.x - tbDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(tbDelegate.origY1 + (pt.y - tbDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = model.x2 - nx1, nH = model.y2 - ny1;
                                     if (nW / nH > tbDelegate.origAspect) {
@@ -1235,17 +1243,17 @@ Item {
                     }
                     // Top-mid
                     Item {
-                        x: parent.width / 2 - 14
-                        y: 14
-                        width: 28
-                        height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor
+                        y: 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1264,24 +1272,24 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                textBoxesModel.setProperty(index, "y1", Math.max(0, Math.min(tbDelegate.origY1 + pt.y - tbDelegate.pressVpY, model.y2 - 20)));
+                                textBoxesModel.setProperty(index, "y1", Math.max(0, Math.min(tbDelegate.origY1 + (pt.y - tbDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
                     }
                     // Top-right
                     Item {
-                        x: parent.width - 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor
                         y: 0
-                        width: 56
-                        height: 56
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1304,8 +1312,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(tbDelegate.origX2 + pt.x - tbDelegate.pressVpX, model.x1 + 20));
-                                var ny1 = Math.max(0, Math.min(tbDelegate.origY1 + pt.y - tbDelegate.pressVpY, model.y2 - 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(tbDelegate.origX2 + (pt.x - tbDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(tbDelegate.origY1 + (pt.y - tbDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = nx2 - model.x1, nH = model.y2 - ny1;
                                     if (nW / nH > tbDelegate.origAspect) {
@@ -1324,17 +1332,17 @@ Item {
                     }
                     // Right-mid
                     Item {
-                        x: parent.width - 42
-                        y: parent.height / 2 - 14
-                        width: 28
-                        height: 28
+                        x: parent.width - 42 / sceneContent.editorScaleFactor
+                        y: parent.height / 2 - 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1353,24 +1361,24 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                textBoxesModel.setProperty(index, "x2", Math.min(viewportRef.width, Math.max(tbDelegate.origX2 + pt.x - tbDelegate.pressVpX, model.x1 + 20)));
+                                textBoxesModel.setProperty(index, "x2", Math.min(viewportRef.contentWidth, Math.max(tbDelegate.origX2 + (pt.x - tbDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
                     }
                     // Bottom-right
                     Item {
-                        x: parent.width - 56
-                        y: parent.height - 56
-                        width: 56
-                        height: 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor
+                        y: parent.height - 56 / sceneContent.editorScaleFactor
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1393,8 +1401,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(tbDelegate.origX2 + pt.x - tbDelegate.pressVpX, model.x1 + 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(tbDelegate.origY2 + pt.y - tbDelegate.pressVpY, model.y1 + 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(tbDelegate.origX2 + (pt.x - tbDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(tbDelegate.origY2 + (pt.y - tbDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = nx2 - model.x1, nH = ny2 - model.y1;
                                     if (nW / nH > tbDelegate.origAspect) {
@@ -1413,17 +1421,17 @@ Item {
                     }
                     // Bottom-mid
                     Item {
-                        x: parent.width / 2 - 14
-                        y: parent.height - 42
-                        width: 28
-                        height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor
+                        y: parent.height - 42 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1442,7 +1450,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                textBoxesModel.setProperty(index, "y2", Math.min(viewportRef.height, Math.max(tbDelegate.origY2 + pt.y - tbDelegate.pressVpY, model.y1 + 20)));
+                                textBoxesModel.setProperty(index, "y2", Math.min(viewportRef.contentHeight, Math.max(tbDelegate.origY2 + (pt.y - tbDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -1450,16 +1458,16 @@ Item {
                     // Bottom-left
                     Item {
                         x: 0
-                        y: parent.height - 56
-                        width: 56
-                        height: 56
+                        y: parent.height - 56 / sceneContent.editorScaleFactor
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1482,8 +1490,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + pt.x - tbDelegate.pressVpX, model.x2 - 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(tbDelegate.origY2 + pt.y - tbDelegate.pressVpY, model.y1 + 20));
+                                var nx1 = Math.max(0, Math.min(tbDelegate.origX1 + (pt.x - tbDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(tbDelegate.origY2 + (pt.y - tbDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = model.x2 - nx1, nH = ny2 - model.y1;
                                     if (nW / nH > tbDelegate.origAspect) {
@@ -1502,17 +1510,17 @@ Item {
                     }
                     // Left-mid
                     Item {
-                        x: 14
-                        y: parent.height / 2 - 14
-                        width: 28
-                        height: 28
+                        x: 14 / sceneContent.editorScaleFactor
+                        y: parent.height / 2 - 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1531,7 +1539,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                textBoxesModel.setProperty(index, "x1", Math.max(0, Math.min(tbDelegate.origX1 + pt.x - tbDelegate.pressVpX, model.x2 - 20)));
+                                textBoxesModel.setProperty(index, "x1", Math.max(0, Math.min(tbDelegate.origX1 + (pt.x - tbDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -1539,9 +1547,9 @@ Item {
 
                     MouseArea {
                         id: tbSimulateMouseArea
-                        x: 28; y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor; y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
                         hoverEnabled: false
                         z: 3
@@ -1642,10 +1650,10 @@ Item {
                 model: imagesModel
                 delegate: Item {
                     id: imgDelegate
-                    x: model.x1 - 28
-                    y: model.y1 - 28
-                    width: model.x2 - model.x1 + 56
-                    height: model.y2 - model.y1 + 56
+                    x: model.x1 - 28 / sceneContent.editorScaleFactor
+                    y: model.y1 - 28 / sceneContent.editorScaleFactor
+                    width: model.x2 - model.x1 + 56 / sceneContent.editorScaleFactor
+                    height: model.y2 - model.y1 + 56 / sceneContent.editorScaleFactor
                     z: 100 + model.stackOrder
                     layer.enabled: true
 
@@ -1663,10 +1671,10 @@ Item {
 
                     // Image fill
                     Image {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         source: model.filePath
                         fillMode: Image.Stretch
                         clip: true
@@ -1678,10 +1686,10 @@ Item {
 
                     // Border — only when active/selected or relayer hovered
                     Rectangle {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 1
                         color: "transparent"
                         border.color: imgDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((imgDelegate.isActive || imgDelegate.isRelayerHovered) ? "white" : "transparent")
@@ -1697,20 +1705,20 @@ Item {
 
                     // Red delete overlay
                     Rectangle {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 2
                         color: Qt.rgba(1, 0, 0, imgDelegate.isBeingDeleted ? viewportRef.deleteProgress * 0.6 : 0)
                     }
 
                     // Move
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: imgDelegate.isSelect
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
@@ -1741,10 +1749,10 @@ Item {
                             viewportRef.elementDragX = pt.x;
                             viewportRef.elementDragY = pt.y;
                             if (!imgDelegate.isActive || model.locked) return;
-                            var dx = pt.x - imgDelegate.pressVpX, dy = pt.y - imgDelegate.pressVpY;
+                            var dx = (pt.x - imgDelegate.pressVpX) / sceneContent.editorScaleFactor, dy = (pt.y - imgDelegate.pressVpY) / sceneContent.editorScaleFactor;
                             var w = imgDelegate.origX2 - imgDelegate.origX1, h = imgDelegate.origY2 - imgDelegate.origY1;
-                            var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + dx, viewportRef.width - w));
-                            var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + dy, viewportRef.height - h));
+                            var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + dx, viewportRef.contentWidth - w));
+                            var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + dy, viewportRef.contentHeight - h));
                             imagesModel.setProperty(index, "x1", nx1);
                             imagesModel.setProperty(index, "y1", ny1);
                             imagesModel.setProperty(index, "x2", nx1 + w);
@@ -1763,10 +1771,10 @@ Item {
 
                     // Relayer: hover to highlight, drag to change z-order
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "relayer"
                         hoverEnabled: true
                         z: 2
@@ -1804,10 +1812,10 @@ Item {
 
                     // Delete (destroy tool): click-and-hold to remove
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: buttonGridRef.selectedTool === "destroy"
                         z: 3
                         onPressed: {
@@ -1825,15 +1833,15 @@ Item {
                     Item {
                         x: 0
                         y: 0
-                        width: 56
-                        height: 56
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1856,8 +1864,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20));
-                                var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20));
+                                var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + (pt.x - imgDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + (pt.y - imgDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 if (!(mouse.modifiers & Qt.ShiftModifier)) {
                                     var nW = model.x2 - nx1, nH = model.y2 - ny1;
                                     if (nW / nH > imgDelegate.origAspect) {
@@ -1876,17 +1884,17 @@ Item {
                     }
                     // Top-mid
                     Item {
-                        x: parent.width / 2 - 14
-                        y: 14
-                        width: 28
-                        height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor
+                        y: 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1905,24 +1913,24 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                imagesModel.setProperty(index, "y1", Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20)));
+                                imagesModel.setProperty(index, "y1", Math.max(0, Math.min(imgDelegate.origY1 + (pt.y - imgDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
                     }
                     // Top-right
                     Item {
-                        x: parent.width - 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor
                         y: 0
-                        width: 56
-                        height: 56
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1945,8 +1953,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20));
-                                var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + pt.y - imgDelegate.pressVpY, model.y2 - 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(imgDelegate.origX2 + (pt.x - imgDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(imgDelegate.origY1 + (pt.y - imgDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 if (!(mouse.modifiers & Qt.ShiftModifier)) {
                                     var nW = nx2 - model.x1, nH = model.y2 - ny1;
                                     if (nW / nH > imgDelegate.origAspect) {
@@ -1965,17 +1973,17 @@ Item {
                     }
                     // Right-mid
                     Item {
-                        x: parent.width - 42
-                        y: parent.height / 2 - 14
-                        width: 28
-                        height: 28
+                        x: parent.width - 42 / sceneContent.editorScaleFactor
+                        y: parent.height / 2 - 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -1994,24 +2002,24 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                imagesModel.setProperty(index, "x2", Math.min(viewportRef.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20)));
+                                imagesModel.setProperty(index, "x2", Math.min(viewportRef.contentWidth, Math.max(imgDelegate.origX2 + (pt.x - imgDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
                     }
                     // Bottom-right
                     Item {
-                        x: parent.width - 56
-                        y: parent.height - 56
-                        width: 56
-                        height: 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor
+                        y: parent.height - 56 / sceneContent.editorScaleFactor
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2034,8 +2042,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(imgDelegate.origX2 + pt.x - imgDelegate.pressVpX, model.x1 + 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(imgDelegate.origX2 + (pt.x - imgDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(imgDelegate.origY2 + (pt.y - imgDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 if (!(mouse.modifiers & Qt.ShiftModifier)) {
                                     var nW = nx2 - model.x1, nH = ny2 - model.y1;
                                     if (nW / nH > imgDelegate.origAspect) {
@@ -2054,17 +2062,17 @@ Item {
                     }
                     // Bottom-mid
                     Item {
-                        x: parent.width / 2 - 14
-                        y: parent.height - 42
-                        width: 28
-                        height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor
+                        y: parent.height - 42 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2083,7 +2091,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                imagesModel.setProperty(index, "y2", Math.min(viewportRef.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20)));
+                                imagesModel.setProperty(index, "y2", Math.min(viewportRef.contentHeight, Math.max(imgDelegate.origY2 + (pt.y - imgDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -2091,16 +2099,16 @@ Item {
                     // Bottom-left
                     Item {
                         x: 0
-                        y: parent.height - 56
-                        width: 56
-                        height: 56
+                        y: parent.height - 56 / sceneContent.editorScaleFactor
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2123,8 +2131,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(imgDelegate.origY2 + pt.y - imgDelegate.pressVpY, model.y1 + 20));
+                                var nx1 = Math.max(0, Math.min(imgDelegate.origX1 + (pt.x - imgDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(imgDelegate.origY2 + (pt.y - imgDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 if (!(mouse.modifiers & Qt.ShiftModifier)) {
                                     var nW = model.x2 - nx1, nH = ny2 - model.y1;
                                     if (nW / nH > imgDelegate.origAspect) {
@@ -2143,17 +2151,17 @@ Item {
                     }
                     // Left-mid
                     Item {
-                        x: 14
-                        y: parent.height / 2 - 14
-                        width: 28
-                        height: 28
+                        x: 14 / sceneContent.editorScaleFactor
+                        y: parent.height / 2 - 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2172,7 +2180,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                imagesModel.setProperty(index, "x1", Math.max(0, Math.min(imgDelegate.origX1 + pt.x - imgDelegate.pressVpX, model.x2 - 20)));
+                                imagesModel.setProperty(index, "x1", Math.max(0, Math.min(imgDelegate.origX1 + (pt.x - imgDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -2180,9 +2188,9 @@ Item {
 
                     MouseArea {
                         id: imgSimulateMouseArea
-                        x: 28; y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor; y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
                         hoverEnabled: false
                         z: 3
@@ -2275,10 +2283,10 @@ Item {
                 model: videosModel
                 delegate: Item {
                     id: vidDelegate
-                    x: model.x1 - 28
-                    y: model.y1 - 28
-                    width: model.x2 - model.x1 + 56
-                    height: model.y2 - model.y1 + 56
+                    x: model.x1 - 28 / sceneContent.editorScaleFactor
+                    y: model.y1 - 28 / sceneContent.editorScaleFactor
+                    width: model.x2 - model.x1 + 56 / sceneContent.editorScaleFactor
+                    height: model.y2 - model.y1 + 56 / sceneContent.editorScaleFactor
                     z: 100 + model.stackOrder
                     layer.enabled: true
 
@@ -2410,10 +2418,10 @@ Item {
                     }
                     VideoOutput {
                         id: vidOutput
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
 
                         // Wait for 2 real decoded frames before signaling readyForDisplay.
                         // videoSink.videoFrameChanged fires each time a frame arrives in the
@@ -2453,7 +2461,7 @@ Item {
                     // is already black would defeat the purpose. Fade-out is handled explicitly below.
                     Image {
                         id: vidFreezeFrame
-                        x: 28; y: 28
+                        x: 28 / sceneContent.editorScaleFactor; y: 28 / sceneContent.editorScaleFactor
                         width: parent.width - 56; height: parent.height - 56
                         z: 0.5
                         opacity: 0
@@ -2496,10 +2504,10 @@ Item {
 
                     // Border — only when active/selected or relayer hovered
                     Rectangle {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 1
                         color: "transparent"
                         border.color: vidDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((vidDelegate.isActive || vidDelegate.isRelayerHovered) ? "white" : "transparent")
@@ -2515,20 +2523,20 @@ Item {
 
                     // Red delete overlay
                     Rectangle {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 2
                         color: Qt.rgba(1, 0, 0, vidDelegate.isBeingDeleted ? viewportRef.deleteProgress * 0.6 : 0)
                     }
 
                     // Move
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: vidDelegate.isSelect
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
@@ -2559,10 +2567,10 @@ Item {
                             viewportRef.elementDragX = pt.x;
                             viewportRef.elementDragY = pt.y;
                             if (!vidDelegate.isActive || model.locked) return;
-                            var dx = pt.x - vidDelegate.pressVpX, dy = pt.y - vidDelegate.pressVpY;
+                            var dx = (pt.x - vidDelegate.pressVpX) / sceneContent.editorScaleFactor, dy = (pt.y - vidDelegate.pressVpY) / sceneContent.editorScaleFactor;
                             var w = vidDelegate.origX2 - vidDelegate.origX1, h = vidDelegate.origY2 - vidDelegate.origY1;
-                            var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + dx, viewportRef.width - w));
-                            var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + dy, viewportRef.height - h));
+                            var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + dx, viewportRef.contentWidth - w));
+                            var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + dy, viewportRef.contentHeight - h));
                             videosModel.setProperty(index, "x1", nx1);
                             videosModel.setProperty(index, "y1", ny1);
                             videosModel.setProperty(index, "x2", nx1 + w);
@@ -2581,10 +2589,10 @@ Item {
 
                     // Relayer: hover to highlight, drag to change z-order
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "relayer"
                         hoverEnabled: true
                         z: 2
@@ -2622,10 +2630,10 @@ Item {
 
                     // Delete (destroy tool): click-and-hold to remove
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: buttonGridRef.selectedTool === "destroy"
                         z: 3
                         onPressed: {
@@ -2643,15 +2651,15 @@ Item {
                     Item {
                         x: 0
                         y: 0
-                        width: 56
-                        height: 56
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2674,8 +2682,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20));
-                                var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20));
+                                var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + (pt.x - vidDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + (pt.y - vidDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 var nW = model.x2 - nx1, nH = model.y2 - ny1;
                                 if (nW / nH > vidDelegate.origAspect) {
                                     nW = nH * vidDelegate.origAspect;
@@ -2692,17 +2700,17 @@ Item {
                     }
                     // Top-mid
                     Item {
-                        x: parent.width / 2 - 14
-                        y: 14
-                        width: 28
-                        height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor
+                        y: 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2724,12 +2732,12 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20));
+                                var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + (pt.y - vidDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 var nH = model.y2 - ny1;
                                 var nW = nH * vidDelegate.origAspect;
                                 var cx = (vidDelegate.origX1 + vidDelegate.origX2) / 2;
                                 videosModel.setProperty(index, "x1", Math.max(0, cx - nW / 2));
-                                videosModel.setProperty(index, "x2", Math.min(viewportRef.width, cx + nW / 2));
+                                videosModel.setProperty(index, "x2", Math.min(viewportRef.contentWidth, cx + nW / 2));
                                 videosModel.setProperty(index, "y1", ny1);
                             }
                             onReleased: viewportRef.elementDragging = false
@@ -2737,17 +2745,17 @@ Item {
                     }
                     // Top-right
                     Item {
-                        x: parent.width - 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor
                         y: 0
-                        width: 56
-                        height: 56
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2770,8 +2778,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20));
-                                var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + pt.y - vidDelegate.pressVpY, model.y2 - 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(vidDelegate.origX2 + (pt.x - vidDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(vidDelegate.origY1 + (pt.y - vidDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 var nW = nx2 - model.x1, nH = model.y2 - ny1;
                                 if (nW / nH > vidDelegate.origAspect) {
                                     nW = nH * vidDelegate.origAspect;
@@ -2788,17 +2796,17 @@ Item {
                     }
                     // Right-mid
                     Item {
-                        x: parent.width - 42
-                        y: parent.height / 2 - 14
-                        width: 28
-                        height: 28
+                        x: parent.width - 42 / sceneContent.editorScaleFactor
+                        y: parent.height / 2 - 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2820,12 +2828,12 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                var nx2 = Math.min(viewportRef.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(vidDelegate.origX2 + (pt.x - vidDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
                                 var nW = nx2 - model.x1;
                                 var nH = nW / vidDelegate.origAspect;
                                 var cy = (vidDelegate.origY1 + vidDelegate.origY2) / 2;
                                 videosModel.setProperty(index, "y1", Math.max(0, cy - nH / 2));
-                                videosModel.setProperty(index, "y2", Math.min(viewportRef.height, cy + nH / 2));
+                                videosModel.setProperty(index, "y2", Math.min(viewportRef.contentHeight, cy + nH / 2));
                                 videosModel.setProperty(index, "x2", nx2);
                             }
                             onReleased: viewportRef.elementDragging = false
@@ -2833,17 +2841,17 @@ Item {
                     }
                     // Bottom-right
                     Item {
-                        x: parent.width - 56
-                        y: parent.height - 56
-                        width: 56
-                        height: 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor
+                        y: parent.height - 56 / sceneContent.editorScaleFactor
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2866,8 +2874,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(vidDelegate.origX2 + pt.x - vidDelegate.pressVpX, model.x1 + 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(vidDelegate.origX2 + (pt.x - vidDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(vidDelegate.origY2 + (pt.y - vidDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 var nW = nx2 - model.x1, nH = ny2 - model.y1;
                                 if (nW / nH > vidDelegate.origAspect) {
                                     nW = nH * vidDelegate.origAspect;
@@ -2884,17 +2892,17 @@ Item {
                     }
                     // Bottom-mid
                     Item {
-                        x: parent.width / 2 - 14
-                        y: parent.height - 42
-                        width: 28
-                        height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor
+                        y: parent.height - 42 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2916,12 +2924,12 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                var ny2 = Math.min(viewportRef.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(vidDelegate.origY2 + (pt.y - vidDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 var nH = ny2 - model.y1;
                                 var nW = nH * vidDelegate.origAspect;
                                 var cx = (vidDelegate.origX1 + vidDelegate.origX2) / 2;
                                 videosModel.setProperty(index, "x1", Math.max(0, cx - nW / 2));
-                                videosModel.setProperty(index, "x2", Math.min(viewportRef.width, cx + nW / 2));
+                                videosModel.setProperty(index, "x2", Math.min(viewportRef.contentWidth, cx + nW / 2));
                                 videosModel.setProperty(index, "y2", ny2);
                             }
                             onReleased: viewportRef.elementDragging = false
@@ -2930,16 +2938,16 @@ Item {
                     // Bottom-left
                     Item {
                         x: 0
-                        y: parent.height - 56
-                        width: 56
-                        height: 56
+                        y: parent.height - 56 / sceneContent.editorScaleFactor
+                        width: 56 / sceneContent.editorScaleFactor
+                        height: 56 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -2962,8 +2970,8 @@ Item {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
                                 viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(vidDelegate.origY2 + pt.y - vidDelegate.pressVpY, model.y1 + 20));
+                                var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + (pt.x - vidDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(vidDelegate.origY2 + (pt.y - vidDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 var nW = model.x2 - nx1, nH = ny2 - model.y1;
                                 if (nW / nH > vidDelegate.origAspect) {
                                     nW = nH * vidDelegate.origAspect;
@@ -2980,17 +2988,17 @@ Item {
                     }
                     // Left-mid
                     Item {
-                        x: 14
-                        y: parent.height / 2 - 14
-                        width: 28
-                        height: 28
+                        x: 14 / sceneContent.editorScaleFactor
+                        y: parent.height / 2 - 14 / sceneContent.editorScaleFactor
+                        width: 28 / sceneContent.editorScaleFactor
+                        height: 28 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 8
-                            height: 8
-                            radius: 4
+                            width: 8 / sceneContent.editorScaleFactor
+                            height: 8 / sceneContent.editorScaleFactor
+                            radius: 4 / sceneContent.editorScaleFactor
                             color: "white"
                             border.color: "black"
                             border.width: 1
@@ -3012,12 +3020,12 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + pt.x - vidDelegate.pressVpX, model.x2 - 20));
+                                var nx1 = Math.max(0, Math.min(vidDelegate.origX1 + (pt.x - vidDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
                                 var nW = model.x2 - nx1;
                                 var nH = nW / vidDelegate.origAspect;
                                 var cy = (vidDelegate.origY1 + vidDelegate.origY2) / 2;
                                 videosModel.setProperty(index, "y1", Math.max(0, cy - nH / 2));
-                                videosModel.setProperty(index, "y2", Math.min(viewportRef.height, cy + nH / 2));
+                                videosModel.setProperty(index, "y2", Math.min(viewportRef.contentHeight, cy + nH / 2));
                                 videosModel.setProperty(index, "x1", nx1);
                             }
                             onReleased: viewportRef.elementDragging = false
@@ -3026,9 +3034,9 @@ Item {
 
                     MouseArea {
                         id: vidSimulateMouseArea
-                        x: 28; y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor; y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
                         hoverEnabled: false
                         z: 3
@@ -3183,10 +3191,10 @@ Item {
                 model: shadersModel
                 delegate: Item {
                     id: shaderDelegate
-                    x: model.x1 - 28
-                    y: model.y1 - 28
-                    width: model.x2 - model.x1 + 56
-                    height: model.y2 - model.y1 + 56
+                    x: model.x1 - 28 / sceneContent.editorScaleFactor
+                    y: model.y1 - 28 / sceneContent.editorScaleFactor
+                    width: model.x2 - model.x1 + 56 / sceneContent.editorScaleFactor
+                    height: model.y2 - model.y1 + 56 / sceneContent.editorScaleFactor
                     z: 100 + model.stackOrder
 
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
@@ -3210,9 +3218,9 @@ Item {
                     // changes, so per-shader uniform properties are correctly declared.
                     Item {
                         id: shaderEffectContainer
-                        x: 28; y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor; y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         visible: model.fragPath !== ""
 
                         property var dynamicEffect: null
@@ -3344,10 +3352,10 @@ Item {
 
                     // Border — only when active/selected or relayer hovered
                     Rectangle {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 1
                         color: "transparent"
                         border.color: shaderDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((shaderDelegate.isActive || shaderDelegate.isRelayerHovered) ? "white" : "transparent")
@@ -3363,20 +3371,20 @@ Item {
 
                     // Red delete overlay
                     Rectangle {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 2
                         color: Qt.rgba(1, 0, 0, shaderDelegate.isBeingDeleted ? viewportRef.deleteProgress * 0.6 : 0)
                     }
 
                     // Move
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: shaderDelegate.isSelect
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         z: 2
@@ -3407,10 +3415,10 @@ Item {
                             viewportRef.elementDragX = pt.x;
                             viewportRef.elementDragY = pt.y;
                             if (!shaderDelegate.isActive || model.locked) return;
-                            var dx = pt.x - shaderDelegate.pressVpX, dy = pt.y - shaderDelegate.pressVpY;
+                            var dx = (pt.x - shaderDelegate.pressVpX) / sceneContent.editorScaleFactor, dy = (pt.y - shaderDelegate.pressVpY) / sceneContent.editorScaleFactor;
                             var w = shaderDelegate.origX2 - shaderDelegate.origX1, h = shaderDelegate.origY2 - shaderDelegate.origY1;
-                            var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + dx, viewportRef.width - w));
-                            var ny1 = Math.max(0, Math.min(shaderDelegate.origY1 + dy, viewportRef.height - h));
+                            var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + dx, viewportRef.contentWidth - w));
+                            var ny1 = Math.max(0, Math.min(shaderDelegate.origY1 + dy, viewportRef.contentHeight - h));
                             shadersModel.setProperty(index, "x1", nx1);
                             shadersModel.setProperty(index, "y1", ny1);
                             shadersModel.setProperty(index, "x2", nx1 + w);
@@ -3429,10 +3437,10 @@ Item {
 
                     // Relayer
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "relayer"
                         hoverEnabled: true
                         z: 2
@@ -3470,10 +3478,10 @@ Item {
 
                     // Delete (destroy tool)
                     MouseArea {
-                        x: 28
-                        y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: buttonGridRef.selectedTool === "destroy"
                         z: 3
                         onPressed: {
@@ -3492,7 +3500,7 @@ Item {
                         x: 0; y: 0; width: 56; height: 56
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.SizeFDiagCursor
@@ -3506,8 +3514,8 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x; viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + pt.x - shaderDelegate.pressVpX, model.x2 - 20));
-                                var ny1 = Math.max(0, Math.min(shaderDelegate.origY1 + pt.y - shaderDelegate.pressVpY, model.y2 - 20));
+                                var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + (pt.x - shaderDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(shaderDelegate.origY1 + (pt.y - shaderDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = model.x2 - nx1, nH = model.y2 - ny1;
                                     if (nW / nH > shaderDelegate.origAspect) { nW = nH * shaderDelegate.origAspect; nx1 = model.x2 - nW; }
@@ -3521,10 +3529,10 @@ Item {
                     }
                     // Top-mid
                     Item {
-                        x: parent.width / 2 - 14; y: 14; width: 28; height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor; y: 14 / sceneContent.editorScaleFactor; width: 28 / sceneContent.editorScaleFactor; height: 28 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.SizeVerCursor
@@ -3536,7 +3544,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                shadersModel.setProperty(index, "y1", Math.max(0, Math.min(shaderDelegate.origY1 + pt.y - shaderDelegate.pressVpY, model.y2 - 20)));
+                                shadersModel.setProperty(index, "y1", Math.max(0, Math.min(shaderDelegate.origY1 + (pt.y - shaderDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -3546,7 +3554,7 @@ Item {
                         x: parent.width - 56; y: 0; width: 56; height: 56
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.SizeBDiagCursor
@@ -3560,8 +3568,8 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x; viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(shaderDelegate.origX2 + pt.x - shaderDelegate.pressVpX, model.x1 + 20));
-                                var ny1 = Math.max(0, Math.min(shaderDelegate.origY1 + pt.y - shaderDelegate.pressVpY, model.y2 - 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(shaderDelegate.origX2 + (pt.x - shaderDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny1 = Math.max(0, Math.min(shaderDelegate.origY1 + (pt.y - shaderDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y2 - 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = nx2 - model.x1, nH = model.y2 - ny1;
                                     if (nW / nH > shaderDelegate.origAspect) { nW = nH * shaderDelegate.origAspect; nx2 = model.x1 + nW; }
@@ -3575,10 +3583,10 @@ Item {
                     }
                     // Right-mid
                     Item {
-                        x: parent.width - 42; y: parent.height / 2 - 14; width: 28; height: 28
+                        x: parent.width - 42 / sceneContent.editorScaleFactor; y: parent.height / 2 - 14 / sceneContent.editorScaleFactor; width: 28 / sceneContent.editorScaleFactor; height: 28 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.SizeHorCursor
@@ -3590,7 +3598,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                shadersModel.setProperty(index, "x2", Math.min(viewportRef.width, Math.max(shaderDelegate.origX2 + pt.x - shaderDelegate.pressVpX, model.x1 + 20)));
+                                shadersModel.setProperty(index, "x2", Math.min(viewportRef.contentWidth, Math.max(shaderDelegate.origX2 + (pt.x - shaderDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -3600,7 +3608,7 @@ Item {
                         x: parent.width - 56; y: parent.height - 56; width: 56; height: 56
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.SizeFDiagCursor
@@ -3614,8 +3622,8 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x; viewportRef.elementDragY = pt.y;
-                                var nx2 = Math.min(viewportRef.width, Math.max(shaderDelegate.origX2 + pt.x - shaderDelegate.pressVpX, model.x1 + 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(shaderDelegate.origY2 + pt.y - shaderDelegate.pressVpY, model.y1 + 20));
+                                var nx2 = Math.min(viewportRef.contentWidth, Math.max(shaderDelegate.origX2 + (pt.x - shaderDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x1 + 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(shaderDelegate.origY2 + (pt.y - shaderDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = nx2 - model.x1, nH = ny2 - model.y1;
                                     if (nW / nH > shaderDelegate.origAspect) { nW = nH * shaderDelegate.origAspect; nx2 = model.x1 + nW; }
@@ -3629,10 +3637,10 @@ Item {
                     }
                     // Bottom-mid
                     Item {
-                        x: parent.width / 2 - 14; y: parent.height - 42; width: 28; height: 28
+                        x: parent.width / 2 - 14 / sceneContent.editorScaleFactor; y: parent.height - 42 / sceneContent.editorScaleFactor; width: 28 / sceneContent.editorScaleFactor; height: 28 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.SizeVerCursor
@@ -3644,7 +3652,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragY = pt.y;
-                                shadersModel.setProperty(index, "y2", Math.min(viewportRef.height, Math.max(shaderDelegate.origY2 + pt.y - shaderDelegate.pressVpY, model.y1 + 20)));
+                                shadersModel.setProperty(index, "y2", Math.min(viewportRef.contentHeight, Math.max(shaderDelegate.origY2 + (pt.y - shaderDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -3654,7 +3662,7 @@ Item {
                         x: 0; y: parent.height - 56; width: 56; height: 56
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.SizeBDiagCursor
@@ -3668,8 +3676,8 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x; viewportRef.elementDragY = pt.y;
-                                var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + pt.x - shaderDelegate.pressVpX, model.x2 - 20));
-                                var ny2 = Math.min(viewportRef.height, Math.max(shaderDelegate.origY2 + pt.y - shaderDelegate.pressVpY, model.y1 + 20));
+                                var nx1 = Math.max(0, Math.min(shaderDelegate.origX1 + (pt.x - shaderDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor));
+                                var ny2 = Math.min(viewportRef.contentHeight, Math.max(shaderDelegate.origY2 + (pt.y - shaderDelegate.pressVpY) / sceneContent.editorScaleFactor, model.y1 + 20 / sceneContent.editorScaleFactor));
                                 if (mouse.modifiers & Qt.ShiftModifier) {
                                     var nW = model.x2 - nx1, nH = ny2 - model.y1;
                                     if (nW / nH > shaderDelegate.origAspect) { nW = nH * shaderDelegate.origAspect; nx1 = model.x2 - nW; }
@@ -3683,10 +3691,10 @@ Item {
                     }
                     // Left-mid
                     Item {
-                        x: 14; y: parent.height / 2 - 14; width: 28; height: 28
+                        x: 14 / sceneContent.editorScaleFactor; y: parent.height / 2 - 14 / sceneContent.editorScaleFactor; width: 28 / sceneContent.editorScaleFactor; height: 28 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
                         z: 3
-                        Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: "white"; border.color: "black"; border.width: 1 }
+                        Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.SizeHorCursor
@@ -3698,7 +3706,7 @@ Item {
                             onPositionChanged: function (mouse) {
                                 var pt = mapToItem(viewport, mouse.x, mouse.y);
                                 viewportRef.elementDragX = pt.x;
-                                shadersModel.setProperty(index, "x1", Math.max(0, Math.min(shaderDelegate.origX1 + pt.x - shaderDelegate.pressVpX, model.x2 - 20)));
+                                shadersModel.setProperty(index, "x1", Math.max(0, Math.min(shaderDelegate.origX1 + (pt.x - shaderDelegate.pressVpX) / sceneContent.editorScaleFactor, model.x2 - 20 / sceneContent.editorScaleFactor)));
                             }
                             onReleased: viewportRef.elementDragging = false
                         }
@@ -3706,9 +3714,9 @@ Item {
 
                     MouseArea {
                         id: shaderSimulateMouseArea
-                        x: 28; y: 28
-                        width: parent.width - 56
-                        height: parent.height - 56
+                        x: 28 / sceneContent.editorScaleFactor; y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         enabled: isInteractive && buttonGridRef.selectedTool === "simulate"
                         hoverEnabled: false
                         z: 3

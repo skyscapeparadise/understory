@@ -27,6 +27,35 @@ Window {
     color: "black"
     flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint | Qt.MSWindowsFixedSizeDialogHint
 
+    property bool previewActive: false
+    property string previewSavedTool: "select"
+
+    // Story resolution — drives both editor scaling and preview rendering quality.
+    property int storyWidth:  1920
+    property int storyHeight: 1080
+    // Scale that maps story coordinates → 960×540 editor viewport (with letterboxing for non-16:9).
+    property real editorScale: Math.min(960.0 / storyWidth, 540.0 / storyHeight)
+    // Letterbox offsets so the content area is centred in the 960×540 viewport.
+    property real editorOffsetX: (960  - storyWidth  * editorScale) / 2
+    property real editorOffsetY: (540  - storyHeight * editorScale) / 2
+
+    function enterPreview() {
+        previewSavedTool = buttonGrid.selectedTool
+        buttonGrid.selectedTool = "simulate"
+        previewActive = true
+        viewport.parent = previewOverlay
+        mainWindow.visibility = Window.FullScreen
+        previewOverlay.forceActiveFocus()
+    }
+
+    function exitPreview() {
+        mainWindow.visibility = Window.AutomaticVisibility
+        viewport.parent = sceneEditor
+        buttonGrid.selectedTool = previewSavedTool
+        previewActive = false
+        nodeWorkspace.forceActiveFocus()
+    }
+
     FontLoader {
         id: monaSans
         source: "headings/MonaSans-VariableFont_wdth,wght.ttf"
@@ -134,6 +163,7 @@ Window {
     property int lockedHeight: 540
 
     onWidthChanged: {
+        if (previewActive) return
         if (!widthAnimating && !snapBackWidth) {
             snapBackWidth = true;
             width = lockedWidth;
@@ -142,6 +172,7 @@ Window {
     }
 
     onHeightChanged: {
+        if (previewActive) return
         if (!heightAnimating && !snapBackHeight) {
             snapBackHeight = true;
             height = lockedHeight;
@@ -948,6 +979,11 @@ Window {
                     label: "480p  · 854 × 480",
                     w: 854,
                     h: 480
+                },
+                {
+                    label: "540p  · 960 × 540",
+                    w: 960,
+                    h: 540
                 },
                 {
                     label: "720p  · 1280 × 720",
@@ -3101,6 +3137,30 @@ Window {
             width: 960
             height: 540
             color: "black"
+            // In preview the viewport is reparented to previewOverlay; scale so the story
+            // content fills the screen with letterboxing for non-16:9 display.
+            property real _previewScale: mainWindow.previewActive ? Math.min(mainWindow.width / mainWindow.storyWidth, mainWindow.height / mainWindow.storyHeight) : 1.0
+            x: mainWindow.previewActive ? (mainWindow.width  - mainWindow.storyWidth  * _previewScale) / 2 : 0
+            y: mainWindow.previewActive ? (mainWindow.height - mainWindow.storyHeight * _previewScale) / 2 : 0
+            transformOrigin: Item.TopLeft
+            scale: _previewScale
+
+            // Story-space dimensions exposed so SceneContent can read them.
+            property real contentWidth:  mainWindow.storyWidth
+            property real contentHeight: mainWindow.storyHeight
+            property real editorScale:   mainWindow.editorScale
+
+            // Conversion helpers: viewport-space → story-space (used by creation MouseAreas).
+            function toStoryX(vpX) { return Math.max(0, Math.min((vpX - contentScaler.x) / contentScaler.scale, mainWindow.storyWidth))  }
+            function toStoryY(vpY) { return Math.max(0, Math.min((vpY - contentScaler.y) / contentScaler.scale, mainWindow.storyHeight)) }
+
+            // Reload the active scene from DB without saving (used after resolution change).
+            // Delegates to loadSceneIntoViewport which correctly parses the JSON and
+            // runs all post-load steps (nav links, source evaluation, etc.).
+            function forceReloadScene() {
+                if (mainWindow.currentSceneId === -1) return
+                loadSceneIntoViewport(mainWindow.currentSceneId)
+            }
 
             property bool areaDragging: false
             property int hoveredAreaIndex: -1
@@ -3344,8 +3404,9 @@ Window {
                 selectionRevision++;
             }
             function applyBoxSelect(rx1, ry1, rx2, ry2) {
-                var bx1 = Math.min(rx1, rx2), bx2 = Math.max(rx1, rx2);
-                var by1 = Math.min(ry1, ry2), by2 = Math.max(ry1, ry2);
+                // Convert viewport-space drag box to story space before comparing element positions.
+                var bx1 = toStoryX(Math.min(rx1, rx2)), bx2 = toStoryX(Math.max(rx1, rx2));
+                var by1 = toStoryY(Math.min(ry1, ry2)), by2 = toStoryY(Math.max(ry1, ry2));
                 var newAreas = [], newTbs = [], newImgs = [], newVids = [], newShaders = [];
                 for (var i = 0; i < areasModel.count; i++) {
                     var a = areasModel.get(i);
@@ -3532,11 +3593,12 @@ Window {
             function findHoveredArea(px, py) {
                 if (buttonGrid.selectedTool !== "select" && buttonGrid.selectedTool !== "simulate")
                     return -1;
+                var sx = toStoryX(px), sy = toStoryY(py);
                 for (var i = 0; i < areasModel.count; i++) {
                     var a = areasModel.get(i);
                     var ax = Math.min(a.x1, a.x2), ay = Math.min(a.y1, a.y2);
                     var aw = Math.abs(a.x2 - a.x1), ah = Math.abs(a.y2 - a.y1);
-                    if (px >= ax && px <= ax + aw && py >= ay && py <= ay + ah)
+                    if (sx >= ax && sx <= ax + aw && sy >= ay && sy <= ay + ah)
                         return i;
                 }
                 return -1;
@@ -3547,9 +3609,10 @@ Window {
                     return -1;
                 if (!textBoxesModel)
                     return -1;
+                var sx = toStoryX(px), sy = toStoryY(py);
                 for (var i = 0; i < textBoxesModel.count; i++) {
                     var m = textBoxesModel.get(i);
-                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2)
+                    if (sx >= m.x1 && sx <= m.x2 && sy >= m.y1 && sy <= m.y2)
                         return i;
                 }
                 return -1;
@@ -3560,9 +3623,10 @@ Window {
                     return -1;
                 if (!imagesModel)
                     return -1;
+                var sx = toStoryX(px), sy = toStoryY(py);
                 for (var i = 0; i < imagesModel.count; i++) {
                     var m = imagesModel.get(i);
-                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2)
+                    if (sx >= m.x1 && sx <= m.x2 && sy >= m.y1 && sy <= m.y2)
                         return i;
                 }
                 return -1;
@@ -3573,9 +3637,10 @@ Window {
                     return -1;
                 if (!videosModel)
                     return -1;
+                var sx = toStoryX(px), sy = toStoryY(py);
                 for (var i = 0; i < videosModel.count; i++) {
                     var m = videosModel.get(i);
-                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2)
+                    if (sx >= m.x1 && sx <= m.x2 && sy >= m.y1 && sy <= m.y2)
                         return i;
                 }
                 return -1;
@@ -3586,9 +3651,10 @@ Window {
                     return -1;
                 if (!shadersModel)
                     return -1;
+                var sx = toStoryX(px), sy = toStoryY(py);
                 for (var i = 0; i < shadersModel.count; i++) {
                     var m = shadersModel.get(i);
-                    if (px >= m.x1 && px <= m.x2 && py >= m.y1 && py <= m.y2)
+                    if (sx >= m.x1 && sx <= m.x2 && sy >= m.y1 && sy <= m.y2)
                         return i;
                 }
                 return -1;
@@ -4053,10 +4119,10 @@ Window {
                     var h = Math.abs(viewport.areaY2 - viewport.areaY1);
                     if (w > 2 && h > 2) {
                         viewport.areasModel.append({
-                            x1: Math.min(viewport.areaX1, viewport.areaX2),
-                            y1: Math.min(viewport.areaY1, viewport.areaY2),
-                            x2: Math.max(viewport.areaX1, viewport.areaX2),
-                            y2: Math.max(viewport.areaY1, viewport.areaY2),
+                            x1: viewport.toStoryX(Math.min(viewport.areaX1, viewport.areaX2)),
+                            y1: viewport.toStoryY(Math.min(viewport.areaY1, viewport.areaY2)),
+                            x2: viewport.toStoryX(Math.max(viewport.areaX1, viewport.areaX2)),
+                            y2: viewport.toStoryY(Math.max(viewport.areaY1, viewport.areaY2)),
                             name: areaSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
                             interactivityJson: "[]",
@@ -4092,10 +4158,10 @@ Window {
                     if (w > 2 && h > 2) {
                         viewport.pendingFocusTextBox = viewport.textBoxesModel.count;
                         viewport.textBoxesModel.append({
-                            x1: Math.min(viewport.tbX1, viewport.tbX2),
-                            y1: Math.min(viewport.tbY1, viewport.tbY2),
-                            x2: Math.max(viewport.tbX1, viewport.tbX2),
-                            y2: Math.max(viewport.tbY1, viewport.tbY2),
+                            x1: viewport.toStoryX(Math.min(viewport.tbX1, viewport.tbX2)),
+                            y1: viewport.toStoryY(Math.min(viewport.tbY1, viewport.tbY2)),
+                            x2: viewport.toStoryX(Math.max(viewport.tbX1, viewport.tbX2)),
+                            y2: viewport.toStoryY(Math.max(viewport.tbY1, viewport.tbY2)),
                             family: textSettings.txtFamily,
                             tbWeight: textSettings.txtBold ? Font.Bold : textSettings.txtWeight,
                             size: textSettings.txtSize,
@@ -4171,10 +4237,10 @@ Window {
                     var h = Math.abs(viewport.imgY2 - viewport.imgY1);
                     if (w > 2 && h > 2) {
                         viewport.imagesModel.append({
-                            x1: Math.min(viewport.imgX1, viewport.imgX2),
-                            y1: Math.min(viewport.imgY1, viewport.imgY2),
-                            x2: Math.max(viewport.imgX1, viewport.imgX2),
-                            y2: Math.max(viewport.imgY1, viewport.imgY2),
+                            x1: viewport.toStoryX(Math.min(viewport.imgX1, viewport.imgX2)),
+                            y1: viewport.toStoryY(Math.min(viewport.imgY1, viewport.imgY2)),
+                            x2: viewport.toStoryX(Math.max(viewport.imgX1, viewport.imgX2)),
+                            y2: viewport.toStoryY(Math.max(viewport.imgY1, viewport.imgY2)),
                             filePath: imageSettings.selectedFilePath,
                             name: imageSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
@@ -4246,10 +4312,10 @@ Window {
                     var h = Math.abs(viewport.vidY2 - viewport.vidY1);
                     if (w > 2 && h > 2) {
                         viewport.videosModel.append({
-                            x1: Math.min(viewport.vidX1, viewport.vidX2),
-                            y1: Math.min(viewport.vidY1, viewport.vidY2),
-                            x2: Math.max(viewport.vidX1, viewport.vidX2),
-                            y2: Math.max(viewport.vidY1, viewport.vidY2),
+                            x1: viewport.toStoryX(Math.min(viewport.vidX1, viewport.vidX2)),
+                            y1: viewport.toStoryY(Math.min(viewport.vidY1, viewport.vidY2)),
+                            x2: viewport.toStoryX(Math.max(viewport.vidX1, viewport.vidX2)),
+                            y2: viewport.toStoryY(Math.max(viewport.vidY1, viewport.vidY2)),
                             filePath: videoSettings.selectedFilePath,
                             name: videoSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
@@ -4330,6 +4396,26 @@ Window {
                     }
                 }
             }
+
+            // ── Content scaler ────────────────────────────────────────────────────
+            // Wraps the scene layers and transition effects.  In the editor this item
+            // scales story-resolution coordinates down to fit the 960×540 viewport
+            // (with letterboxing for non-16:9 stories).  In preview it renders at the
+            // story's native resolution via layer.textureSize, then the parent viewport
+            // is scaled to fill the screen.
+            Item {
+                id: contentScaler
+                // z:10 keeps scene layers above viewport-space MouseAreas (box-select at z:2,
+                // creation MouseAreas at z:998 are only enabled for their specific tools).
+                z: 10
+                width:  mainWindow.storyWidth
+                height: mainWindow.storyHeight
+                transformOrigin: Item.TopLeft
+                x:     mainWindow.previewActive ? 0 : mainWindow.editorOffsetX
+                y:     mainWindow.previewActive ? 0 : mainWindow.editorOffsetY
+                scale: mainWindow.previewActive ? 1.0 : mainWindow.editorScale
+                layer.enabled:     mainWindow.previewActive
+                layer.textureSize: Qt.size(mainWindow.storyWidth, mainWindow.storyHeight)
 
             // ── Scene content layers (dual-buffer for seamless transitions) ────────
             // sceneLayerA and sceneLayerB are ping-ponged: one is the interactive
@@ -4537,6 +4623,8 @@ Window {
                 property real shutter: viewport.lookShutter
             }
 
+            } // contentScaler
+
             // In-progress rubber-band (only visible while dragging)
             Rectangle {
                 visible: viewport.areaDragging
@@ -4604,10 +4692,11 @@ Window {
                 property real gbX2: 0
                 property real gbY2: 0
 
-                x: gbX1 - 28
-                y: gbY1 - 28
-                width: gbX2 - gbX1 + 56
-                height: gbY2 - gbY1 + 56
+                // Convert story-space model bounds to viewport-space for display.
+                x: contentScaler.x + gbX1 * contentScaler.scale - 28
+                y: contentScaler.y + gbY1 * contentScaler.scale - 28
+                width:  (gbX2 - gbX1) * contentScaler.scale + 56
+                height: (gbY2 - gbY1) * contentScaler.scale + 56
 
                 // Drag snapshot state
                 property real pressVpX: 0
@@ -5375,14 +5464,16 @@ Window {
                 onStatusChanged: {
                     if (status === Image.Ready && implicitWidth > 0 && implicitHeight > 0) {
                         var aspect = implicitWidth / implicitHeight;
-                        var defaultW = Math.min(320, viewport.width * 0.5);
+                        var defaultW = Math.min(mainWindow.storyWidth * 0.333, mainWindow.storyWidth * 0.5);
                         var defaultH = defaultW / aspect;
-                        if (defaultH > viewport.height * 0.5) {
-                            defaultH = viewport.height * 0.5;
+                        if (defaultH > mainWindow.storyHeight * 0.5) {
+                            defaultH = mainWindow.storyHeight * 0.5;
                             defaultW = defaultH * aspect;
                         }
-                        var x1 = Math.max(0, Math.min(viewport.dropX - defaultW / 2, viewport.width - defaultW));
-                        var y1 = Math.max(0, Math.min(viewport.dropY - defaultH / 2, viewport.height - defaultH));
+                        var sx = viewport.toStoryX(viewport.dropX);
+                        var sy = viewport.toStoryY(viewport.dropY);
+                        var x1 = Math.max(0, Math.min(sx - defaultW / 2, mainWindow.storyWidth - defaultW));
+                        var y1 = Math.max(0, Math.min(sy - defaultH / 2, mainWindow.storyHeight - defaultH));
                         viewport.imagesModel.append({
                             x1: x1,
                             y1: y1,
@@ -5410,14 +5501,16 @@ Window {
                     if (status === MediaPlayer.LoadedMedia || status === MediaPlayer.BufferedMedia) {
                         var res = metaData.value(MediaMetaData.Resolution);
                         var aspect = (res && res.width > 0 && res.height > 0) ? res.width / res.height : 16 / 9;
-                        var defaultW = Math.min(320, viewport.width * 0.5);
+                        var defaultW = Math.min(mainWindow.storyWidth * 0.333, mainWindow.storyWidth * 0.5);
                         var defaultH = defaultW / aspect;
-                        if (defaultH > viewport.height * 0.5) {
-                            defaultH = viewport.height * 0.5;
+                        if (defaultH > mainWindow.storyHeight * 0.5) {
+                            defaultH = mainWindow.storyHeight * 0.5;
                             defaultW = defaultH * aspect;
                         }
-                        var x1 = Math.max(0, Math.min(viewport.dropX - defaultW / 2, viewport.width - defaultW));
-                        var y1 = Math.max(0, Math.min(viewport.dropY - defaultH / 2, viewport.height - defaultH));
+                        var sx = viewport.toStoryX(viewport.dropX);
+                        var sy = viewport.toStoryY(viewport.dropY);
+                        var x1 = Math.max(0, Math.min(sx - defaultW / 2, mainWindow.storyWidth - defaultW));
+                        var y1 = Math.max(0, Math.min(sy - defaultH / 2, mainWindow.storyHeight - defaultH));
                         viewport.videosModel.append({
                             x1: x1,
                             y1: y1,
@@ -6094,7 +6187,7 @@ Window {
                                     if (modelData === "preview") {
                                         buttonRoot.flashing = true;
                                         flashTimer.restart();
-                                        // TODO: launch preview
+                                        mainWindow.enterPreview()
                                         return;
                                     }
                                     var nonCreation = ["select", "simulate", "relayer", "destroy"];
@@ -13847,8 +13940,11 @@ Window {
         width: 1365
         height: 300
         simulateTool: buttonGrid.selectedTool
-        onKeyMappingTriggered:  templateName => viewport.activeContent.fireAreasByTemplate(templateName)
-        onCtrlMappingTriggered: templateName => viewport.activeContent.fireAreasByTemplate(templateName)
+        onKeyMappingTriggered:  templateName => { if (templateName !== "quit") viewport.activeContent.fireAreasByTemplate(templateName) }
+        onCtrlMappingTriggered: templateName => {
+            if (templateName === "quit") { if (mainWindow.previewActive) mainWindow.exitPreview() }
+            else viewport.activeContent.fireAreasByTemplate(templateName)
+        }
     }
 
     Rectangle {
@@ -14195,6 +14291,9 @@ Window {
     Connections {
         target: storyManager
         function onStoryOpened() {
+            var res = storyManager.getResolution()
+            mainWindow.storyWidth  = res.width
+            mainWindow.storyHeight = res.height
             var kbJson = storyManager.getEditorState("keyboard_mappings")
             if (kbJson !== "") {
                 try { nodeWorkspace.kbMappings = JSON.parse(kbJson) } catch(e) {}
@@ -14202,6 +14301,11 @@ Window {
             var ctrlJson = storyManager.getEditorState("controller_mappings")
             if (ctrlJson !== "") {
                 try { nodeWorkspace.ctrlMappings = JSON.parse(ctrlJson) } catch(e) {}
+            }
+            if (Object.keys(nodeWorkspace.kbMappings).length === 0) {
+                var defaults = {}
+                defaults[Qt.Key_Escape] = "quit"
+                nodeWorkspace.kbMappings = defaults
             }
         }
     }
@@ -14215,6 +14319,17 @@ Window {
         function onCtrlMappingsChanged() {
             if (storyManager.isOpen)
                 storyManager.setEditorState("controller_mappings", JSON.stringify(nodeWorkspace.ctrlMappings))
+        }
+    }
+
+    // ── Resolution change: update QML state and reload the active scene ────────
+
+    Connections {
+        target: storyManager
+        function onResolutionChanged(w, h) {
+            mainWindow.storyWidth  = w
+            mainWindow.storyHeight = h
+            viewport.forceReloadScene()
         }
     }
 
@@ -14233,6 +14348,34 @@ Window {
             var pb = Object.assign({}, nodeWorkspace.ctrlPressedButtons)
             delete pb[kc]
             nodeWorkspace.ctrlPressedButtons = pb
+        }
+    }
+
+    Rectangle {
+        id: previewOverlay
+        visible: mainWindow.previewActive
+        anchors.fill: parent
+        color: "black"
+        z: 9999
+
+        focus: visible
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+        }
+
+        Keys.onPressed: event => {
+            event.accepted = true
+            if (!event.isAutoRepeat) {
+                var keyId = event.key | (event.modifiers & Qt.KeypadModifier ? 0x01000000 : 0)
+                var tpl = nodeWorkspace.kbMappings[keyId] || "none"
+                if (tpl === "quit") {
+                    mainWindow.exitPreview()
+                } else if (tpl !== "none") {
+                    viewport.activeContent.fireAreasByTemplate(tpl)
+                }
+            }
         }
     }
 

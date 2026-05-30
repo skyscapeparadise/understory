@@ -184,6 +184,46 @@ class _CommandHistory:
         self._index = -1
 
 
+def _rescale_elements_meta(conn, scale_x, scale_y):
+    """Scale all element spatial data (stored in the meta JSON blob) by (scale_x, scale_y).
+
+    The elements table keeps a parallel set of x/y/w/h columns used for SQLite
+    querying, and a JSON blob in `meta` that holds the full element state read by
+    QML.  Both must be updated together for the resolution change to take effect.
+    """
+    coord_fields_x = {"x", "x1", "x2"}
+    coord_fields_y = {"y", "y1", "y2"}
+    size_fields_x  = {"w"}
+    size_fields_y  = {"h"}
+
+    rows = conn.execute("SELECT id, meta FROM elements").fetchall()
+    for elem_id, meta_json in rows:
+        try:
+            el = json.loads(meta_json)
+        except Exception:
+            continue
+        for f in coord_fields_x:
+            if f in el:
+                el[f] = el[f] * scale_x
+        for f in coord_fields_y:
+            if f in el:
+                el[f] = el[f] * scale_y
+        for f in size_fields_x:
+            if f in el:
+                el[f] = el[f] * scale_x
+        for f in size_fields_y:
+            if f in el:
+                el[f] = el[f] * scale_y
+        # Font size for text elements (stored as "size" in QML model → meta)
+        if "size" in el:
+            el["size"] = el["size"] * scale_x
+        conn.execute(
+            "UPDATE elements SET x = ?, y = ?, w = ?, h = ?, meta = ? WHERE id = ?",
+            (el.get("x", 0), el.get("y", 0), el.get("w", 0), el.get("h", 0),
+             json.dumps(el), elem_id),
+        )
+
+
 class StoryManager(QObject):
     """Owns the SQLite connection for the currently-open .story file."""
 
@@ -191,6 +231,7 @@ class StoryManager(QObject):
     storyOpened = Signal()  # fires only on open/new, not on metadata updates
     undoAvailabilityChanged = Signal()
     redoAvailabilityChanged = Signal()
+    resolutionChanged = Signal(int, int)
 
     def __init__(self):
         super().__init__()
@@ -483,19 +524,20 @@ class StoryManager(QObject):
                 "SELECT resolution_w, resolution_h FROM story WHERE id = 1"
             ).fetchone()
             old_w, old_h = (row[0], row[1]) if row else (1920, 1080)
-
-            def apply(rw, rh):
-                self._conn.execute(
-                    "UPDATE story SET resolution_w = ?, resolution_h = ? WHERE id = 1",
-                    (rw, rh),
-                )
-                self._conn.commit()
-
-            apply(w, h)
-            self._push_command(
-                lambda rw=old_w, rh=old_h: apply(rw, rh),
-                lambda rw=w, rh=h: apply(rw, rh),
+            if old_w == w and old_h == h:
+                return
+            scale_x = w / old_w
+            scale_y = h / old_h
+            self._conn.execute(
+                "UPDATE story SET resolution_w = ?, resolution_h = ? WHERE id = 1",
+                (w, h),
             )
+            _rescale_elements_meta(self._conn, scale_x, scale_y)
+            self._conn.commit()
+            self._history.clear()
+            self.undoAvailabilityChanged.emit()
+            self.redoAvailabilityChanged.emit()
+            self.resolutionChanged.emit(w, h)
         except Exception as e:
             print(f"StoryManager.setResolution: {e}")
 
