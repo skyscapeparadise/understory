@@ -24,7 +24,7 @@ const int   BLUR_SAMPLES = 24;
 
 // Peak barrel-distortion coefficient at transition midpoint. Gives the sensation
 // of being inside a curved sphere. Zero at both endpoints — seamless cut points.
-const float SPHERE_BARREL = 0.065;
+const float SPHERE_BARREL = 0;
 
 // Back-ease-out: f(0)=0, f(1)=1, overshoots past 1.0 around t∈[0.5,0.9].
 float backEaseOut(float t, float s) {
