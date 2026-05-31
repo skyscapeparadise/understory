@@ -2438,8 +2438,13 @@ Item {
                                         imageLoadComplete()
                                     }
                                 }
-                                // During a source swap, count new frames then reveal new video
-                                if (vidDelegate.swapping) {
+                                // During a source swap, count new frames then reveal new video.
+                                // Only count frames after pendingSwapPath is cleared — i.e. after
+                                // Image.Ready has set liveFilePath to the new source. Frames that
+                                // arrive while the freeze grab is in flight are from the old source
+                                // and must not advance the counter, or swapping flips false before
+                                // liveFilePath ever changes and the source never switches.
+                                if (vidDelegate.swapping && vidDelegate.pendingSwapPath === "") {
                                     vidDelegate.swapFrameCount++
                                     if (vidDelegate.swapFrameCount >= 3) {
                                         vidFreezeFrameFadeOut.restart()
