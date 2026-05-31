@@ -4438,7 +4438,7 @@ Window {
                 // During wipe/slide/look: both layers stay at opacity 1 so FBO textures have full color,
                 // but hideSource:true on the ShaderEffectSources hides them from the scene.
                 // Staging at rest: opacity 0 (keeps video frames decoding silently).
-                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 0 ? 1.0 : viewport.dissolving ? viewport.dissolveOpacity : 0.0
+                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 0 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
 
                 Connections {
                     target: sceneLayerA
@@ -4500,7 +4500,7 @@ Window {
                 isInteractive: viewport.foregroundLayer === 1
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
-                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 1 ? 1.0 : viewport.dissolving ? viewport.dissolveOpacity : 0.0
+                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 1 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
 
                 Connections {
                     target: sceneLayerB
