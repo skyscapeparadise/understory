@@ -5941,7 +5941,14 @@ Window {
 
             Item {
                 id: cueVideoOverlay
-                anchors.fill: parent
+                // Match contentScaler's geometry so the fill video covers the full story
+                // canvas at every resolution, both in the editor and in fullscreen preview.
+                x:     mainWindow.previewActive ? 0 : mainWindow.editorOffsetX
+                y:     mainWindow.previewActive ? 0 : mainWindow.editorOffsetY
+                width: mainWindow.storyWidth
+                height: mainWindow.storyHeight
+                transformOrigin: Item.TopLeft
+                scale: mainWindow.previewActive ? 1.0 : mainWindow.editorScale
                 visible: false
                 z: 1000
 
