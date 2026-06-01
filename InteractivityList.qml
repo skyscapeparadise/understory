@@ -1086,7 +1086,8 @@ Item {
                                         { icon: "dissolve", key: "dissolve" },
                                         { icon: "wipe",     key: "wipe"     },
                                         { icon: "push",     key: "push"     },
-                                        { icon: "look",     key: "look"     }
+                                        { icon: "look",     key: "look"     },
+                                        { icon: "move",     key: "move"     }
                                     ]
                                     delegate: Rectangle {
                                         Layout.fillWidth: true
@@ -1125,8 +1126,8 @@ Item {
 
                         Item {
                             width: parent.width
-                            height: (itemCommand === "jump" && itemTransition !== "cut" && itemTransition !== "look") ? 22 : 0
-                            visible: itemCommand === "jump" && itemTransition !== "cut" && itemTransition !== "look"
+                            height: (itemCommand === "jump" && itemTransition !== "cut" && itemTransition !== "look" && itemTransition !== "move") ? 22 : 0
+                            visible: itemCommand === "jump" && itemTransition !== "cut" && itemTransition !== "look" && itemTransition !== "move"
 
                             RowLayout {
                                 anchors.fill: parent
@@ -1683,6 +1684,316 @@ Item {
                                                         lookPitchField.text = modelData.pitch.toFixed(1)
                                                     }
                                                 }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // move controls
+                        Item {
+                            width: parent.width
+                            height: (itemCommand === "jump" && itemTransition === "move") ? 126 : 0
+                            visible: itemCommand === "jump" && itemTransition === "move"
+                            clip: true
+
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 8
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.alignment: Qt.AlignTop
+                                    spacing: 4
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                        Text { text: "speed"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                        Slider {
+                                            id: moveSpeedSlider
+                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            from: 0; to: 1; stepSize: 0
+                                            Component.onCompleted: {
+                                                var s = itemTransitionSpeed || 1.0
+                                                value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                                            }
+                                            onMoved: {
+                                                var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
+                                                var rounded = Math.round(speed * 100) / 100
+                                                root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemTransitionSpeed", rounded)
+                                                moveSpeedField.text = rounded.toFixed(1)
+                                            }
+                                            background: Rectangle {
+                                                x: moveSpeedSlider.leftPadding; y: moveSpeedSlider.topPadding + moveSpeedSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200; implicitHeight: 4; width: moveSpeedSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                Rectangle { width: moveSpeedSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                            }
+                                            handle: Rectangle {
+                                                x: moveSpeedSlider.leftPadding + moveSpeedSlider.visualPosition * (moveSpeedSlider.availableWidth - width)
+                                                y: moveSpeedSlider.topPadding + moveSpeedSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: moveSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                            }
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 52; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: moveSpeedField
+                                                anchors.left: parent.left; anchors.right: moveSpeedSec.left
+                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                                Component.onCompleted: text = (itemTransitionSpeed || 1.0).toFixed(1)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                                    text = speed.toFixed(1)
+                                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemTransitionSpeed", speed)
+                                                    moveSpeedSlider.value = speed <= 2.0 ? speed / 4.0 : 0.5 + (speed - 2.0) / 16.0
+                                                }
+                                            }
+                                            Text { id: moveSpeedSec; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "sec"; font.pixelSize: 10; color: "#aaa" }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                        Text { text: "distance"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                        Slider {
+                                            id: moveDistSlider
+                                            Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
+                                            from: -3.0; to: 3.0; stepSize: 0
+                                            Component.onCompleted: value = itemMoveDist !== undefined ? itemMoveDist : 1.0
+                                            onMoved: {
+                                                var v = Math.round(value * 100) / 100
+                                                root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMoveDist", v)
+                                                moveDistField.text = v.toFixed(2)
+                                            }
+                                            background: Rectangle {
+                                                x: moveDistSlider.leftPadding; y: moveDistSlider.topPadding + moveDistSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200; implicitHeight: 4; width: moveDistSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                Rectangle {
+                                                    x: moveDistSlider.availableWidth / 2
+                                                    width: (moveDistSlider.visualPosition - 0.5) * moveDistSlider.availableWidth
+                                                    height: parent.height; color: "#5DA9A4"; radius: 2
+                                                }
+                                            }
+                                            handle: Rectangle {
+                                                x: moveDistSlider.leftPadding + moveDistSlider.visualPosition * (moveDistSlider.availableWidth - width)
+                                                y: moveDistSlider.topPadding + moveDistSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: moveDistSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                            }
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: moveDistField
+                                                anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: -3.0; top: 3.0 }
+                                                Component.onCompleted: text = (itemMoveDist !== undefined ? itemMoveDist : 1.0).toFixed(2)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = Math.min(3.0, Math.max(-3.0, parseFloat(text) || 0.0))
+                                                    text = v.toFixed(2)
+                                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMoveDist", v)
+                                                    moveDistSlider.value = v
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                        Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                        Slider {
+                                            id: moveFovSlider
+                                            Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
+                                            from: 10; to: 75; stepSize: 0
+                                            Component.onCompleted: value = itemMoveFovMM !== undefined ? itemMoveFovMM : 24.0
+                                            onMoved: {
+                                                var v = Math.round(value * 10) / 10
+                                                root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMoveFovMM", v)
+                                                moveFovField.text = Math.round(v).toString()
+                                            }
+                                            background: Rectangle {
+                                                x: moveFovSlider.leftPadding; y: moveFovSlider.topPadding + moveFovSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200; implicitHeight: 4; width: moveFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                Rectangle { width: moveFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                            }
+                                            handle: Rectangle {
+                                                x: moveFovSlider.leftPadding + moveFovSlider.visualPosition * (moveFovSlider.availableWidth - width)
+                                                y: moveFovSlider.topPadding + moveFovSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: moveFovSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                            }
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: moveFovField
+                                                anchors.left: parent.left; anchors.right: moveFovMmLabel.left
+                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: IntValidator { bottom: 10; top: 75 }
+                                                Component.onCompleted: text = Math.round(itemMoveFovMM !== undefined ? itemMoveFovMM : 24).toString()
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = Math.min(75, Math.max(10, parseInt(text) || 24))
+                                                    text = v.toString()
+                                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMoveFovMM", v)
+                                                    moveFovSlider.value = v
+                                                }
+                                            }
+                                            Text { id: moveFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 6
+                                        Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
+                                        Slider {
+                                            id: moveShutterSlider
+                                            Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
+                                            from: 0.0; to: 0.5; stepSize: 0
+                                            Component.onCompleted: value = itemMoveShutter !== undefined ? itemMoveShutter : 0.12
+                                            onMoved: {
+                                                var v = Math.round(value * 1000) / 1000
+                                                root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMoveShutter", v)
+                                                moveShutterField.text = v.toFixed(2)
+                                            }
+                                            background: Rectangle {
+                                                x: moveShutterSlider.leftPadding; y: moveShutterSlider.topPadding + moveShutterSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200; implicitHeight: 4; width: moveShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
+                                                Rectangle { width: moveShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
+                                            }
+                                            handle: Rectangle {
+                                                x: moveShutterSlider.leftPadding + moveShutterSlider.visualPosition * (moveShutterSlider.availableWidth - width)
+                                                y: moveShutterSlider.topPadding + moveShutterSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12; implicitHeight: 12; radius: 6; color: moveShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                            }
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: moveShutterField
+                                                anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: 0.0; top: 0.5 }
+                                                Component.onCompleted: text = (itemMoveShutter !== undefined ? itemMoveShutter : 0.12).toFixed(2)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0))
+                                                    text = v.toFixed(2)
+                                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMoveShutter", v)
+                                                    moveShutterSlider.value = v
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true; height: 22; spacing: 4
+                                        Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
+                                        Rectangle {
+                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: moveYawField
+                                                anchors.left: parent.left; anchors.right: moveYawDeg.left
+                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                Component.onCompleted: text = (itemMoveYaw !== undefined ? itemMoveYaw : 0.0).toFixed(1)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = parseFloat(text) || 0.0
+                                                    text = v.toFixed(1)
+                                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMoveYaw", v)
+                                                }
+                                            }
+                                            Text { id: moveYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                        }
+                                        Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
+                                        Rectangle {
+                                            Layout.fillWidth: true; Layout.preferredHeight: 22
+                                            color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                            TextInput {
+                                                id: movePitchField
+                                                anchors.left: parent.left; anchors.right: movePitchDeg.left
+                                                anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
+                                                color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                                validator: DoubleValidator { bottom: -9999; top: 9999 }
+                                                Component.onCompleted: text = (itemMovePitch !== undefined ? itemMovePitch : 0.0).toFixed(1)
+                                                Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
+                                                onEditingFinished: {
+                                                    var v = parseFloat(text) || 0.0
+                                                    text = v.toFixed(1)
+                                                    root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMovePitch", v)
+                                                }
+                                            }
+                                            Text { id: movePitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
+                                        }
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    id: movePickerColIL
+                                    Layout.preferredWidth: 76
+                                    Layout.alignment: Qt.AlignTop
+                                    spacing: 4
+                                    property bool movePickerBack: false
+
+                                    RowLayout {
+                                        Layout.preferredWidth: 76; height: 16; spacing: 4
+                                        Repeater {
+                                            model: [{ label: "front", back: false }, { label: "back", back: true }]
+                                            delegate: Rectangle {
+                                                Layout.fillWidth: true; Layout.preferredHeight: 16; radius: 4
+                                                property bool isActive: movePickerColIL.movePickerBack === modelData.back
+                                                color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 9; color: parent.isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
+                                                MouseArea { anchors.fill: parent; onClicked: movePickerColIL.movePickerBack = modelData.back }
+                                            }
+                                        }
+                                    }
+
+                                    Item {
+                                        Layout.preferredWidth: 68; Layout.preferredHeight: 68; Layout.alignment: Qt.AlignHCenter
+                                        ShaderEffect {
+                                            anchors.fill: parent
+                                            fragmentShader: "lookpicker.frag.qsb"
+                                            property real yaw:   itemMoveYaw   !== undefined ? itemMoveYaw   : 0.0
+                                            property real pitch: itemMovePitch !== undefined ? itemMovePitch : 0.0
+                                            property real fovMM: itemMoveFovMM !== undefined ? itemMoveFovMM : 24.0
+                                            property real back:  movePickerColIL.movePickerBack ? 1.0 : 0.0
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onPressed:         movePickerMouse(mouseX, mouseY)
+                                            onPositionChanged: if (pressed) movePickerMouse(mouseX, mouseY)
+                                            function movePickerMouse(mx, my) {
+                                                var cx = 34.0, cy = 34.0
+                                                var nx = (mx - cx) / cx, ny = (my - cy) / cy
+                                                var r = Math.sqrt(nx * nx + ny * ny)
+                                                if (r > 1.0) { nx /= r; ny /= r; r = 1.0 }
+                                                var z  = Math.sqrt(Math.max(0.0, 1.0 - r * r))
+                                                var lx = nx, ly = -ny
+                                                var lz = movePickerColIL.movePickerBack ? -z : z
+                                                var newYaw   = Math.round(Math.atan2(lx, lz) * 1800.0 / Math.PI) / 10
+                                                var absCosy  = Math.sqrt(ly * ly + lz * lz)
+                                                var sinPitch = absCosy > 0.0001 ? ly / (lz >= 0 ? absCosy : -absCosy) : 0.0
+                                                var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, sinPitch))) * 1800.0 / Math.PI) / 10
+                                                root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMoveYaw",   newYaw)
+                                                root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemMovePitch", newPitch)
+                                                moveYawField.text   = newYaw.toFixed(1)
+                                                movePitchField.text = newPitch.toFixed(1)
                                             }
                                         }
                                     }
