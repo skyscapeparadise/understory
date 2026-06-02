@@ -1148,13 +1148,7 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0,
-                    moveSpeed: 1.0,
-                    moveDist: 1.0,
-                    moveFov: 24.0,
-                    moveShutter: 0.12,
-                    moveYaw: 0.0,
-                    movePitch: 0.0
+                    lookPitch: 0.0
                 },
                 {
                     transition: "cut",
@@ -1167,13 +1161,7 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0,
-                    moveSpeed: 1.0,
-                    moveDist: 1.0,
-                    moveFov: 24.0,
-                    moveShutter: 0.12,
-                    moveYaw: 0.0,
-                    movePitch: 0.0
+                    lookPitch: 0.0
                 },
                 {
                     transition: "cut",
@@ -1186,13 +1174,7 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0,
-                    moveSpeed: 1.0,
-                    moveDist: 1.0,
-                    moveFov: 24.0,
-                    moveShutter: 0.12,
-                    moveYaw: 0.0,
-                    movePitch: 0.0
+                    lookPitch: 0.0
                 },
                 {
                     transition: "cut",
@@ -1205,13 +1187,7 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0,
-                    moveSpeed: 1.0,
-                    moveDist: 1.0,
-                    moveFov: 24.0,
-                    moveShutter: 0.12,
-                    moveYaw: 0.0,
-                    movePitch: 0.0
+                    lookPitch: 0.0
                 },
                 {
                     transition: "cut",
@@ -1224,13 +1200,7 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0,
-                    moveSpeed: 1.0,
-                    moveDist: 1.0,
-                    moveFov: 24.0,
-                    moveShutter: 0.12,
-                    moveYaw: 0.0,
-                    movePitch: 0.0
+                    lookPitch: 0.0
                 }
             ]
             // index 0 = default, 1 = north, 2 = south, 3 = east, 4 = west
@@ -1262,13 +1232,7 @@ Window {
                                 lookOvershoot: 1.0,
                                 lookShutter: 0.10,
                                 lookYaw: 90.0,
-                                lookPitch: 0.0,
-                                moveSpeed: 1.0,
-                                moveDist: 1.0,
-                                moveFov: 24.0,
-                                moveShutter: 0.12,
-                                moveYaw: 0.0,
-                                movePitch: 0.0
+                                lookPitch: 0.0
                             });
                         }
                         dirTransitions = loaded;
@@ -1323,7 +1287,7 @@ Window {
                             if (items[j].itemCommand !== "jump")
                                 continue;
                             items[j].itemTransition = td.transition || "cut";
-                            items[j].itemTransitionSpeed = td.transition === "look" ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4) : td.transition === "move" ? (td.moveSpeed !== undefined ? td.moveSpeed : 1.0) : (td.speed !== undefined ? td.speed : 1.0);
+                            items[j].itemTransitionSpeed = td.transition === "look" ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4) : (td.speed !== undefined ? td.speed : 1.0);
                             items[j].itemPushDirection = td.pushDir || "right";
                             items[j].itemWipeFeather = td.wipeFeather !== undefined ? td.wipeFeather : 0.0;
                             items[j].itemWipeDirection = td.wipeDir || "right";
@@ -1332,11 +1296,6 @@ Window {
                             items[j].itemLookFovMM = td.lookFov !== undefined ? td.lookFov : 24.0;
                             items[j].itemLookOvershoot = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0;
                             items[j].itemLookShutter = td.lookShutter !== undefined ? td.lookShutter : 0.10;
-                            items[j].itemMoveDist = td.moveDist !== undefined ? td.moveDist : 1.0;
-                            items[j].itemMoveYaw = td.moveYaw !== undefined ? td.moveYaw : 0.0;
-                            items[j].itemMovePitch = td.movePitch !== undefined ? td.movePitch : 0.0;
-                            items[j].itemMoveFovMM = td.moveFov !== undefined ? td.moveFov : 24.0;
-                            items[j].itemMoveShutter = td.moveShutter !== undefined ? td.moveShutter : 0.12;
                             itemChanged = true;
                         }
                         if (itemChanged) {
@@ -1378,7 +1337,7 @@ Window {
                             if (items[j].itemCommand !== "jump")
                                 continue;
                             items[j].itemTransition = td.transition || "cut";
-                            items[j].itemTransitionSpeed = td.transition === "look" ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4) : td.transition === "move" ? (td.moveSpeed !== undefined ? td.moveSpeed : 1.0) : (td.speed !== undefined ? td.speed : 1.0);
+                            items[j].itemTransitionSpeed = td.transition === "look" ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4) : (td.speed !== undefined ? td.speed : 1.0);
                             items[j].itemPushDirection = td.pushDir || "right";
                             items[j].itemWipeFeather = td.wipeFeather !== undefined ? td.wipeFeather : 0.0;
                             items[j].itemWipeDirection = td.wipeDir || "right";
@@ -1387,11 +1346,6 @@ Window {
                             items[j].itemLookFovMM = td.lookFov !== undefined ? td.lookFov : 24.0;
                             items[j].itemLookOvershoot = td.lookOvershoot !== undefined ? td.lookOvershoot : 1.0;
                             items[j].itemLookShutter = td.lookShutter !== undefined ? td.lookShutter : 0.10;
-                            items[j].itemMoveDist = td.moveDist !== undefined ? td.moveDist : 1.0;
-                            items[j].itemMoveYaw = td.moveYaw !== undefined ? td.moveYaw : 0.0;
-                            items[j].itemMovePitch = td.movePitch !== undefined ? td.movePitch : 0.0;
-                            items[j].itemMoveFovMM = td.moveFov !== undefined ? td.moveFov : 24.0;
-                            items[j].itemMoveShutter = td.moveShutter !== undefined ? td.moveShutter : 0.12;
                             changed = true;
                         }
                         if (changed) {
@@ -2087,17 +2041,6 @@ Window {
                                 dShutterField.text = (td.lookShutter !== undefined ? td.lookShutter : 0.10).toFixed(2);
                                 dYawField.text = (td.lookYaw !== undefined ? td.lookYaw : 90.0).toFixed(1);
                                 dPitchField.text = (td.lookPitch !== undefined ? td.lookPitch : 0.0).toFixed(1);
-                                var ms = td.moveSpeed !== undefined ? td.moveSpeed : 1.0;
-                                dMoveSpeedSlider.value = ms <= 2.0 ? ms / 4.0 : 0.5 + (ms - 2.0) / 16.0;
-                                dMoveSpeedField.text = ms.toFixed(1);
-                                dMoveDistSlider.value = td.moveDist !== undefined ? td.moveDist : 1.0;
-                                dMoveDistField.text = (td.moveDist !== undefined ? td.moveDist : 1.0).toFixed(2);
-                                dMoveFovSlider.value = td.moveFov !== undefined ? td.moveFov : 24.0;
-                                dMoveFovField.text = Math.round(td.moveFov !== undefined ? td.moveFov : 24).toString();
-                                dMoveShutterSlider.value = td.moveShutter !== undefined ? td.moveShutter : 0.12;
-                                dMoveShutterField.text = (td.moveShutter !== undefined ? td.moveShutter : 0.12).toFixed(2);
-                                dMoveYawField.text = (td.moveYaw !== undefined ? td.moveYaw : 0.0).toFixed(1);
-                                dMovePitchField.text = (td.movePitch !== undefined ? td.movePitch : 0.0).toFixed(1);
                             }
 
                             // direction label
@@ -2133,15 +2076,11 @@ Window {
                                         {
                                             icon: "look",
                                             key: "look"
-                                        },
-                                        {
-                                            icon: "move",
-                                            key: "move"
                                         }
                                     ]
                                     delegate: Rectangle {
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: Math.round((storyHubSettingsView.availableWidth - 40 - 16) / 2 / 6)
+                                        Layout.preferredHeight: Math.round((storyHubSettingsView.availableWidth - 40 - 16) / 2 / 5)
                                         radius: 4
                                         property bool isActive: dirDelegate.td.transition === modelData.key
                                         color: isActive ? "white" : "transparent"
@@ -2183,7 +2122,7 @@ Window {
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 6
-                                visible: dirDelegate.td.transition !== "cut" && dirDelegate.td.transition !== "look" && dirDelegate.td.transition !== "move"
+                                visible: dirDelegate.td.transition !== "cut" && dirDelegate.td.transition !== "look"
                                 Text {
                                     text: "speed"
                                     font.pixelSize: 10
@@ -3065,304 +3004,6 @@ Window {
                                     }
                                 }
                             }
-
-                            // move controls
-                            Item {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: dirDelegate.td.transition === "move" ? 126 : 0
-                                clip: true
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 8
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        Layout.alignment: Qt.AlignTop
-                                        spacing: 4
-
-                                        RowLayout {
-                                            Layout.fillWidth: true; height: 22; spacing: 6
-                                            Text { text: "speed"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                            Slider {
-                                                id: dMoveSpeedSlider
-                                                Layout.fillWidth: true; Layout.preferredHeight: 22
-                                                from: 0; to: 1; stepSize: 0
-                                                Component.onCompleted: {
-                                                    var s = dirDelegate.td.moveSpeed !== undefined ? dirDelegate.td.moveSpeed : 1.0;
-                                                    value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0;
-                                                }
-                                                onMoved: {
-                                                    var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0;
-                                                    storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveSpeed", Math.round(speed * 100) / 100);
-                                                }
-                                                background: Rectangle {
-                                                    x: dMoveSpeedSlider.leftPadding; y: dMoveSpeedSlider.topPadding + dMoveSpeedSlider.availableHeight / 2 - height / 2
-                                                    implicitWidth: 200; implicitHeight: 4; width: dMoveSpeedSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                    Rectangle { width: dMoveSpeedSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                                }
-                                                handle: Rectangle {
-                                                    x: dMoveSpeedSlider.leftPadding + dMoveSpeedSlider.visualPosition * (dMoveSpeedSlider.availableWidth - width)
-                                                    y: dMoveSpeedSlider.topPadding + dMoveSpeedSlider.availableHeight / 2 - height / 2
-                                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: dMoveSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                                }
-                                            }
-                                            Rectangle {
-                                                Layout.preferredWidth: 52; Layout.preferredHeight: 22
-                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                TextInput {
-                                                    id: dMoveSpeedField
-                                                    anchors.left: parent.left; anchors.right: dMoveSpeedSec.left
-                                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                    validator: DoubleValidator { bottom: 0.0; top: 10.0 }
-                                                    Component.onCompleted: text = (dirDelegate.td.moveSpeed !== undefined ? dirDelegate.td.moveSpeed : 1.0).toFixed(1)
-                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                    onEditingFinished: {
-                                                        var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0));
-                                                        text = speed.toFixed(1);
-                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveSpeed", speed);
-                                                    }
-                                                }
-                                                Text { id: dMoveSpeedSec; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "sec"; font.pixelSize: 10; color: "#aaa" }
-                                            }
-                                        }
-
-                                        RowLayout {
-                                            Layout.fillWidth: true; height: 22; spacing: 6
-                                            Text { text: "distance"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                            Slider {
-                                                id: dMoveDistSlider
-                                                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
-                                                from: -3.0; to: 3.0; stepSize: 0
-                                                Component.onCompleted: value = dirDelegate.td.moveDist !== undefined ? dirDelegate.td.moveDist : 1.0
-                                                onMoved: {
-                                                    var v = Math.round(value * 100) / 100;
-                                                    storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveDist", v);
-                                                    dMoveDistField.text = v.toFixed(2);
-                                                }
-                                                background: Rectangle {
-                                                    x: dMoveDistSlider.leftPadding; y: dMoveDistSlider.topPadding + dMoveDistSlider.availableHeight / 2 - height / 2
-                                                    implicitWidth: 200; implicitHeight: 4; width: dMoveDistSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                    Rectangle {
-                                                        x: dMoveDistSlider.availableWidth / 2
-                                                        width: (dMoveDistSlider.visualPosition - 0.5) * dMoveDistSlider.availableWidth
-                                                        height: parent.height; color: "#5DA9A4"; radius: 2
-                                                    }
-                                                }
-                                                handle: Rectangle {
-                                                    x: dMoveDistSlider.leftPadding + dMoveDistSlider.visualPosition * (dMoveDistSlider.availableWidth - width)
-                                                    y: dMoveDistSlider.topPadding + dMoveDistSlider.availableHeight / 2 - height / 2
-                                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: dMoveDistSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                                }
-                                            }
-                                            Rectangle {
-                                                Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                TextInput {
-                                                    id: dMoveDistField
-                                                    anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                    validator: DoubleValidator { bottom: -3.0; top: 3.0 }
-                                                    Component.onCompleted: text = (dirDelegate.td.moveDist !== undefined ? dirDelegate.td.moveDist : 1.0).toFixed(2)
-                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                    onEditingFinished: {
-                                                        var v = Math.min(3.0, Math.max(-3.0, parseFloat(text) || 0.0));
-                                                        text = v.toFixed(2);
-                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveDist", v);
-                                                        dMoveDistSlider.value = v;
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        RowLayout {
-                                            Layout.fillWidth: true; height: 22; spacing: 6
-                                            Text { text: "fov"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                            Slider {
-                                                id: dMoveFovSlider
-                                                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
-                                                from: 10; to: 75; stepSize: 0
-                                                Component.onCompleted: value = dirDelegate.td.moveFov !== undefined ? dirDelegate.td.moveFov : 24.0
-                                                onMoved: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveFov", Math.round(value * 10) / 10)
-                                                background: Rectangle {
-                                                    x: dMoveFovSlider.leftPadding; y: dMoveFovSlider.topPadding + dMoveFovSlider.availableHeight / 2 - height / 2
-                                                    implicitWidth: 200; implicitHeight: 4; width: dMoveFovSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                    Rectangle { width: dMoveFovSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                                }
-                                                handle: Rectangle {
-                                                    x: dMoveFovSlider.leftPadding + dMoveFovSlider.visualPosition * (dMoveFovSlider.availableWidth - width)
-                                                    y: dMoveFovSlider.topPadding + dMoveFovSlider.availableHeight / 2 - height / 2
-                                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: dMoveFovSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                                }
-                                            }
-                                            Rectangle {
-                                                Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                TextInput {
-                                                    id: dMoveFovField
-                                                    anchors.left: parent.left; anchors.right: dMoveFovMmLabel.left
-                                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                    validator: IntValidator { bottom: 10; top: 75 }
-                                                    Component.onCompleted: text = Math.round(dirDelegate.td.moveFov !== undefined ? dirDelegate.td.moveFov : 24).toString()
-                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                    onEditingFinished: {
-                                                        var v = Math.min(75, Math.max(10, parseInt(text) || 24));
-                                                        text = v.toString();
-                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveFov", v);
-                                                        dMoveFovSlider.value = v;
-                                                    }
-                                                }
-                                                Text { id: dMoveFovMmLabel; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "mm"; font.pixelSize: 10; color: "#aaa" }
-                                            }
-                                        }
-
-                                        RowLayout {
-                                            Layout.fillWidth: true; height: 22; spacing: 6
-                                            Text { text: "shutter"; font.pixelSize: 10; color: "#aaa"; Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter }
-                                            Slider {
-                                                id: dMoveShutterSlider
-                                                Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
-                                                from: 0.0; to: 0.5; stepSize: 0
-                                                Component.onCompleted: value = dirDelegate.td.moveShutter !== undefined ? dirDelegate.td.moveShutter : 0.12
-                                                onMoved: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveShutter", Math.round(value * 1000) / 1000)
-                                                background: Rectangle {
-                                                    x: dMoveShutterSlider.leftPadding; y: dMoveShutterSlider.topPadding + dMoveShutterSlider.availableHeight / 2 - height / 2
-                                                    implicitWidth: 200; implicitHeight: 4; width: dMoveShutterSlider.availableWidth; height: 4; radius: 2; color: "#333"
-                                                    Rectangle { width: dMoveShutterSlider.visualPosition * parent.width; height: parent.height; color: "#5DA9A4"; radius: 2 }
-                                                }
-                                                handle: Rectangle {
-                                                    x: dMoveShutterSlider.leftPadding + dMoveShutterSlider.visualPosition * (dMoveShutterSlider.availableWidth - width)
-                                                    y: dMoveShutterSlider.topPadding + dMoveShutterSlider.availableHeight / 2 - height / 2
-                                                    implicitWidth: 12; implicitHeight: 12; radius: 6; color: dMoveShutterSlider.pressed ? "#80cfff" : "#5DA9A4"
-                                                }
-                                            }
-                                            Rectangle {
-                                                Layout.preferredWidth: 46; Layout.preferredHeight: 22
-                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                TextInput {
-                                                    id: dMoveShutterField
-                                                    anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 4; anchors.rightMargin: 4
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                    validator: DoubleValidator { bottom: 0.0; top: 0.5 }
-                                                    Component.onCompleted: text = (dirDelegate.td.moveShutter !== undefined ? dirDelegate.td.moveShutter : 0.12).toFixed(2)
-                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                    onEditingFinished: {
-                                                        var v = Math.min(0.5, Math.max(0.0, parseFloat(text) || 0.0));
-                                                        text = v.toFixed(2);
-                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveShutter", v);
-                                                        dMoveShutterSlider.value = v;
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        RowLayout {
-                                            Layout.fillWidth: true; height: 22; spacing: 4
-                                            Text { text: "yaw"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
-                                            Rectangle {
-                                                Layout.fillWidth: true; Layout.preferredHeight: 22
-                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                TextInput {
-                                                    id: dMoveYawField
-                                                    anchors.left: parent.left; anchors.right: dMoveYawDeg.left
-                                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                    validator: DoubleValidator { bottom: -9999; top: 9999 }
-                                                    Component.onCompleted: text = (dirDelegate.td.moveYaw !== undefined ? dirDelegate.td.moveYaw : 0.0).toFixed(1)
-                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                    onEditingFinished: {
-                                                        var v = parseFloat(text) || 0.0;
-                                                        text = v.toFixed(1);
-                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveYaw", v);
-                                                    }
-                                                }
-                                                Text { id: dMoveYawDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
-                                            }
-                                            Text { text: "pitch"; font.pixelSize: 10; color: "#aaa"; verticalAlignment: Text.AlignVCenter }
-                                            Rectangle {
-                                                Layout.fillWidth: true; Layout.preferredHeight: 22
-                                                color: "transparent"; border.color: "white"; border.width: 1; radius: 4
-                                                TextInput {
-                                                    id: dMovePitchField
-                                                    anchors.left: parent.left; anchors.right: dMovePitchDeg.left
-                                                    anchors.leftMargin: 4; anchors.rightMargin: 2; anchors.verticalCenter: parent.verticalCenter
-                                                    color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
-                                                    validator: DoubleValidator { bottom: -9999; top: 9999 }
-                                                    Component.onCompleted: text = (dirDelegate.td.movePitch !== undefined ? dirDelegate.td.movePitch : 0.0).toFixed(1)
-                                                    Keys.onReturnPressed: focus = false; Keys.onEscapePressed: focus = false
-                                                    onEditingFinished: {
-                                                        var v = parseFloat(text) || 0.0;
-                                                        text = v.toFixed(1);
-                                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "movePitch", v);
-                                                    }
-                                                }
-                                                Text { id: dMovePitchDeg; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "°"; font.pixelSize: 10; color: "#aaa" }
-                                            }
-                                        }
-                                    }
-
-                                    ColumnLayout {
-                                        id: movePickerCol
-                                        Layout.preferredWidth: 76
-                                        Layout.alignment: Qt.AlignTop
-                                        spacing: 4
-                                        property bool movePickerBack: false
-
-                                        RowLayout {
-                                            Layout.preferredWidth: 76; height: 16; spacing: 4
-                                            Repeater {
-                                                model: [{ label: "front", back: false }, { label: "back", back: true }]
-                                                delegate: Rectangle {
-                                                    Layout.fillWidth: true; Layout.preferredHeight: 16; radius: 4
-                                                    property bool isActive: movePickerCol.movePickerBack === modelData.back
-                                                    color: isActive ? "white" : "transparent"; border.color: "white"; border.width: 1
-                                                    Behavior on color { ColorAnimation { duration: 100 } }
-                                                    Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 9; color: parent.isActive ? "#477B78" : "white"; Behavior on color { ColorAnimation { duration: 100 } } }
-                                                    MouseArea { anchors.fill: parent; onClicked: movePickerCol.movePickerBack = modelData.back }
-                                                }
-                                            }
-                                        }
-
-                                        Item {
-                                            Layout.preferredWidth: 68; Layout.preferredHeight: 68; Layout.alignment: Qt.AlignHCenter
-                                            ShaderEffect {
-                                                anchors.fill: parent
-                                                fragmentShader: "lookpicker.frag.qsb"
-                                                property real yaw: dirDelegate.td.moveYaw !== undefined ? dirDelegate.td.moveYaw : 0.0
-                                                property real pitch: dirDelegate.td.movePitch !== undefined ? dirDelegate.td.movePitch : 0.0
-                                                property real fovMM: dirDelegate.td.moveFov !== undefined ? dirDelegate.td.moveFov : 24.0
-                                                property real back: movePickerCol.movePickerBack ? 1.0 : 0.0
-                                            }
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                onPressed: dMovePickerMouse(mouseX, mouseY)
-                                                onPositionChanged: if (pressed) dMovePickerMouse(mouseX, mouseY)
-                                                function dMovePickerMouse(mx, my) {
-                                                    var cx = 34.0, cy = 34.0;
-                                                    var nx = (mx - cx) / cx, ny = (my - cy) / cy;
-                                                    var r = Math.sqrt(nx * nx + ny * ny);
-                                                    if (r > 1.0) { nx /= r; ny /= r; r = 1.0; }
-                                                    var z = Math.sqrt(Math.max(0.0, 1.0 - r * r));
-                                                    var lx = nx, ly = -ny;
-                                                    var lz = movePickerCol.movePickerBack ? -z : z;
-                                                    var newYaw = Math.round(Math.atan2(lx, lz) * 1800.0 / Math.PI) / 10;
-                                                    var absCosy = Math.sqrt(ly * ly + lz * lz);
-                                                    var sinPitch = absCosy > 0.0001 ? ly / (lz >= 0 ? absCosy : -absCosy) : 0.0;
-                                                    var newPitch = Math.round(Math.asin(Math.max(-1.0, Math.min(1.0, sinPitch))) * 1800.0 / Math.PI) / 10;
-                                                    storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "moveYaw", newYaw);
-                                                    storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "movePitch", newPitch);
-                                                    dMoveYawField.text = newYaw.toFixed(1);
-                                                    dMovePitchField.text = newPitch.toFixed(1);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 } // GridLayout
@@ -3574,21 +3215,6 @@ Window {
             property real lookFovMM: 24.0
             property real lookOvershoot: 1.0
             property real lookShutter: 0.10
-
-            // ── Move (dolly) transition state ─────────────────────────────────────
-            property bool moving: false
-            property real moveProgress: 0.0      // animates 0→1 during move
-            property real pendingMoveDist: 1.0   // signed dolly distance (positive=forward)
-            property real pendingMoveYaw: 0.0    // surface plane orientation yaw, degrees
-            property real pendingMovePitch: 0.0  // surface plane orientation pitch, degrees
-            property real pendingMoveFovMM: 24.0
-            property real pendingMoveShutter: 0.12
-            // Live values fed into the ShaderEffect during a move:
-            property real moveDist: 1.0
-            property real moveYaw: 0.0
-            property real movePitch: 0.0
-            property real moveFovMM: 24.0
-            property real moveShutter: 0.12
 
             // ── Cue video state ───────────────────────────────────────────────────
             // cueVideoActive:       video is currently playing
@@ -4230,15 +3856,6 @@ Window {
                     lookAnim.duration = pendingDuration;
                     looking = true;
                     lookAnim.start();
-                } else if (pendingTransition === "move") {
-                    moveDist = pendingMoveDist;
-                    moveYaw = pendingMoveYaw;
-                    movePitch = pendingMovePitch;
-                    moveFovMM = pendingMoveFovMM;
-                    moveShutter = pendingMoveShutter;
-                    moveAnim.duration = pendingDuration;
-                    moving = true;
-                    moveAnim.start();
                 } else {
                     performSwap();
                 }
@@ -4248,10 +3865,10 @@ Window {
             // transition: "cut" | "dissolve" | "wipe"   durationMs: length of animated transitions.
             // wipeFeather: 0.0–0.5   wipeDirection: "right"|"left"|"down"|"up"
             // When staging signals readyForDisplay the Connections below start the transition.
-            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection, lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal, lookShutterVal, moveDistVal, moveYawDeg, movePitchDeg, moveFovMMVal, moveShutterVal) {
+            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection, lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal, lookShutterVal) {
                 if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId)
                     return;
-                if (dissolving || wiping || sliding || looking || moving)
+                if (dissolving || wiping || sliding || looking)
                     // don't interrupt an in-progress transition
                     return;
                 selectSettings.saveCurrentInteractivity();
@@ -4268,11 +3885,6 @@ Window {
                 pendingLookFovMM = lookFovMMVal !== undefined ? lookFovMMVal : 24.0;
                 pendingLookOvershoot = lookOvershootVal !== undefined ? lookOvershootVal : 1.0;
                 pendingLookShutter = lookShutterVal !== undefined ? lookShutterVal : 0.10;
-                pendingMoveDist = moveDistVal !== undefined ? moveDistVal : 1.0;
-                pendingMoveYaw = moveYawDeg !== undefined ? moveYawDeg : 0.0;
-                pendingMovePitch = movePitchDeg !== undefined ? movePitchDeg : 0.0;
-                pendingMoveFovMM = moveFovMMVal !== undefined ? moveFovMMVal : 24.0;
-                pendingMoveShutter = moveShutterVal !== undefined ? moveShutterVal : 0.12;
                 var raw = storyManager.loadSceneElements(targetSceneId);
                 var elements;
                 try {
@@ -4309,10 +3921,6 @@ Window {
                 if (looking) {
                     looking = false;
                     lookProgress = 0.0;
-                }
-                if (moving) {
-                    moving = false;
-                    moveProgress = 0.0;
                 }
                 navigationSettings.saveNavLinks(mainWindow.currentSceneId);
                 foregroundLayer = 1 - foregroundLayer;
@@ -4386,21 +3994,6 @@ Window {
                 easing.type: Easing.Linear
                 onStopped: {
                     if (viewport.looking) {
-                        viewport.performSwap();
-                    }
-                }
-            }
-
-            // Move (dolly) animation — sweeps moveProgress 0→1.  Easing is baked into move.frag.
-            NumberAnimation {
-                id: moveAnim
-                target: viewport
-                property: "moveProgress"
-                from: 0.0
-                to: 1.0
-                easing.type: Easing.Linear
-                onStopped: {
-                    if (viewport.moving) {
                         viewport.performSwap();
                     }
                 }
@@ -4834,7 +4427,7 @@ Window {
                 // During a dissolve or wipe, staging layer must render above foreground.
                 // During wipe both layers are captured into FBO textures by ShaderEffectSource,
                 // so both are hidden (opacity 0) and the wipeEffect ShaderEffect at z:15 is shown.
-                z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking || viewport.moving) && viewport.foregroundLayer !== 0) ? 11 : 10
+                z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking) && viewport.foregroundLayer !== 0) ? 11 : 10
                 viewportRef: viewport
                 buttonGridRef: buttonGrid
                 variablesModel: variablesModel
@@ -4845,7 +4438,7 @@ Window {
                 // During wipe/slide/look: both layers stay at opacity 1 so FBO textures have full color,
                 // but hideSource:true on the ShaderEffectSources hides them from the scene.
                 // Staging at rest: opacity 0 (keeps video frames decoding silently).
-                opacity: (viewport.wiping || viewport.sliding || viewport.looking || viewport.moving) ? 1.0 : viewport.foregroundLayer === 0 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
+                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 0 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
 
                 Connections {
                     target: sceneLayerA
@@ -4889,15 +4482,6 @@ Window {
                                 lookAnim.duration = viewport.pendingDuration;
                                 viewport.looking = true;
                                 lookAnim.start();
-                            } else if (viewport.pendingTransition === "move") {
-                                viewport.moveDist = viewport.pendingMoveDist;
-                                viewport.moveYaw = viewport.pendingMoveYaw;
-                                viewport.movePitch = viewport.pendingMovePitch;
-                                viewport.moveFovMM = viewport.pendingMoveFovMM;
-                                viewport.moveShutter = viewport.pendingMoveShutter;
-                                moveAnim.duration = viewport.pendingDuration;
-                                viewport.moving = true;
-                                moveAnim.start();
                             } else {
                                 viewport.performSwap();
                             }
@@ -4909,14 +4493,14 @@ Window {
             SceneContent {
                 id: sceneLayerB
                 anchors.fill: parent
-                z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking || viewport.moving) && viewport.foregroundLayer !== 1) ? 11 : 10
+                z: ((viewport.dissolving || viewport.wiping || viewport.sliding || viewport.looking) && viewport.foregroundLayer !== 1) ? 11 : 10
                 viewportRef: viewport
                 buttonGridRef: buttonGrid
                 variablesModel: variablesModel
                 isInteractive: viewport.foregroundLayer === 1
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
-                opacity: (viewport.wiping || viewport.sliding || viewport.looking || viewport.moving) ? 1.0 : viewport.foregroundLayer === 1 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
+                opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 1 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
 
                 Connections {
                     target: sceneLayerB
@@ -4960,15 +4544,6 @@ Window {
                                 lookAnim.duration = viewport.pendingDuration;
                                 viewport.looking = true;
                                 lookAnim.start();
-                            } else if (viewport.pendingTransition === "move") {
-                                viewport.moveDist = viewport.pendingMoveDist;
-                                viewport.moveYaw = viewport.pendingMoveYaw;
-                                viewport.movePitch = viewport.pendingMovePitch;
-                                viewport.moveFovMM = viewport.pendingMoveFovMM;
-                                viewport.moveShutter = viewport.pendingMoveShutter;
-                                moveAnim.duration = viewport.pendingDuration;
-                                viewport.moving = true;
-                                moveAnim.start();
                             } else {
                                 viewport.performSwap();
                             }
@@ -4983,16 +4558,16 @@ Window {
             ShaderEffectSource {
                 id: texA
                 sourceItem: sceneLayerA
-                live: viewport.wiping || viewport.sliding || viewport.looking || viewport.moving
-                hideSource: viewport.wiping || viewport.sliding || viewport.looking || viewport.moving
+                live: viewport.wiping || viewport.sliding || viewport.looking
+                hideSource: viewport.wiping || viewport.sliding || viewport.looking
                 visible: false
             }
 
             ShaderEffectSource {
                 id: texB
                 sourceItem: sceneLayerB
-                live: viewport.wiping || viewport.sliding || viewport.looking || viewport.moving
-                hideSource: viewport.wiping || viewport.sliding || viewport.looking || viewport.moving
+                live: viewport.wiping || viewport.sliding || viewport.looking
+                hideSource: viewport.wiping || viewport.sliding || viewport.looking
                 visible: false
             }
 
@@ -5046,25 +4621,6 @@ Window {
                 property real fovMM: viewport.lookFovMM
                 property real overshoot: viewport.lookOvershoot
                 property real shutter: viewport.lookShutter
-            }
-
-            // Move (dolly) transition overlay — perspective ground-plane dolly via move.frag.qsb.
-            ShaderEffect {
-                id: moveEffect
-                anchors.fill: parent
-                z: 15
-                visible: viewport.moving
-                fragmentShader: "move.frag.qsb"
-
-                property var sourceIn: viewport.foregroundLayer === 0 ? texB : texA
-                property var sourceOut: viewport.foregroundLayer === 0 ? texA : texB
-
-                property real progress: viewport.moveProgress
-                property real moveDist: viewport.moveDist
-                property real yaw: viewport.moveYaw
-                property real pitch: viewport.movePitch
-                property real fovMM: viewport.moveFovMM
-                property real shutter: viewport.moveShutter
             }
 
             } // contentScaler
@@ -12418,12 +11974,7 @@ Window {
                                                  pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
                                                  pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
                                                  pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
-                                                 pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10,
-                                                 pendingJump.itemMoveDist        !== undefined ? pendingJump.itemMoveDist      : 1.0,
-                                                 pendingJump.itemMoveYaw         !== undefined ? pendingJump.itemMoveYaw       : 0.0,
-                                                 pendingJump.itemMovePitch       !== undefined ? pendingJump.itemMovePitch     : 0.0,
-                                                 pendingJump.itemMoveFovMM       !== undefined ? pendingJump.itemMoveFovMM     : 24.0,
-                                                 pendingJump.itemMoveShutter     !== undefined ? pendingJump.itemMoveShutter   : 0.12)
+                                                 pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
                         }
                     }
 
