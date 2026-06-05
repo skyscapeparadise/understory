@@ -440,6 +440,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
 
                         function fireInteractivity(trigger) {
+                            if (viewportRef.cueVideoActive) return
                             var json = areasModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
@@ -1556,6 +1557,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
 
                         function fireInteractivity(trigger) {
+                            if (viewportRef.cueVideoActive) return
                             var json = textBoxesModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
@@ -2197,6 +2199,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
 
                         function fireInteractivity(trigger) {
+                            if (viewportRef.cueVideoActive) return
                             var json = imagesModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
@@ -3048,6 +3051,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
 
                         function fireInteractivity(trigger) {
+                            if (viewportRef.cueVideoActive) return
                             var json = videosModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
@@ -3728,6 +3732,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
 
                         function fireInteractivity(trigger) {
+                            if (viewportRef.cueVideoActive) return
                             var json = shadersModel.get(index).interactivityJson || "[]"
                             var items = []
                             try { items = JSON.parse(json) } catch(e) {}
