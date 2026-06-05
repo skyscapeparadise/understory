@@ -5570,7 +5570,11 @@ Window {
             // Tool cursor
             MouseArea {
                 id: viewportCursorArea
-                anchors.fill: parent
+                // In preview mode, contentScaler renders at native story resolution and
+                // overflows the 960×540 viewport to fill the screen. Expand to match so
+                // hover tracking and cursor visibility cover the full story area.
+                width:  mainWindow.previewActive ? mainWindow.storyWidth  : parent.width
+                height: mainWindow.previewActive ? mainWindow.storyHeight : parent.height
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton
                 cursorShape: viewport.textEditing ? Qt.IBeamCursor : ((sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1) ? Qt.BlankCursor : Qt.ArrowCursor)
@@ -5594,8 +5598,8 @@ Window {
             Image {
                 x: (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.shaderDragging ? viewport.shaderX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -8 : 0)
                 y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.shaderDragging ? viewport.shaderY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -1 : 0)
-                width: 36
-                height: 36
+                width:  mainWindow.previewActive ? 36 / mainWindow.editorScale : 36
+                height: mainWindow.previewActive ? 36 / mainWindow.editorScale : 36
                 source: {
                     if (viewport.elementDragging)
                         return "icons/pinch.svg";
