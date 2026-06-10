@@ -2329,8 +2329,9 @@ Item {
                     property bool transitionCapturing: false
                     property bool transitionGrabDone: false
                     property bool transitionFreezeReady: false
-                    property bool vidCfAIsPrimary: true  // player A (vidPlayer) is currently primary
-                    property bool vidCfActive: false      // a crossfade is currently in progress
+                    property bool vidCfAIsPrimary: true   // player A (vidPlayer) is currently primary
+                    property bool vidCfActive: false       // a crossfade opacity animation is running
+                    property bool vidCfPrerolling: false  // secondary player started early; fade not yet begun
 
                     onTrackedFilePathChanged: {
                         if (!vidDelegate.videoReadySignaled) {
@@ -2351,6 +2352,7 @@ Item {
                         vidOutputB.opacity = 0.0
                         vidDelegate.vidCfAIsPrimary = true
                         vidDelegate.vidCfActive = false
+                        vidDelegate.vidCfPrerolling = false
                         vidOutput.opacity = 1.0
                         vidFreezeFrameFadeOut.stop()
                         vidDelegate.transitionCapturing = false
@@ -2387,26 +2389,33 @@ Item {
                             volume: sceneContent.isInteractive ? 1.0 : 0.0
                         }
                         onPositionChanged: {
-                            // True self-crossfade: when A enters its final overlap zone, start B
-                            // from position 0. B fades in (via vidOutputBFadeIn) while A finishes.
-                            // B is rendered above A (z:0.1), so as B.opacity rises the end of A
-                            // dissolves into the beginning of B — a seamless loop crossfade.
+                            // True self-crossfade: B pre-rolls invisibly 300 ms before the fade
+                            // zone so its first decoded frame is ready when the fade starts.
+                            // vidPlayerB.play() after EndOfMedia restarts from position 0 in Qt6;
+                            // no stop() is called here, which avoids the null-frame videoFrameChanged
+                            // signal that would otherwise make the fade start against black pixels.
                             if (!model.inTransition && model.vidLoop && model.vidCrossfade &&
-                                    vidDelegate.vidCfAIsPrimary && !vidDelegate.vidCfActive && vidPlayer.duration > 0) {
+                                    vidDelegate.vidCfAIsPrimary && vidPlayer.duration > 0) {
                                 var xfDur = vidPlayer.duration * Math.max(0, Math.min(50, model.vidCrossfadePct || 5)) / 100
                                 var remA = vidPlayer.duration - vidPlayer.position
-                                if (remA > 0 && remA <= xfDur && xfDur > 0) {
-                                    vidDelegate.vidCfActive = true
-                                    vidOutputB.opacity = 0
-                                    if (vidPlayerB.source !== vidDelegate.liveFilePath)
-                                        vidPlayerB.source = vidDelegate.liveFilePath
-                                    vidPlayerB.stop()
-                                    vidPlayerB.play()
-                                    vidOutputBFadeIn.duration = Math.max(1, Math.round(remA))
-                                    vidOutputBFadeIn.start()
+                                if (xfDur > 0 && remA > 0) {
+                                    if (!vidDelegate.vidCfPrerolling && !vidDelegate.vidCfActive && remA <= xfDur + 300) {
+                                        vidOutputB.opacity = 0
+                                        if (vidPlayerB.source !== vidDelegate.liveFilePath)
+                                            vidPlayerB.source = vidDelegate.liveFilePath
+                                        vidPlayerB.play()
+                                        vidDelegate.vidCfPrerolling = true
+                                    }
+                                    if (vidDelegate.vidCfPrerolling && !vidDelegate.vidCfActive && remA <= xfDur) {
+                                        vidDelegate.vidCfPrerolling = false
+                                        vidDelegate.vidCfActive = true
+                                        vidOutputBFadeIn.duration = Math.max(1, Math.round(remA))
+                                        vidOutputBFadeIn.start()
+                                    }
                                 }
                             } else if (!model.inTransition && (!model.vidLoop || !model.vidCrossfade) &&
-                                       (vidDelegate.vidCfActive || vidOutputB.opacity > 0 || !vidDelegate.vidCfAIsPrimary)) {
+                                       (vidDelegate.vidCfActive || vidDelegate.vidCfPrerolling ||
+                                        vidOutputB.opacity > 0 || !vidDelegate.vidCfAIsPrimary)) {
                                 // Crossfade disabled mid-cycle — clean up player B and restore A
                                 vidOutputBFadeIn.stop()
                                 vidOutputBFadeOut.stop()
@@ -2419,6 +2428,7 @@ Item {
                                 }
                                 vidDelegate.vidCfAIsPrimary = true
                                 vidDelegate.vidCfActive = false
+                                vidDelegate.vidCfPrerolling = false
                             }
                             // Grab a freeze frame ~200ms before end so Image.Ready fires while
                             // the clip is still playing. We then show it in Image.Ready — before
@@ -2453,6 +2463,7 @@ Item {
                                 // A finished its cycle; B has been playing since the overlap zone.
                                 // Snap to a clean handoff: A invisible, B fully visible, B is primary.
                                 vidOutputBFadeIn.stop()
+                                vidDelegate.vidCfPrerolling = false
                                 vidOutput.opacity = 0.0
                                 vidOutputB.opacity = 1.0
                                 vidDelegate.vidCfAIsPrimary = false
@@ -2490,20 +2501,29 @@ Item {
                         loops: 1
                         videoOutput: vidOutputB
                         audioOutput: AudioOutput {
-                            volume: sceneContent.isInteractive ? 1.0 : 0.0
+                            // Volume tracks vidOutputB.opacity: silent during pre-roll, fades
+                            // in/out with the crossfade animation, full when B is primary.
+                            volume: vidOutputB.opacity * (sceneContent.isInteractive ? 1.0 : 0.0)
                         }
                         onPositionChanged: {
+                            // Mirror of vidPlayer's pre-roll logic: start A early so its first
+                            // decoded frame is ready before B fades out and reveals A below.
                             if (!model.inTransition && model.vidLoop && model.vidCrossfade &&
-                                    !vidDelegate.vidCfAIsPrimary && !vidDelegate.vidCfActive && vidPlayerB.duration > 0) {
+                                    !vidDelegate.vidCfAIsPrimary && vidPlayerB.duration > 0) {
                                 var xfDur = vidPlayerB.duration * Math.max(0, Math.min(50, model.vidCrossfadePct || 5)) / 100
                                 var remB = vidPlayerB.duration - vidPlayerB.position
-                                if (remB > 0 && remB <= xfDur && xfDur > 0) {
-                                    vidDelegate.vidCfActive = true
-                                    vidOutput.opacity = 1.0
-                                    vidPlayer.stop()
-                                    vidPlayer.play()
-                                    vidOutputBFadeOut.duration = Math.max(1, Math.round(remB))
-                                    vidOutputBFadeOut.start()
+                                if (xfDur > 0 && remB > 0) {
+                                    if (!vidDelegate.vidCfPrerolling && !vidDelegate.vidCfActive && remB <= xfDur + 300) {
+                                        vidPlayer.play()  // after EndOfMedia restarts from 0 in Qt6; no stop() needed
+                                        vidDelegate.vidCfPrerolling = true
+                                    }
+                                    if (vidDelegate.vidCfPrerolling && !vidDelegate.vidCfActive && remB <= xfDur) {
+                                        vidDelegate.vidCfPrerolling = false
+                                        vidDelegate.vidCfActive = true
+                                        vidOutput.opacity = 1.0  // A has been decoding for ~300 ms
+                                        vidOutputBFadeOut.duration = Math.max(1, Math.round(remB))
+                                        vidOutputBFadeOut.start()
+                                    }
                                 }
                             }
                         }
@@ -2512,6 +2532,7 @@ Item {
                                     !model.inTransition && !vidDelegate.vidCfAIsPrimary) {
                                 // B finished — A is now primary. Snap to clean state.
                                 vidOutputBFadeOut.stop()
+                                vidDelegate.vidCfPrerolling = false
                                 vidOutputB.opacity = 0.0
                                 vidDelegate.vidCfAIsPrimary = true
                                 vidDelegate.vidCfActive = false
