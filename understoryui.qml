@@ -5464,21 +5464,29 @@ Window {
                 onStatusChanged: {
                     if (status === Image.Ready && implicitWidth > 0 && implicitHeight > 0) {
                         var aspect = implicitWidth / implicitHeight;
-                        var defaultW = Math.min(mainWindow.storyWidth * 0.333, mainWindow.storyWidth * 0.5);
-                        var defaultH = defaultW / aspect;
-                        if (defaultH > mainWindow.storyHeight * 0.5) {
-                            defaultH = mainWindow.storyHeight * 0.5;
-                            defaultW = defaultH * aspect;
+                        var storyAspect = mainWindow.storyWidth / mainWindow.storyHeight;
+                        var x1, y1, x2, y2;
+                        if (Math.abs(aspect - storyAspect) <= 0.01) {
+                            x1 = 0; y1 = 0; x2 = mainWindow.storyWidth; y2 = mainWindow.storyHeight;
+                        } else {
+                            var defaultW = Math.min(mainWindow.storyWidth * 0.333, mainWindow.storyWidth * 0.5);
+                            var defaultH = defaultW / aspect;
+                            if (defaultH > mainWindow.storyHeight * 0.5) {
+                                defaultH = mainWindow.storyHeight * 0.5;
+                                defaultW = defaultH * aspect;
+                            }
+                            var sx = viewport.toStoryX(viewport.dropX);
+                            var sy = viewport.toStoryY(viewport.dropY);
+                            x1 = Math.max(0, Math.min(sx - defaultW / 2, mainWindow.storyWidth - defaultW));
+                            y1 = Math.max(0, Math.min(sy - defaultH / 2, mainWindow.storyHeight - defaultH));
+                            x2 = x1 + defaultW;
+                            y2 = y1 + defaultH;
                         }
-                        var sx = viewport.toStoryX(viewport.dropX);
-                        var sy = viewport.toStoryY(viewport.dropY);
-                        var x1 = Math.max(0, Math.min(sx - defaultW / 2, mainWindow.storyWidth - defaultW));
-                        var y1 = Math.max(0, Math.min(sy - defaultH / 2, mainWindow.storyHeight - defaultH));
                         viewport.imagesModel.append({
                             x1: x1,
                             y1: y1,
-                            x2: x1 + defaultW,
-                            y2: y1 + defaultH,
+                            x2: x2,
+                            y2: y2,
                             filePath: viewport.dropPendingImagePath,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false,
@@ -5501,21 +5509,29 @@ Window {
                     if (status === MediaPlayer.LoadedMedia || status === MediaPlayer.BufferedMedia) {
                         var res = metaData.value(MediaMetaData.Resolution);
                         var aspect = (res && res.width > 0 && res.height > 0) ? res.width / res.height : 16 / 9;
-                        var defaultW = Math.min(mainWindow.storyWidth * 0.333, mainWindow.storyWidth * 0.5);
-                        var defaultH = defaultW / aspect;
-                        if (defaultH > mainWindow.storyHeight * 0.5) {
-                            defaultH = mainWindow.storyHeight * 0.5;
-                            defaultW = defaultH * aspect;
+                        var storyAspect = mainWindow.storyWidth / mainWindow.storyHeight;
+                        var x1, y1, x2, y2;
+                        if (Math.abs(aspect - storyAspect) <= 0.01) {
+                            x1 = 0; y1 = 0; x2 = mainWindow.storyWidth; y2 = mainWindow.storyHeight;
+                        } else {
+                            var defaultW = Math.min(mainWindow.storyWidth * 0.333, mainWindow.storyWidth * 0.5);
+                            var defaultH = defaultW / aspect;
+                            if (defaultH > mainWindow.storyHeight * 0.5) {
+                                defaultH = mainWindow.storyHeight * 0.5;
+                                defaultW = defaultH * aspect;
+                            }
+                            var sx = viewport.toStoryX(viewport.dropX);
+                            var sy = viewport.toStoryY(viewport.dropY);
+                            x1 = Math.max(0, Math.min(sx - defaultW / 2, mainWindow.storyWidth - defaultW));
+                            y1 = Math.max(0, Math.min(sy - defaultH / 2, mainWindow.storyHeight - defaultH));
+                            x2 = x1 + defaultW;
+                            y2 = y1 + defaultH;
                         }
-                        var sx = viewport.toStoryX(viewport.dropX);
-                        var sy = viewport.toStoryY(viewport.dropY);
-                        var x1 = Math.max(0, Math.min(sx - defaultW / 2, mainWindow.storyWidth - defaultW));
-                        var y1 = Math.max(0, Math.min(sy - defaultH / 2, mainWindow.storyHeight - defaultH));
                         viewport.videosModel.append({
                             x1: x1,
                             y1: y1,
-                            x2: x1 + defaultW,
-                            y2: y1 + defaultH,
+                            x2: x2,
+                            y2: y2,
                             filePath: viewport.dropPendingVideoPath,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false,
