@@ -183,6 +183,9 @@ Item {
                     sourcesJson: el.sourcesJson || "[]",
                     template: el.template || "none",
                     locked: el.locked || false,
+                    vidLoop: el.vidLoop !== undefined ? el.vidLoop : true,
+                    vidCrossfade: el.vidCrossfade || false,
+                    vidCrossfadePct: el.vidCrossfadePct !== undefined ? el.vidCrossfadePct : 5,
                     inTransition: false
                 })
             } else if (el.type === "shader") {
@@ -256,7 +259,10 @@ Item {
                 interactivityJson: m.interactivityJson || "[]",
                 sourcesJson: m.sourcesJson || "[]",
                 template: m.template || "none",
-                locked: m.locked || false })
+                locked: m.locked || false,
+                vidLoop: m.vidLoop !== undefined ? m.vidLoop : true,
+                vidCrossfade: m.vidCrossfade || false,
+                vidCrossfadePct: m.vidCrossfadePct !== undefined ? m.vidCrossfadePct : 5 })
         }
         for (i = 0; i < shadersModelInst.count; i++) {
             m = shadersModelInst.get(i)
@@ -2323,6 +2329,8 @@ Item {
                     property bool transitionCapturing: false
                     property bool transitionGrabDone: false
                     property bool transitionFreezeReady: false
+                    property bool vidCfAIsPrimary: true  // player A (vidPlayer) is currently primary
+                    property bool vidCfActive: false      // a crossfade is currently in progress
 
                     onTrackedFilePathChanged: {
                         if (!vidDelegate.videoReadySignaled) {
@@ -2336,6 +2344,14 @@ Item {
 
                     function startSourceSwap(newPath) {
                         if (vidDelegate.swapping) { vidDelegate.queuedFilePath = newPath; return }
+                        vidNoLoopFadeOut.stop()
+                        vidOutputBFadeIn.stop()
+                        vidOutputBFadeOut.stop()
+                        vidPlayerB.stop()
+                        vidOutputB.opacity = 0.0
+                        vidDelegate.vidCfAIsPrimary = true
+                        vidDelegate.vidCfActive = false
+                        vidOutput.opacity = 1.0
                         vidFreezeFrameFadeOut.stop()
                         vidDelegate.transitionCapturing = false
                         vidDelegate.transitionGrabDone = false
@@ -2364,13 +2380,46 @@ Item {
                         id: vidPlayer
                         source: vidDelegate.liveFilePath
                         autoPlay: true
-                        loops: model.inTransition ? 1 : MediaPlayer.Infinite
+                        loops: model.inTransition ? 1 : (model.vidLoop && !model.vidCrossfade ? MediaPlayer.Infinite : 1)
                         videoOutput: vidOutput
                         // Mute while staging so audio doesn't bleed through during pre-buffering.
                         audioOutput: AudioOutput {
                             volume: sceneContent.isInteractive ? 1.0 : 0.0
                         }
                         onPositionChanged: {
+                            // True self-crossfade: when A enters its final overlap zone, start B
+                            // from position 0. B fades in (via vidOutputBFadeIn) while A finishes.
+                            // B is rendered above A (z:0.1), so as B.opacity rises the end of A
+                            // dissolves into the beginning of B — a seamless loop crossfade.
+                            if (!model.inTransition && model.vidLoop && model.vidCrossfade &&
+                                    vidDelegate.vidCfAIsPrimary && !vidDelegate.vidCfActive && vidPlayer.duration > 0) {
+                                var xfDur = vidPlayer.duration * Math.max(0, Math.min(50, model.vidCrossfadePct || 5)) / 100
+                                var remA = vidPlayer.duration - vidPlayer.position
+                                if (remA > 0 && remA <= xfDur && xfDur > 0) {
+                                    vidDelegate.vidCfActive = true
+                                    vidOutputB.opacity = 0
+                                    if (vidPlayerB.source !== vidDelegate.liveFilePath)
+                                        vidPlayerB.source = vidDelegate.liveFilePath
+                                    vidPlayerB.stop()
+                                    vidPlayerB.play()
+                                    vidOutputBFadeIn.duration = Math.max(1, Math.round(remA))
+                                    vidOutputBFadeIn.start()
+                                }
+                            } else if (!model.inTransition && (!model.vidLoop || !model.vidCrossfade) &&
+                                       (vidDelegate.vidCfActive || vidOutputB.opacity > 0 || !vidDelegate.vidCfAIsPrimary)) {
+                                // Crossfade disabled mid-cycle — clean up player B and restore A
+                                vidOutputBFadeIn.stop()
+                                vidOutputBFadeOut.stop()
+                                vidPlayerB.stop()
+                                vidOutputB.opacity = 0.0
+                                vidOutput.opacity = 1.0
+                                if (!vidDelegate.vidCfAIsPrimary && model.vidLoop) {
+                                    vidPlayer.stop()
+                                    vidPlayer.play()
+                                }
+                                vidDelegate.vidCfAIsPrimary = true
+                                vidDelegate.vidCfActive = false
+                            }
                             // Grab a freeze frame ~200ms before end so Image.Ready fires while
                             // the clip is still playing. We then show it in Image.Ready — before
                             // EndOfMedia — so the freeze is definitely visible when the VideoOutput
@@ -2396,6 +2445,19 @@ Item {
                                 vidDelegate.videoReadySignaled = true
                                 imageLoadComplete()
                             }
+                            if (mediaStatus === MediaPlayer.EndOfMedia && !model.inTransition && !model.vidLoop) {
+                                vidNoLoopFadeOut.start()
+                            }
+                            if (mediaStatus === MediaPlayer.EndOfMedia && model.vidLoop && model.vidCrossfade &&
+                                    !model.inTransition && vidDelegate.vidCfAIsPrimary) {
+                                // A finished its cycle; B has been playing since the overlap zone.
+                                // Snap to a clean handoff: A invisible, B fully visible, B is primary.
+                                vidOutputBFadeIn.stop()
+                                vidOutput.opacity = 0.0
+                                vidOutputB.opacity = 1.0
+                                vidDelegate.vidCfAIsPrimary = false
+                                vidDelegate.vidCfActive = false
+                            }
                             if (mediaStatus === MediaPlayer.EndOfMedia && model.inTransition) {
                                 if (vidDelegate.transitionFreezeReady) {
                                     // Best case: freeze already showing (opacity=1 was set in
@@ -2416,6 +2478,43 @@ Item {
                                         })
                                     }
                                 }
+                            }
+                        }
+                    }
+                    // Secondary player for crossfade loops — starts from position 0 as A
+                    // nears its end, fading vidOutputB in over vidOutput for a seamless loop.
+                    MediaPlayer {
+                        id: vidPlayerB
+                        source: ""
+                        autoPlay: false
+                        loops: 1
+                        videoOutput: vidOutputB
+                        audioOutput: AudioOutput {
+                            volume: sceneContent.isInteractive ? 1.0 : 0.0
+                        }
+                        onPositionChanged: {
+                            if (!model.inTransition && model.vidLoop && model.vidCrossfade &&
+                                    !vidDelegate.vidCfAIsPrimary && !vidDelegate.vidCfActive && vidPlayerB.duration > 0) {
+                                var xfDur = vidPlayerB.duration * Math.max(0, Math.min(50, model.vidCrossfadePct || 5)) / 100
+                                var remB = vidPlayerB.duration - vidPlayerB.position
+                                if (remB > 0 && remB <= xfDur && xfDur > 0) {
+                                    vidDelegate.vidCfActive = true
+                                    vidOutput.opacity = 1.0
+                                    vidPlayer.stop()
+                                    vidPlayer.play()
+                                    vidOutputBFadeOut.duration = Math.max(1, Math.round(remB))
+                                    vidOutputBFadeOut.start()
+                                }
+                            }
+                        }
+                        onMediaStatusChanged: {
+                            if (mediaStatus === MediaPlayer.EndOfMedia && model.vidLoop && model.vidCrossfade &&
+                                    !model.inTransition && !vidDelegate.vidCfAIsPrimary) {
+                                // B finished — A is now primary. Snap to clean state.
+                                vidOutputBFadeOut.stop()
+                                vidOutputB.opacity = 0.0
+                                vidDelegate.vidCfAIsPrimary = true
+                                vidDelegate.vidCfActive = false
                             }
                         }
                     }
@@ -2461,6 +2560,17 @@ Item {
                                 }
                             }
                         }
+                    }
+                    // Crossfade secondary output — rendered above vidOutput (z:0.1) so B can
+                    // dissolve in over A. Opacity starts at 0 and is animated by vidOutputBFadeIn/Out.
+                    VideoOutput {
+                        id: vidOutputB
+                        x: 28 / sceneContent.editorScaleFactor
+                        y: 28 / sceneContent.editorScaleFactor
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
+                        z: 0.1
+                        opacity: 0
                     }
 
                     // Freeze-frame overlay: holds the last rendered frame while a new source loads,
@@ -2509,6 +2619,19 @@ Item {
                             }
                         }
                     }
+
+                    // Fades vidOutput to transparent when loop=false and playback ends.
+                    NumberAnimation {
+                        id: vidNoLoopFadeOut
+                        target: vidOutput
+                        property: "opacity"
+                        to: 0.0
+                        duration: 500
+                        easing.type: Easing.InQuad
+                    }
+                    // Crossfade animations — duration set dynamically before start() is called.
+                    NumberAnimation { id: vidOutputBFadeIn;  target: vidOutputB; property: "opacity"; to: 1.0 }
+                    NumberAnimation { id: vidOutputBFadeOut; target: vidOutputB; property: "opacity"; to: 0.0 }
 
                     // Border — only when active/selected or relayer hovered
                     Rectangle {

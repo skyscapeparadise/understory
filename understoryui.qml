@@ -5535,7 +5535,10 @@ Window {
                             filePath: viewport.dropPendingVideoPath,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false,
-                            sourcesJson: "[]"
+                            sourcesJson: "[]",
+                            vidLoop: true,
+                            vidCrossfade: false,
+                            vidCrossfadePct: 5
                         });
                         viewport.selectVideo(viewport.videosModel.count - 1);
                         buttonGrid.selectedTool = "select";
@@ -7587,6 +7590,9 @@ Window {
                     property string selCursor: "select"
                     property string selCursorPath: ""
                     property string selTemplate: "none"
+                    property bool selVidLoop: true
+                    property bool selVidCrossfade: false
+                    property real selVidCrossfadePct: 5
 
                     function syncSpatialFromModel() {
                         var m = null;
@@ -7610,6 +7616,11 @@ Window {
                             selCursorPath = m.cursorPath || "";
                             selTemplate = m.template || "none";
                             selLock = m.locked || false;
+                            if (hasActiveVideo) {
+                                selVidLoop = m.vidLoop !== undefined ? m.vidLoop : true;
+                                selVidCrossfade = m.vidCrossfade || false;
+                                selVidCrossfadePct = m.vidCrossfadePct !== undefined ? m.vidCrossfadePct : 5;
+                            }
                         }
                     }
 
@@ -7697,6 +7708,20 @@ Window {
 
                     onSelCursorChanged: writeCursorToModel()
                     onSelCursorPathChanged: writeCursorToModel()
+
+                    function writeVidLoopToModel() {
+                        if (!hasActiveVideo) return;
+                        var idx = viewport.selectedVideos[0];
+                        if (idx < 0 || idx >= viewport.videosModel.count) return;
+                        viewport.videosModel.setProperty(idx, "vidLoop", selVidLoop);
+                        viewport.videosModel.setProperty(idx, "vidCrossfade", selVidCrossfade);
+                        viewport.videosModel.setProperty(idx, "vidCrossfadePct", selVidCrossfadePct);
+                        propSaveDebounce.restart();
+                    }
+
+                    onSelVidLoopChanged: writeVidLoopToModel()
+                    onSelVidCrossfadeChanged: writeVidLoopToModel()
+                    onSelVidCrossfadePctChanged: writeVidLoopToModel()
 
                     function writeTemplateToModel() {
                         var idx = -1;
@@ -10332,6 +10357,166 @@ Window {
                                                 if (drop.hasUrls)
                                                     selectSettings.selCursorPath = drop.urls[0].toString();
                                             }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // video-only: loop / crossfade settings
+                            Column {
+                                visible: selectSettings.hasActiveVideo
+                                width: parent.width
+                                spacing: 4
+                                enabled: !selectSettings.selLock
+                                opacity: selectSettings.selLock ? 0.4 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                // loop toggle
+                                Row {
+                                    width: parent.width
+                                    height: 22
+                                    spacing: 6
+                                    Text {
+                                        text: "loop"
+                                        width: 60
+                                        color: "white"
+                                        font.pixelSize: 11
+                                        height: parent.height
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    Rectangle {
+                                        property bool isActive: selectSettings.selVidLoop === true
+                                        width: 40; height: 20; radius: 3
+                                        color: isActive ? "white" : "transparent"
+                                        border.color: "white"; border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "true"; font.pixelSize: 9
+                                            color: parent.isActive ? "#477B78" : "white"
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                        }
+                                        MouseArea { anchors.fill: parent; onClicked: selectSettings.selVidLoop = true }
+                                    }
+                                    Rectangle {
+                                        property bool isActive: selectSettings.selVidLoop === false
+                                        width: 40; height: 20; radius: 3
+                                        color: isActive ? "white" : "transparent"
+                                        border.color: "white"; border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "false"; font.pixelSize: 9
+                                            color: parent.isActive ? "#477B78" : "white"
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                        }
+                                        MouseArea { anchors.fill: parent; onClicked: selectSettings.selVidLoop = false }
+                                    }
+                                }
+
+                                // crossfade toggle (only when looping)
+                                Row {
+                                    visible: selectSettings.selVidLoop
+                                    width: parent.width
+                                    height: 22
+                                    spacing: 6
+                                    Text {
+                                        text: "crossfade"
+                                        width: 60
+                                        color: "white"
+                                        font.pixelSize: 11
+                                        height: parent.height
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    Rectangle {
+                                        property bool isActive: selectSettings.selVidCrossfade === true
+                                        width: 40; height: 20; radius: 3
+                                        color: isActive ? "white" : "transparent"
+                                        border.color: "white"; border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "true"; font.pixelSize: 9
+                                            color: parent.isActive ? "#477B78" : "white"
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                        }
+                                        MouseArea { anchors.fill: parent; onClicked: selectSettings.selVidCrossfade = true }
+                                    }
+                                    Rectangle {
+                                        property bool isActive: selectSettings.selVidCrossfade === false
+                                        width: 40; height: 20; radius: 3
+                                        color: isActive ? "white" : "transparent"
+                                        border.color: "white"; border.width: 1
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "false"; font.pixelSize: 9
+                                            color: parent.isActive ? "#477B78" : "white"
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                        }
+                                        MouseArea { anchors.fill: parent; onClicked: selectSettings.selVidCrossfade = false }
+                                    }
+                                }
+
+                                // crossfade duration slider (0–50%, only when crossfade enabled)
+                                Row {
+                                    visible: selectSettings.selVidLoop && selectSettings.selVidCrossfade
+                                    width: parent.width
+                                    height: 26
+                                    spacing: 4
+                                    Item { width: 46; height: 26 }
+                                    RowLayout {
+                                        width: parent.width - 50
+                                        height: 26
+                                        spacing: 4
+                                        Text {
+                                            text: "0%"
+                                            color: "#888"
+                                            font.pixelSize: 9
+                                            Layout.preferredWidth: 16
+                                            verticalAlignment: Text.AlignVCenter
+                                            height: 26
+                                        }
+                                        Slider {
+                                            id: vidCrossfadePctSlider
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 22
+                                            from: 0; to: 50; stepSize: 0.5
+                                            value: selectSettings.selVidCrossfadePct
+                                            onMoved: selectSettings.selVidCrossfadePct = Math.round(value * 2) / 2
+                                            background: Rectangle {
+                                                x: vidCrossfadePctSlider.leftPadding
+                                                y: vidCrossfadePctSlider.topPadding + vidCrossfadePctSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 200; implicitHeight: 4
+                                                width: vidCrossfadePctSlider.availableWidth; height: 4
+                                                radius: 2; color: "#333"
+                                                Rectangle {
+                                                    width: vidCrossfadePctSlider.visualPosition * parent.width
+                                                    height: parent.height; color: "#5DA9A4"; radius: 2
+                                                }
+                                            }
+                                            handle: Rectangle {
+                                                x: vidCrossfadePctSlider.leftPadding + vidCrossfadePctSlider.visualPosition * (vidCrossfadePctSlider.availableWidth - width)
+                                                y: vidCrossfadePctSlider.topPadding + vidCrossfadePctSlider.availableHeight / 2 - height / 2
+                                                implicitWidth: 12; implicitHeight: 12; radius: 6
+                                                color: vidCrossfadePctSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                            }
+                                        }
+                                        Text {
+                                            text: "50%"
+                                            color: "#888"
+                                            font.pixelSize: 9
+                                            Layout.preferredWidth: 20
+                                            verticalAlignment: Text.AlignVCenter
+                                            height: 26
+                                        }
+                                        Text {
+                                            text: Math.round(selectSettings.selVidCrossfadePct) + "%"
+                                            color: "white"
+                                            font.pixelSize: 9
+                                            Layout.preferredWidth: 22
+                                            verticalAlignment: Text.AlignVCenter
+                                            height: 26
                                         }
                                     }
                                 }
