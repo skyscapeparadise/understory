@@ -11260,8 +11260,12 @@ Window {
                             }
 
                             function doLayoutAreas() {
-                                var vw = viewport.width;
-                                var vh = viewport.height;
+                                var vw = mainWindow.storyWidth;
+                                var vh = mainWindow.storyHeight;
+                                // Strip sizes proportional to baseline 960×540 so they look
+                                // identical regardless of story resolution.
+                                var ewStrip = Math.round(vw * 150 / 960);
+                                var sStrip  = Math.round(vh * 80 / 540);
                                 var hasN = nSettingsArea.linkedSceneId !== -1;
                                 var hasS = sSettingsArea.linkedSceneId !== -1;
                                 var hasE = eSettingsArea.linkedSceneId !== -1;
@@ -11303,10 +11307,10 @@ Window {
                                     ]);
                                 }
 
-                                // E: 150px wide strip on right, full height
+                                // E: strip on right, full height
                                 if (hasE) {
                                     viewport.areasModel.append({
-                                        x1: vw - 150,
+                                        x1: vw - ewStrip,
                                         y1: 0,
                                         x2: vw,
                                         y2: vh,
@@ -11320,12 +11324,12 @@ Window {
                                     });
                                 }
 
-                                // W: 150px wide strip on left, full height
+                                // W: strip on left, full height
                                 if (hasW) {
                                     viewport.areasModel.append({
                                         x1: 0,
                                         y1: 0,
-                                        x2: 150,
+                                        x2: ewStrip,
                                         y2: vh,
                                         name: "west",
                                         stackOrder: viewport.nextStackOrder++,
@@ -11337,17 +11341,17 @@ Window {
                                     });
                                 }
 
-                                // S: 80px tall strip at bottom, width depends on E/W presence
+                                // S: strip at bottom, width depends on E/W presence
                                 if (hasS) {
                                     var sx1, sx2;
                                     if (hasE && hasW) {
-                                        sx1 = 150;
-                                        sx2 = vw - 150;
+                                        sx1 = ewStrip;
+                                        sx2 = vw - ewStrip;
                                     } else if (hasE && !hasW) {
                                         sx1 = 0;
-                                        sx2 = 810;
+                                        sx2 = vw - ewStrip;
                                     } else if (hasW && !hasE) {
-                                        sx1 = vw - 810;
+                                        sx1 = ewStrip;
                                         sx2 = vw;
                                     } else {
                                         sx1 = 0;
@@ -11355,7 +11359,7 @@ Window {
                                     }
                                     viewport.areasModel.append({
                                         x1: sx1,
-                                        y1: vh - 80,
+                                        y1: vh - sStrip,
                                         x2: sx2,
                                         y2: vh,
                                         name: "south",
@@ -11370,9 +11374,9 @@ Window {
 
                                 // N: fills remaining space above S, between W and E
                                 if (hasN) {
-                                    var nx1 = hasW ? 150 : 0;
-                                    var nx2 = hasE ? vw - 150 : vw;
-                                    var ny2 = hasS ? vh - 80 : vh;
+                                    var nx1 = hasW ? ewStrip : 0;
+                                    var nx2 = hasE ? vw - ewStrip : vw;
+                                    var ny2 = hasS ? vh - sStrip : vh;
                                     viewport.areasModel.append({
                                         x1: nx1,
                                         y1: 0,

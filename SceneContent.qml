@@ -351,6 +351,10 @@ Item {
         }
     }
 
+    function parseInteractivityJson(json) {
+        try { return JSON.parse(json || "[]") } catch(e) { return [] }
+    }
+
     // Expose shader delegate for external code that needs to update live uniforms.
     function shaderDelegateAt(idx) { return shadersRepeater.itemAt(idx) }
 
@@ -381,6 +385,7 @@ Item {
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedAreas.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
                     property bool isRelayerHovered: isInteractive && buttonGridRef.selectedTool === "relayer" && viewportRef.relayerHoveredType === "area" && viewportRef.relayerHoveredIndex === index
+                    property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
                     property real pressVpX: 0
                     property real pressVpY: 0
                     property real origX1: 0
@@ -447,9 +452,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var json = areasModel.get(index).interactivityJson || "[]"
-                            var items = []
-                            try { items = JSON.parse(json) } catch(e) {}
+                            var items = areaDelegate._cachedInteractivity
                             var pendingJump = null
                             var hasCueVideo = false
                             var lastCondPassed = false
@@ -1019,6 +1022,7 @@ Item {
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedTbs.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
                     property bool isRelayerHovered: isInteractive && buttonGridRef.selectedTool === "relayer" && viewportRef.relayerHoveredType === "tb" && viewportRef.relayerHoveredIndex === index
+                    property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
                     property bool editing: false
                     onEditingChanged: viewportRef.textEditing = editing
                     onIsActiveChanged: if (!isActive && editing) {
@@ -1564,9 +1568,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var json = textBoxesModel.get(index).interactivityJson || "[]"
-                            var items = []
-                            try { items = JSON.parse(json) } catch(e) {}
+                            var items = tbDelegate._cachedInteractivity
                             var pendingJump = null
                             var hasCueVideo = false
                             var lastCondPassed = false
@@ -1668,6 +1670,7 @@ Item {
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedImages.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
                     property bool isRelayerHovered: isInteractive && buttonGridRef.selectedTool === "relayer" && viewportRef.relayerHoveredType === "image" && viewportRef.relayerHoveredIndex === index
+                    property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
                     property real pressVpX: 0
                     property real pressVpY: 0
                     property real origX1: 0
@@ -2206,9 +2209,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var json = imagesModel.get(index).interactivityJson || "[]"
-                            var items = []
-                            try { items = JSON.parse(json) } catch(e) {}
+                            var items = imgDelegate._cachedInteractivity
                             var pendingJump = null
                             var hasCueVideo = false
                             var lastCondPassed = false
@@ -2311,6 +2312,8 @@ Item {
                     property real origAspect: 1
                     property bool isBeingDeleted: isInteractive && (buttonGridRef.selectedTool === "destroy" || viewportRef.tempDestroyMode) && viewportRef.deleteTargetType === "video" && viewportRef.deleteTargetIndex === index
 
+                    property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
+
                     // Tracks whether imageLoadComplete() has been called for this delegate.
                     // Guards against duplicate calls if both the frame path and fallback path fire.
                     property bool videoReadySignaled: false
@@ -2332,6 +2335,24 @@ Item {
                     property bool vidCfAIsPrimary: true   // player A (vidPlayer) is currently primary
                     property bool vidCfActive: false       // a crossfade opacity animation is running
                     property bool vidCfPrerolling: false  // secondary player started early; fade not yet begun
+
+                    // Stop the secondary crossfade player the instant a scene transition begins
+                    // rather than waiting for the next onPositionChanged tick (~33 ms at 30 fps).
+                    // This frees the decoder slot immediately so the transition video can start.
+                    readonly property bool _inTransitionWatcher: model.inTransition
+                    on_InTransitionWatcherChanged: {
+                        if (model.inTransition &&
+                                (vidDelegate.vidCfActive || vidDelegate.vidCfPrerolling ||
+                                 vidOutputB.opacity > 0 || !vidDelegate.vidCfAIsPrimary)) {
+                            vidOutputBFadeIn.stop()
+                            vidOutputBFadeOut.stop()
+                            vidPlayerB.stop()
+                            vidOutputB.opacity = 0.0
+                            vidDelegate.vidCfAIsPrimary = true
+                            vidDelegate.vidCfActive = false
+                            vidDelegate.vidCfPrerolling = false
+                        }
+                    }
 
                     onTrackedFilePathChanged: {
                         if (!vidDelegate.videoReadySignaled) {
@@ -2398,8 +2419,11 @@ Item {
                                     vidDelegate.vidCfAIsPrimary && vidPlayer.duration > 0) {
                                 var xfDur = vidPlayer.duration * Math.max(0, Math.min(50, model.vidCrossfadePct || 5)) / 100
                                 var remA = vidPlayer.duration - vidPlayer.position
-                                if (xfDur > 0 && remA > 0) {
-                                    if (!vidDelegate.vidCfPrerolling && !vidDelegate.vidCfActive && remA <= xfDur + 300) {
+                                if (xfDur > 0 && remA > xfDur + 350) {
+                                    // well outside the crossfade zone — nothing to do this tick
+                                } else if (xfDur > 0 && remA > 0) {
+                                    if (!vidDelegate.vidCfPrerolling && !vidDelegate.vidCfActive &&
+                                            remA <= xfDur + 300 && sceneContent.isInteractive) {
                                         vidOutputB.opacity = 0
                                         if (vidPlayerB.source !== vidDelegate.liveFilePath)
                                             vidPlayerB.source = vidDelegate.liveFilePath
@@ -2413,18 +2437,23 @@ Item {
                                         vidOutputBFadeIn.start()
                                     }
                                 }
-                            } else if (!model.inTransition && (!model.vidLoop || !model.vidCrossfade) &&
+                            } else if ((model.inTransition || !model.vidLoop || !model.vidCrossfade) &&
                                        (vidDelegate.vidCfActive || vidDelegate.vidCfPrerolling ||
                                         vidOutputB.opacity > 0 || !vidDelegate.vidCfAIsPrimary)) {
-                                // Crossfade disabled mid-cycle — clean up player B and restore A
+                                // Stop B when a scene transition starts (frees the decoder slot) or
+                                // when crossfade is disabled mid-cycle.
                                 vidOutputBFadeIn.stop()
                                 vidOutputBFadeOut.stop()
                                 vidPlayerB.stop()
                                 vidOutputB.opacity = 0.0
-                                vidOutput.opacity = 1.0
-                                if (!vidDelegate.vidCfAIsPrimary && model.vidLoop) {
-                                    vidPlayer.stop()
-                                    vidPlayer.play()
+                                if (!model.inTransition) {
+                                    // Restore A opacity and restart it only outside transitions;
+                                    // transition logic owns vidOutput.opacity during a transition.
+                                    vidOutput.opacity = 1.0
+                                    if (!vidDelegate.vidCfAIsPrimary && model.vidLoop) {
+                                        vidPlayer.stop()
+                                        vidPlayer.play()
+                                    }
                                 }
                                 vidDelegate.vidCfAIsPrimary = true
                                 vidDelegate.vidCfActive = false
@@ -2512,8 +2541,11 @@ Item {
                                     !vidDelegate.vidCfAIsPrimary && vidPlayerB.duration > 0) {
                                 var xfDur = vidPlayerB.duration * Math.max(0, Math.min(50, model.vidCrossfadePct || 5)) / 100
                                 var remB = vidPlayerB.duration - vidPlayerB.position
-                                if (xfDur > 0 && remB > 0) {
-                                    if (!vidDelegate.vidCfPrerolling && !vidDelegate.vidCfActive && remB <= xfDur + 300) {
+                                if (xfDur > 0 && remB > xfDur + 350) {
+                                    // well outside the crossfade zone — nothing to do this tick
+                                } else if (xfDur > 0 && remB > 0) {
+                                    if (!vidDelegate.vidCfPrerolling && !vidDelegate.vidCfActive &&
+                                            remB <= xfDur + 300 && sceneContent.isInteractive) {
                                         vidPlayer.play()  // after EndOfMedia restarts from 0 in Qt6; no stop() needed
                                         vidDelegate.vidCfPrerolling = true
                                     }
@@ -3196,9 +3228,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var json = videosModel.get(index).interactivityJson || "[]"
-                            var items = []
-                            try { items = JSON.parse(json) } catch(e) {}
+                            var items = vidDelegate._cachedInteractivity
                             var pendingJump = null
                             var hasCueVideo = false
                             var lastCondPassed = false
@@ -3353,6 +3383,7 @@ Item {
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedShaders.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
                     property bool isRelayerHovered: isInteractive && buttonGridRef.selectedTool === "relayer" && viewportRef.relayerHoveredType === "shader" && viewportRef.relayerHoveredIndex === index
+                    property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
                     property real pressVpX: 0
                     property real pressVpY: 0
                     property real origX1: 0
@@ -3877,9 +3908,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var json = shadersModel.get(index).interactivityJson || "[]"
-                            var items = []
-                            try { items = JSON.parse(json) } catch(e) {}
+                            var items = shaderDelegate._cachedInteractivity
                             var pendingJump = null
                             var hasCueVideo = false
                             var lastCondPassed = false
