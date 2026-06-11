@@ -23,11 +23,13 @@ import base64
 import ctypes
 import hashlib
 import json
+import queue as _queue
 import re
 import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -224,6 +226,80 @@ def _rescale_elements_meta(conn, scale_x, scale_y):
         )
 
 
+class _SaveThread(threading.Thread):
+    """Daemon thread that performs fire-and-forget SQLite element writes."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self._q = _queue.Queue()
+        self._conn = None
+
+    def open(self, path):
+        self._q.put(("open", path))
+
+    def close(self):
+        self._q.put(("close", None))
+
+    def write(self, scene_id, elements_json):
+        self._q.put(("write", (scene_id, elements_json)))
+
+    def stop(self):
+        self._q.put(None)
+
+    def run(self):
+        while True:
+            item = self._q.get()
+            if item is None:
+                if self._conn:
+                    self._conn.close()
+                    self._conn = None
+                break
+            op, data = item
+            if op == "open":
+                if self._conn:
+                    self._conn.close()
+                try:
+                    self._conn = sqlite3.connect(data)
+                    self._conn.execute("PRAGMA journal_mode=WAL")
+                    self._conn.execute("PRAGMA synchronous=NORMAL")
+                except Exception as e:
+                    print(f"SaveThread.open: {e}")
+                    self._conn = None
+            elif op == "close":
+                if self._conn:
+                    self._conn.close()
+                    self._conn = None
+            elif op == "write":
+                if not self._conn:
+                    continue
+                scene_id, elements_json = data
+                try:
+                    d = json.loads(elements_json)
+                    self._conn.execute(
+                        "DELETE FROM elements WHERE scene_id = ?", (scene_id,)
+                    )
+                    for el in d:
+                        self._conn.execute(
+                            "INSERT INTO elements"
+                            " (scene_id, type, name, x, y, w, h, z_order, meta)"
+                            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (
+                                scene_id,
+                                el["type"],
+                                el.get("name", ""),
+                                el["x"],
+                                el["y"],
+                                el["w"],
+                                el["h"],
+                                el.get("z_order", 0),
+                                json.dumps(el),
+                            ),
+                        )
+                    self._conn.commit()
+                except Exception as e:
+                    print(f"SaveThread.write: ERROR scene={scene_id} {e}")
+
+
 class StoryManager(QObject):
     """Owns the SQLite connection for the currently-open .story file."""
 
@@ -245,6 +321,8 @@ class StoryManager(QObject):
         self._thumbs_dir = Path.home() / ".config" / "understory" / "thumbs"
         self._recent = []
         self._load_recent()
+        self._save_thread = _SaveThread()
+        self._save_thread.start()
 
     # ------------------------------------------------------------------ helpers
 
@@ -255,9 +333,14 @@ class StoryManager(QObject):
         return s
 
     def _close(self):
+        self._save_thread.close()
         if self._conn:
             self._conn.close()
             self._conn = None
+
+    def _cleanup_save_thread(self):
+        self._save_thread.stop()
+        self._save_thread.join(timeout=3.0)
 
     def _load_recent(self):
         try:
@@ -349,7 +432,9 @@ class StoryManager(QObject):
             conn.executescript(self._template_sql)
             conn.execute("INSERT INTO story (id, title) VALUES (1, '')")
             conn.commit()
+            conn.execute("PRAGMA journal_mode=WAL")
             self._conn = conn
+            self._save_thread.open(path)
             self._path = path
             self._title = ""
             self._history.clear()
@@ -431,7 +516,9 @@ class StoryManager(QObject):
                 )
                 conn.commit()
             row = conn.execute("SELECT title FROM story WHERE id = 1").fetchone()
+            conn.execute("PRAGMA journal_mode=WAL")
             self._conn = conn
+            self._save_thread.open(path)
             self._path = path
             stored = row[0] if row else ""
             # Treat the old default "new story" as no custom title so the
@@ -466,9 +553,13 @@ class StoryManager(QObject):
             return False
         try:
             self._conn.commit()
+            self._conn.execute("PRAGMA wal_checkpoint(FULL)")
             shutil.copy2(self._path, path)
             self._close()
-            self._conn = sqlite3.connect(path)
+            conn = sqlite3.connect(path)
+            conn.execute("PRAGMA journal_mode=WAL")
+            self._conn = conn
+            self._save_thread.open(path)
             self._path = path
             self._add_recent(path, self._title)
             self.storyChanged.emit()
@@ -746,6 +837,51 @@ class StoryManager(QObject):
             )
         except Exception as e:
             print(f"StoryManager.saveSceneElements: ERROR scene={scene_id} {e}")
+
+    @Slot(int, str)
+    def saveSceneElementsDeferred(self, scene_id, elements_json):
+        """Like saveSceneElements but dispatches the DB write to the background thread.
+        Used by propSaveDebounce to avoid blocking the main thread during transitions."""
+        if not self._conn:
+            return
+        try:
+            rows = self._conn.execute(
+                "SELECT meta FROM elements WHERE scene_id = ? ORDER BY z_order",
+                (scene_id,),
+            ).fetchall()
+            old_json = json.dumps([json.loads(r[0]) for r in rows])
+
+            self._save_thread.write(scene_id, elements_json)
+
+            def apply_sync(sid, ej):
+                if not self._conn:
+                    return
+                data = json.loads(ej)
+                self._conn.execute("DELETE FROM elements WHERE scene_id = ?", (sid,))
+                for el in data:
+                    self._conn.execute(
+                        "INSERT INTO elements (scene_id, type, name, x, y, w, h, z_order, meta)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            sid,
+                            el["type"],
+                            el.get("name", ""),
+                            el["x"],
+                            el["y"],
+                            el["w"],
+                            el["h"],
+                            el.get("z_order", 0),
+                            json.dumps(el),
+                        ),
+                    )
+                self._conn.commit()
+
+            self._push_command(
+                lambda sid=scene_id, ej=old_json: apply_sync(sid, ej),
+                lambda sid=scene_id, ej=elements_json: apply_sync(sid, ej),
+            )
+        except Exception as e:
+            print(f"StoryManager.saveSceneElementsDeferred: ERROR scene={scene_id} {e}")
 
     @Slot(int, result=str)
     def loadSceneElements(self, scene_id):
@@ -1454,6 +1590,7 @@ engine.addImageProvider("thumbnails", thumbnailProvider)
 controllerManager = ControllerManager()
 engine.rootContext().setContextProperty("controllerManager", controllerManager)
 app.aboutToQuit.connect(controllerManager.cleanup)
+app.aboutToQuit.connect(storyManager._cleanup_save_thread)
 
 
 # Load QML file

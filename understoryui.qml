@@ -7145,7 +7145,7 @@ Window {
                         repeat: false
                         onTriggered: {
                             if (mainWindow.currentSceneId !== -1)
-                                storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements())
+                                storyManager.saveSceneElementsDeferred(mainWindow.currentSceneId, viewport.collectSceneElements())
                         }
                     }
 
