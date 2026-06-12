@@ -3173,6 +3173,11 @@ Window {
             readonly property var activeContent: foregroundLayer === 0 ? sceneLayerA : sceneLayerB
             readonly property var stagingContent: foregroundLayer === 0 ? sceneLayerB : sceneLayerA
 
+            // Pre-warm: staging is loaded with the next likely scene before the user clicks
+            property int  preWarmSceneId:      -1     // which scene is staged
+            property bool preWarmReady:        false  // staging emitted readyForDisplay
+            property bool preWarmInProgress:   false  // staging is loading (suppress auto-transition)
+
             property int pendingJumpSceneId: -1
             property string pendingJumpSceneName: ""
             property string pendingTransition: "cut"
@@ -3796,6 +3801,10 @@ Window {
                 selectSettings.stableOrbitCache = ({});
                 selectSettings.elementTransitionDest = ({});
                 selectSettings.evaluateAllSources();
+                preWarmSceneId = -1;
+                preWarmReady = false;
+                preWarmInProgress = false;
+                preWarmTimer.restart();
             }
 
             function collectSceneElements() {
@@ -3865,6 +3874,75 @@ Window {
             // transition: "cut" | "dissolve" | "wipe"   durationMs: length of animated transitions.
             // wipeFeather: 0.0–0.5   wipeDirection: "right"|"left"|"down"|"up"
             // When staging signals readyForDisplay the Connections below start the transition.
+            // Shared transition-start logic called by onReadyForDisplay and by
+            // jumpToScene when staging was already pre-warmed and ready.
+            function startPendingTransition() {
+                if (cueVideoActive) { cueVideoStagingReady = true; return }
+                if (cueVideoHasJump) { commitCueVideoTransition(); return }
+                var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
+                if (pendingTransition === "dissolve") {
+                    dissolveAnim.duration = pendingDuration
+                    dissolving = true
+                    dissolveAnim.start()
+                } else if (pendingTransition === "wipe") {
+                    wipeFeather = pendingWipeFeather
+                    wipeDirection = dirMap[pendingWipeDirection] !== undefined ? dirMap[pendingWipeDirection] : 0
+                    wipeAnim.duration = pendingDuration
+                    wiping = true
+                    wipeAnim.start()
+                } else if (pendingTransition === "push") {
+                    slideDirection = dirMap[pendingSlideDirection] !== undefined ? dirMap[pendingSlideDirection] : 0
+                    slideAnim.duration = pendingDuration
+                    sliding = true
+                    slideAnim.start()
+                } else if (pendingTransition === "look") {
+                    lookYaw = pendingLookYaw
+                    lookPitch = pendingLookPitch
+                    lookFovMM = pendingLookFovMM
+                    lookOvershoot = pendingLookOvershoot
+                    lookShutter = pendingLookShutter
+                    lookAnim.duration = pendingDuration
+                    looking = true
+                    lookAnim.start()
+                } else {
+                    performSwap()
+                }
+            }
+
+            // Load the first jump target from the active scene into staging so
+            // the video decoder is warm before the user clicks.
+            function preWarmNextScene() {
+                if (dissolving || wiping || sliding || looking) return
+                var targets = activeContent.collectJumpTargets()
+                if (targets.length === 0) return
+                var targetId = targets[0]
+                if (preWarmSceneId === targetId) return
+                preWarmSceneId = -1
+                preWarmReady = false
+                preWarmInProgress = false
+                var raw = storyManager.loadSceneElements(targetId)
+                var elements
+                try { elements = JSON.parse(raw) } catch(e) { elements = [] }
+                for (var ei = 0; ei < elements.length; ei++) {
+                    var el = elements[ei]
+                    if (!el.sourcesJson || el.sourcesJson === "[]") continue
+                    var sr = selectSettings.evaluateSourcesJson(el.sourcesJson)
+                    if (sr === null) continue
+                    if (el.type === "video" || el.type === "image") el.filePath = sr.filePath
+                    else if (el.type === "shader") { el.fragPath = sr.fragPath; el.vertPath = sr.vertPath }
+                }
+                preWarmSceneId = targetId
+                preWarmInProgress = true
+                stagingContent.loadScene(elements)
+            }
+
+            Timer {
+                id: preWarmTimer
+                interval: 300
+                repeat: false
+                onTriggered: viewport.preWarmNextScene()
+            }
+
             function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection, lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal, lookShutterVal) {
                 if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId)
                     return;
@@ -3885,6 +3963,27 @@ Window {
                 pendingLookFovMM = lookFovMMVal !== undefined ? lookFovMMVal : 24.0;
                 pendingLookOvershoot = lookOvershootVal !== undefined ? lookOvershootVal : 1.0;
                 pendingLookShutter = lookShutterVal !== undefined ? lookShutterVal : 0.10;
+
+                if (preWarmSceneId === targetSceneId) {
+                    // Staging is already loaded with this scene — skip cold load.
+                    preWarmSceneId = -1
+                    if (preWarmReady) {
+                        // Decoder is warm and first frame is ready — start immediately.
+                        preWarmReady = false
+                        preWarmInProgress = false
+                        startPendingTransition()
+                    } else {
+                        // Still loading — clear the suppression flag so onReadyForDisplay
+                        // starts the transition as soon as staging signals ready.
+                        preWarmInProgress = false
+                    }
+                    return;
+                }
+
+                // Cold load path — invalidate any unrelated pre-warm and load fresh.
+                preWarmSceneId = -1
+                preWarmReady = false
+                preWarmInProgress = false
                 var raw = storyManager.loadSceneElements(targetSceneId);
                 var elements;
                 try {
@@ -3933,6 +4032,7 @@ Window {
                 selectSettings.evaluateAllSources();
                 stagingContent.clear();
                 checkOcclusion();
+                preWarmTimer.restart();
             }
 
             // Dissolve animation — fades the staging layer in over pendingDuration ms.
@@ -4444,47 +4544,12 @@ Window {
                     target: sceneLayerA
                     function onReadyForDisplay() {
                         if (viewport.foregroundLayer !== 0) {
-                            if (viewport.cueVideoActive) {
-                                viewport.cueVideoStagingReady = true;
-                                return;
+                            if (viewport.preWarmInProgress) {
+                                viewport.preWarmReady = true
+                                viewport.preWarmInProgress = false
+                                return
                             }
-                            if (viewport.cueVideoHasJump) {
-                                viewport.commitCueVideoTransition();
-                                return;
-                            }
-                            var dirMap = {
-                                "right": 0,
-                                "left": 1,
-                                "down": 2,
-                                "up": 3
-                            };
-                            if (viewport.pendingTransition === "dissolve") {
-                                dissolveAnim.duration = viewport.pendingDuration;
-                                viewport.dissolving = true;
-                                dissolveAnim.start();
-                            } else if (viewport.pendingTransition === "wipe") {
-                                viewport.wipeFeather = viewport.pendingWipeFeather;
-                                viewport.wipeDirection = dirMap[viewport.pendingWipeDirection] !== undefined ? dirMap[viewport.pendingWipeDirection] : 0;
-                                wipeAnim.duration = viewport.pendingDuration;
-                                viewport.wiping = true;
-                                wipeAnim.start();
-                            } else if (viewport.pendingTransition === "push") {
-                                viewport.slideDirection = dirMap[viewport.pendingSlideDirection] !== undefined ? dirMap[viewport.pendingSlideDirection] : 0;
-                                slideAnim.duration = viewport.pendingDuration;
-                                viewport.sliding = true;
-                                slideAnim.start();
-                            } else if (viewport.pendingTransition === "look") {
-                                viewport.lookYaw = viewport.pendingLookYaw;
-                                viewport.lookPitch = viewport.pendingLookPitch;
-                                viewport.lookFovMM = viewport.pendingLookFovMM;
-                                viewport.lookOvershoot = viewport.pendingLookOvershoot;
-                                viewport.lookShutter = viewport.pendingLookShutter;
-                                lookAnim.duration = viewport.pendingDuration;
-                                viewport.looking = true;
-                                lookAnim.start();
-                            } else {
-                                viewport.performSwap();
-                            }
+                            viewport.startPendingTransition()
                         }
                     }
                 }
@@ -4506,47 +4571,12 @@ Window {
                     target: sceneLayerB
                     function onReadyForDisplay() {
                         if (viewport.foregroundLayer !== 1) {
-                            if (viewport.cueVideoActive) {
-                                viewport.cueVideoStagingReady = true;
-                                return;
+                            if (viewport.preWarmInProgress) {
+                                viewport.preWarmReady = true
+                                viewport.preWarmInProgress = false
+                                return
                             }
-                            if (viewport.cueVideoHasJump) {
-                                viewport.commitCueVideoTransition();
-                                return;
-                            }
-                            var dirMap = {
-                                "right": 0,
-                                "left": 1,
-                                "down": 2,
-                                "up": 3
-                            };
-                            if (viewport.pendingTransition === "dissolve") {
-                                dissolveAnim.duration = viewport.pendingDuration;
-                                viewport.dissolving = true;
-                                dissolveAnim.start();
-                            } else if (viewport.pendingTransition === "wipe") {
-                                viewport.wipeFeather = viewport.pendingWipeFeather;
-                                viewport.wipeDirection = dirMap[viewport.pendingWipeDirection] !== undefined ? dirMap[viewport.pendingWipeDirection] : 0;
-                                wipeAnim.duration = viewport.pendingDuration;
-                                viewport.wiping = true;
-                                wipeAnim.start();
-                            } else if (viewport.pendingTransition === "push") {
-                                viewport.slideDirection = dirMap[viewport.pendingSlideDirection] !== undefined ? dirMap[viewport.pendingSlideDirection] : 0;
-                                slideAnim.duration = viewport.pendingDuration;
-                                viewport.sliding = true;
-                                slideAnim.start();
-                            } else if (viewport.pendingTransition === "look") {
-                                viewport.lookYaw = viewport.pendingLookYaw;
-                                viewport.lookPitch = viewport.pendingLookPitch;
-                                viewport.lookFovMM = viewport.pendingLookFovMM;
-                                viewport.lookOvershoot = viewport.pendingLookOvershoot;
-                                viewport.lookShutter = viewport.pendingLookShutter;
-                                lookAnim.duration = viewport.pendingDuration;
-                                viewport.looking = true;
-                                lookAnim.start();
-                            } else {
-                                viewport.performSwap();
-                            }
+                            viewport.startPendingTransition()
                         }
                     }
                 }

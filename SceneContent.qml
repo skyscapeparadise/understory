@@ -110,6 +110,29 @@ Item {
 
     // ── Scene management ────────────────────────────────────────────────────
 
+    function collectJumpTargets() {
+        var seen = {}
+        var result = []
+        var models = [areasModelInst, textBoxesModelInst, imagesModelInst, videosModelInst, shadersModelInst]
+        for (var m = 0; m < models.length; m++) {
+            var mdl = models[m]
+            for (var i = 0; i < mdl.count; i++) {
+                var el = mdl.get(i)
+                if (!el.interactivityJson) continue
+                var items = parseInteractivityJson(el.interactivityJson)
+                for (var j = 0; j < items.length; j++) {
+                    var it = items[j]
+                    if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0
+                            && !seen[it.itemTargetSceneId]) {
+                        seen[it.itemTargetSceneId] = true
+                        result.push(it.itemTargetSceneId)
+                    }
+                }
+            }
+        }
+        return result
+    }
+
     function clear() {
         areasModelInst.clear()
         textBoxesModelInst.clear()
