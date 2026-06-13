@@ -7,11 +7,18 @@ import Qt5Compat.GraphicalEffects
 import QtQuick.Effects
 import QtQuick.Dialogs
 import Qt.labs.platform as Platform
+import QtCore
 
 Window {
     id: mainWindow
     property var activeLoopingSounds: []
     property string currentLocationNodeName: ""
+
+    Settings {
+        id: appSettings
+        property bool muted: false
+    }
+
     visible: true
     width: 960
     height: 540
@@ -488,11 +495,52 @@ Window {
                 }
 
                 Text {
-                    text: "this is where the body text goes"
+                    text: "audio"
                     font.pixelSize: 16
+                    font.bold: true
                     color: "white"
-                    wrapMode: Text.WordWrap
+                    topPadding: 8
+                }
+
+                Rectangle {
+                    id: muteRect
                     Layout.fillWidth: true
+                    height: 44
+                    radius: 10
+                    property bool isOn: appSettings.muted
+                    color: isOn ? "white" : "transparent"
+                    border.width: 2
+                    border.color: "white"
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: appSettings.muted = !appSettings.muted
+                    }
+                    Item {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        height: 20
+                        Text {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "mute all audio"
+                            font.pixelSize: 14
+                            font.bold: true
+                            color: muteRect.isOn ? "#477B78" : "white"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
+                        Text {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: muteRect.isOn ? "on" : "off"
+                            font.pixelSize: 11
+                            color: muteRect.isOn ? "#477B78" : "#888"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
+                    }
                 }
             }
         }
@@ -1135,6 +1183,33 @@ Window {
                     storyManager.setEditorState("cursor_paths", JSON.stringify(cursorCustomPaths));
             }
 
+            // ---- transition input settings ----
+            property string transitionInputMode: "ignore"          // "ignore" | "queue" | "skip"
+            property real transitionInputMaxDurationMs: 10000      // threshold in ms; default = max (10s)
+            property bool transitionInputSkipQueues: false         // skip mode: also fire input on arrival
+
+            function loadTransitionInput() {
+                if (!storyManager.isOpen) return;
+                var mode = storyManager.getEditorState("transition_input_mode");
+                if (mode !== "") transitionInputMode = mode;
+                var maxDur = storyManager.getEditorState("transition_input_max_dur");
+                if (maxDur !== "") transitionInputMaxDurationMs = parseFloat(maxDur) || 10000;
+                var sq = storyManager.getEditorState("transition_input_skip_queues");
+                if (sq !== "") transitionInputSkipQueues = (sq === "true");
+            }
+            onTransitionInputModeChanged: {
+                if (storyManager.isOpen)
+                    storyManager.setEditorState("transition_input_mode", transitionInputMode);
+            }
+            onTransitionInputMaxDurationMsChanged: {
+                if (storyManager.isOpen)
+                    storyManager.setEditorState("transition_input_max_dur", transitionInputMaxDurationMs.toString());
+            }
+            onTransitionInputSkipQueuesChanged: {
+                if (storyManager.isOpen)
+                    storyManager.setEditorState("transition_input_skip_queues", transitionInputSkipQueues ? "true" : "false");
+            }
+
             // ---- transitions data ----
             property var dirTransitions: [
                 {
@@ -1371,6 +1446,7 @@ Window {
                     storyHubSettingsView.loadStoryCursor();
                     storyHubSettingsView.loadTransitions();
                     storyHubSettingsView.loadTimecodeFormat();
+                    storyHubSettingsView.loadTransitionInput();
                 }
                 function onStoryChanged() {
                     storyHubSettingsView.loadTimecodeFormat();
@@ -3008,6 +3084,295 @@ Window {
                     }
                 } // GridLayout
 
+                // ---- transition input heading ----
+                Text {
+                    text: "transition input"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: "white"
+                    topPadding: 8
+                    Layout.fillWidth: true
+                }
+
+                // ---- transition input options ----
+                Column {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    // -- ignore --
+                    Rectangle {
+                        id: tiIgnoreRect
+                        width: parent.width
+                        height: 44
+                        radius: 10
+                        property bool isSelected: storyHubSettingsView.transitionInputMode === "ignore"
+                        color: isSelected ? "white" : "transparent"
+                        border.width: 2
+                        border.color: "white"
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        MouseArea { anchors.fill: parent; onClicked: storyHubSettingsView.transitionInputMode = "ignore" }
+                        Item {
+                            anchors.left: parent.left; anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.leftMargin: 14; anchors.rightMargin: 14
+                            height: 20
+                            Text {
+                                anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                                text: "ignore"
+                                font.pixelSize: 14; font.bold: true
+                                color: tiIgnoreRect.isSelected ? "#477B78" : "white"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+                            Text {
+                                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                text: "discard inputs during transitions"
+                                font.pixelSize: 11
+                                color: tiIgnoreRect.isSelected ? "#477B78" : "#888"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+                        }
+                    }
+
+                    // -- queue --
+                    Rectangle {
+                        id: tiQueueRect
+                        width: parent.width
+                        property bool isSelected: storyHubSettingsView.transitionInputMode === "queue"
+                        height: isSelected ? 82 : 44
+                        Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+                        radius: 10; clip: true
+                        color: isSelected ? "white" : "transparent"
+                        border.width: 2; border.color: "white"
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        MouseArea { anchors.fill: parent; onClicked: storyHubSettingsView.transitionInputMode = "queue" }
+                        Column {
+                            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                            anchors.topMargin: 12; anchors.leftMargin: 14; anchors.rightMargin: 14
+                            spacing: 10
+                            Item {
+                                width: parent.width; height: 20
+                                Text {
+                                    anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                                    text: "queue"
+                                    font.pixelSize: 14; font.bold: true
+                                    color: tiQueueRect.isSelected ? "#477B78" : "white"
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                }
+                                Text {
+                                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                    text: "execute input after transition completes"
+                                    font.pixelSize: 11
+                                    color: tiQueueRect.isSelected ? "#477B78" : "#888"
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                }
+                            }
+                            RowLayout {
+                                width: parent.width; height: 22; spacing: 6
+                                Text {
+                                    text: "max length"
+                                    font.pixelSize: 10; color: "#477B78"
+                                    Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter
+                                }
+                                Slider {
+                                    id: tiQueueDurSlider
+                                    Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
+                                    from: 0; to: 10; stepSize: 0
+                                    Component.onCompleted: value = storyHubSettingsView.transitionInputMaxDurationMs / 1000
+                                    onMoved: {
+                                        storyHubSettingsView.transitionInputMaxDurationMs = Math.round(value * 1000);
+                                        tiQueueDurField.text = value.toFixed(1);
+                                    }
+                                    Connections {
+                                        target: storyHubSettingsView
+                                        function onTransitionInputMaxDurationMsChanged() {
+                                            if (!tiQueueDurSlider.pressed) {
+                                                tiQueueDurSlider.value = storyHubSettingsView.transitionInputMaxDurationMs / 1000;
+                                                tiQueueDurField.text = (storyHubSettingsView.transitionInputMaxDurationMs / 1000).toFixed(1);
+                                            }
+                                        }
+                                    }
+                                    background: Rectangle {
+                                        x: tiQueueDurSlider.leftPadding
+                                        y: tiQueueDurSlider.topPadding + tiQueueDurSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 200; implicitHeight: 4
+                                        width: tiQueueDurSlider.availableWidth; height: 4; radius: 2
+                                        color: "#ccc"
+                                        Rectangle {
+                                            width: tiQueueDurSlider.visualPosition * parent.width
+                                            height: parent.height; radius: 2; color: "#5DA9A4"
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: tiQueueDurSlider.leftPadding + tiQueueDurSlider.visualPosition * (tiQueueDurSlider.availableWidth - width)
+                                        y: tiQueueDurSlider.topPadding + tiQueueDurSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 12; implicitHeight: 12; radius: 6
+                                        color: tiQueueDurSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                    color: "transparent"; border.color: "#477B78"; border.width: 1; radius: 4
+                                    TextInput {
+                                        id: tiQueueDurField
+                                        anchors.left: parent.left; anchors.right: tiQueueDurSuffix.left
+                                        anchors.leftMargin: 4; anchors.rightMargin: 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: "#477B78"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                        validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                        Component.onCompleted: text = (storyHubSettingsView.transitionInputMaxDurationMs / 1000).toFixed(1)
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: {
+                                            var v = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0));
+                                            text = v.toFixed(1);
+                                            storyHubSettingsView.transitionInputMaxDurationMs = Math.round(v * 1000);
+                                            tiQueueDurSlider.value = v;
+                                        }
+                                    }
+                                    Text {
+                                        id: tiQueueDurSuffix
+                                        anchors.right: parent.right; anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "s"; font.pixelSize: 10; color: "#477B78"
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // -- skip to end --
+                    Rectangle {
+                        id: tiSkipRect
+                        width: parent.width
+                        property bool isSelected: storyHubSettingsView.transitionInputMode === "skip"
+                        height: isSelected ? 116 : 44
+                        Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+                        radius: 10; clip: true
+                        color: isSelected ? "white" : "transparent"
+                        border.width: 2; border.color: "white"
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        MouseArea { anchors.fill: parent; onClicked: storyHubSettingsView.transitionInputMode = "skip" }
+                        Column {
+                            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                            anchors.topMargin: 12; anchors.leftMargin: 14; anchors.rightMargin: 14
+                            spacing: 10
+                            Item {
+                                width: parent.width; height: 20
+                                Text {
+                                    anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+                                    text: "skip to end"
+                                    font.pixelSize: 14; font.bold: true
+                                    color: tiSkipRect.isSelected ? "#477B78" : "white"
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                }
+                                Text {
+                                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                    text: "hard-cut to destination on input"
+                                    font.pixelSize: 11
+                                    color: tiSkipRect.isSelected ? "#477B78" : "#888"
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                }
+                            }
+                            RowLayout {
+                                width: parent.width; height: 22; spacing: 6
+                                Text {
+                                    text: "max length"
+                                    font.pixelSize: 10; color: "#477B78"
+                                    Layout.preferredHeight: 22; verticalAlignment: Text.AlignVCenter
+                                }
+                                Slider {
+                                    id: tiSkipDurSlider
+                                    Layout.fillWidth: true; Layout.minimumWidth: 0; Layout.preferredHeight: 22
+                                    from: 0; to: 10; stepSize: 0
+                                    Component.onCompleted: value = storyHubSettingsView.transitionInputMaxDurationMs / 1000
+                                    onMoved: {
+                                        storyHubSettingsView.transitionInputMaxDurationMs = Math.round(value * 1000);
+                                        tiSkipDurField.text = value.toFixed(1);
+                                    }
+                                    Connections {
+                                        target: storyHubSettingsView
+                                        function onTransitionInputMaxDurationMsChanged() {
+                                            if (!tiSkipDurSlider.pressed) {
+                                                tiSkipDurSlider.value = storyHubSettingsView.transitionInputMaxDurationMs / 1000;
+                                                tiSkipDurField.text = (storyHubSettingsView.transitionInputMaxDurationMs / 1000).toFixed(1);
+                                            }
+                                        }
+                                    }
+                                    background: Rectangle {
+                                        x: tiSkipDurSlider.leftPadding
+                                        y: tiSkipDurSlider.topPadding + tiSkipDurSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 200; implicitHeight: 4
+                                        width: tiSkipDurSlider.availableWidth; height: 4; radius: 2
+                                        color: "#ccc"
+                                        Rectangle {
+                                            width: tiSkipDurSlider.visualPosition * parent.width
+                                            height: parent.height; radius: 2; color: "#5DA9A4"
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: tiSkipDurSlider.leftPadding + tiSkipDurSlider.visualPosition * (tiSkipDurSlider.availableWidth - width)
+                                        y: tiSkipDurSlider.topPadding + tiSkipDurSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 12; implicitHeight: 12; radius: 6
+                                        color: tiSkipDurSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: 46; Layout.preferredHeight: 22
+                                    color: "transparent"; border.color: "#477B78"; border.width: 1; radius: 4
+                                    TextInput {
+                                        id: tiSkipDurField
+                                        anchors.left: parent.left; anchors.right: tiSkipDurSuffix.left
+                                        anchors.leftMargin: 4; anchors.rightMargin: 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: "#477B78"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                        validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                        Component.onCompleted: text = (storyHubSettingsView.transitionInputMaxDurationMs / 1000).toFixed(1)
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: {
+                                            var v = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0));
+                                            text = v.toFixed(1);
+                                            storyHubSettingsView.transitionInputMaxDurationMs = Math.round(v * 1000);
+                                            tiSkipDurSlider.value = v;
+                                        }
+                                    }
+                                    Text {
+                                        id: tiSkipDurSuffix
+                                        anchors.right: parent.right; anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "s"; font.pixelSize: 10; color: "#477B78"
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                width: parent.width; height: 20; spacing: 8
+                                Rectangle {
+                                    width: 16; height: 16; radius: 3
+                                    color: storyHubSettingsView.transitionInputSkipQueues ? "#5DA9A4" : "transparent"
+                                    border.width: 1; border.color: "#477B78"
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "✓"; font.pixelSize: 10; font.bold: true
+                                        color: "white"
+                                        visible: storyHubSettingsView.transitionInputSkipQueues
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: storyHubSettingsView.transitionInputSkipQueues = !storyHubSettingsView.transitionInputSkipQueues
+                                    }
+                                }
+                                Text {
+                                    text: "also fire input on arrival"
+                                    font.pixelSize: 10; color: "#477B78"
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                Item { Layout.fillWidth: true }
+                            }
+                        }
+                    }
+                }
+
                 Item {
                     Layout.preferredHeight: 20
                 }
@@ -3229,6 +3594,10 @@ Window {
             property bool cueVideoStagingReady: false
             property bool cueVideoHasJump: false
             property bool cueVideoEarlyCommit: false
+
+            property var queuedJump: null       // stores jump args for direct-click inputs queued during a transition
+            property string queuedTemplate: "" // stores template name for keyboard/controller inputs queued during a transition
+            property bool transitionLoading: false  // staging is loading but animation hasn't started yet
 
             // Thin wrappers — viewport and sidebar code can use these bare names
             property var areasModel: activeContent ? activeContent.areasModel : null
@@ -3785,6 +4154,9 @@ Window {
             // ------------------------------------------------------------------ scene persistence
 
             function loadSceneIntoViewport(sceneId) {
+                queuedJump = null;
+                queuedTemplate = "";
+                transitionLoading = false;
                 clearSelection();
                 var raw = storyManager.loadSceneElements(sceneId);
                 var elements;
@@ -3877,6 +4249,7 @@ Window {
             // Shared transition-start logic called by onReadyForDisplay and by
             // jumpToScene when staging was already pre-warmed and ready.
             function startPendingTransition() {
+                transitionLoading = false;
                 if (cueVideoActive) { cueVideoStagingReady = true; return }
                 if (cueVideoHasJump) { commitCueVideoTransition(); return }
                 var dirMap = { "right": 0, "left": 1, "down": 2, "up": 3 }
@@ -3912,7 +4285,7 @@ Window {
             // Load the first jump target from the active scene into staging so
             // the video decoder is warm before the user clicks.
             function preWarmNextScene() {
-                if (dissolving || wiping || sliding || looking) return
+                if (dissolving || wiping || sliding || looking || transitionLoading) return
                 var targets = activeContent.collectJumpTargets()
                 if (targets.length === 0) return
                 var targetId = targets[0]
@@ -3946,9 +4319,32 @@ Window {
             function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection, lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal, lookShutterVal) {
                 if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId)
                     return;
-                if (dissolving || wiping || sliding || looking)
-                    // don't interrupt an in-progress transition
-                    return;
+                if (dissolving || wiping || sliding || looking || transitionLoading) {
+                    var tMode = storyHubSettingsView.transitionInputMode;
+                    if (tMode !== "ignore" && pendingDuration <= storyHubSettingsView.transitionInputMaxDurationMs) {
+                        var qj = { sceneId: targetSceneId, transition: transition,
+                                   durationMs: durationMs, wipeFeather: wipeFeather,
+                                   wipeDirection: wipeDirection, pushDirection: pushDirection,
+                                   lookYawDeg: lookYawDeg, lookPitchDeg: lookPitchDeg,
+                                   lookFovMMVal: lookFovMMVal, lookOvershootVal: lookOvershootVal,
+                                   lookShutterVal: lookShutterVal };
+                        if (tMode === "queue") {
+                            queuedJump = qj;   // overwrite any prior queued jump (most recent wins)
+                            return;
+                        }
+                        if (tMode === "skip" && !transitionLoading) {
+                            // Can't skip during loading phase — staging isn't ready yet
+                            skipCurrentTransition();
+                            if (targetSceneId === mainWindow.currentSceneId) return;
+                            if (!storyHubSettingsView.transitionInputSkipQueues) return;
+                            // "also fire on arrival": fall through to start the new jump now
+                        } else if (tMode === "skip" && transitionLoading) {
+                            return;
+                        }
+                    } else {
+                        return;
+                    }
+                }
                 selectSettings.saveCurrentInteractivity();
                 storyManager.saveSceneElements(mainWindow.currentSceneId, activeContent.collectElements());
                 pendingJumpSceneId = targetSceneId;
@@ -3976,6 +4372,7 @@ Window {
                         // Still loading — clear the suppression flag so onReadyForDisplay
                         // starts the transition as soon as staging signals ready.
                         preWarmInProgress = false
+                        transitionLoading = true
                     }
                     return;
                 }
@@ -4003,11 +4400,13 @@ Window {
                     if (el.type === "video" || el.type === "image") el.filePath = sr.filePath;
                     else if (el.type === "shader") { el.fragPath = sr.fragPath; el.vertPath = sr.vertPath; }
                 }
+                transitionLoading = true;
                 stagingContent.loadScene(elements);
             }
 
             // Swap foreground/staging layers — called after a cut, or at end of dissolve/wipe.
             function performSwap() {
+                transitionLoading = false;
                 // Clean up shader transition state before flip so opacity bindings reset cleanly.
                 if (wiping) {
                     wiping = false;
@@ -4035,6 +4434,62 @@ Window {
                 preWarmTimer.restart();
             }
 
+            // Called by keyboard/controller dispatchers before firing a template.
+            // Returns true if the input was consumed by queue mode; caller should not
+            // call fireAreasByTemplate in that case.
+            // Skip mode is intentionally NOT handled here — it flows through
+            // fireAreasByTemplate → jumpToScene so that non-jump interactivity
+            // (variable updates etc.) still fires immediately, as expected.
+            function handleTemplateInputDuringTransition(tpl) {
+                if (!(dissolving || wiping || sliding || looking) && !transitionLoading) return false;
+                if (storyHubSettingsView.transitionInputMode !== "queue") return false;
+                if (pendingDuration > storyHubSettingsView.transitionInputMaxDurationMs) return false;
+                queuedTemplate = tpl;   // most recent wins
+                return true;
+            }
+
+            // Hard-cut to the pending destination immediately, stopping whatever animation is running.
+            // Clears the transition flag BEFORE stopping the animation so onStopped guards don't
+            // double-call performSwap().
+            function skipCurrentTransition() {
+                if (dissolving) {
+                    dissolving = false;
+                    dissolveOpacity = 0.0;
+                    dissolveAnim.stop();
+                } else if (wiping) {
+                    wiping = false;
+                    wipeProgress = 0.0;
+                    wipeAnim.stop();
+                } else if (sliding) {
+                    sliding = false;
+                    slideProgress = 0.0;
+                    slideAnim.stop();
+                } else if (looking) {
+                    looking = false;
+                    lookProgress = 0.0;
+                    lookAnim.stop();
+                }
+                performSwap();
+            }
+
+            // Fire the queued input (if any) after a transition completes.
+            // Template inputs (keyboard/controller) re-fire on the NEW scene so the interactivity
+            // is evaluated fresh from the destination rather than replaying a stale scene ID.
+            function fireQueuedJump() {
+                if (queuedTemplate !== "") {
+                    var tpl = queuedTemplate;
+                    queuedTemplate = "";
+                    queuedJump = null;
+                    activeContent.fireAreasByTemplate(tpl);
+                } else if (queuedJump) {
+                    var j = queuedJump;
+                    queuedJump = null;
+                    jumpToScene(j.sceneId, j.transition, j.durationMs, j.wipeFeather, j.wipeDirection,
+                                j.pushDirection, j.lookYawDeg, j.lookPitchDeg, j.lookFovMMVal,
+                                j.lookOvershootVal, j.lookShutterVal);
+                }
+            }
+
             // Dissolve animation — fades the staging layer in over pendingDuration ms.
             // On completion it calls performSwap() which flips foregroundLayer.
             NumberAnimation {
@@ -4049,6 +4504,7 @@ Window {
                         viewport.dissolving = false;
                         viewport.dissolveOpacity = 0.0;
                         viewport.performSwap();
+                        viewport.fireQueuedJump();
                     }
                 }
             }
@@ -4065,6 +4521,7 @@ Window {
                 onStopped: {
                     if (viewport.wiping) {
                         viewport.performSwap();
+                        viewport.fireQueuedJump();
                     }
                 }
             }
@@ -4080,6 +4537,7 @@ Window {
                 onStopped: {
                     if (viewport.sliding) {
                         viewport.performSwap();
+                        viewport.fireQueuedJump();
                     }
                 }
             }
@@ -4095,6 +4553,7 @@ Window {
                 onStopped: {
                     if (viewport.looking) {
                         viewport.performSwap();
+                        viewport.fireQueuedJump();
                     }
                 }
             }
@@ -4532,6 +4991,7 @@ Window {
                 buttonGridRef: buttonGrid
                 variablesModel: variablesModel
                 isInteractive: viewport.foregroundLayer === 0
+                globalMuted: appSettings.muted
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
                 // Foreground: fully opaque.  Staging during dissolve: fades 0→1.
@@ -4563,6 +5023,7 @@ Window {
                 buttonGridRef: buttonGrid
                 variablesModel: variablesModel
                 isInteractive: viewport.foregroundLayer === 1
+                globalMuted: appSettings.muted
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
                 opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 1 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
@@ -6045,7 +6506,7 @@ Window {
                     id: cueVideoPlayer
                     videoOutput: cueVideoOutput
                     audioOutput: AudioOutput {
-                        volume: 1.0
+                        volume: appSettings.muted ? 0.0 : 1.0
                     }
 
                     onMediaStatusChanged: {
@@ -14186,10 +14647,10 @@ Window {
         width: 1365
         height: 300
         simulateTool: buttonGrid.selectedTool
-        onKeyMappingTriggered:  templateName => { if (templateName !== "quit") viewport.activeContent.fireAreasByTemplate(templateName) }
+        onKeyMappingTriggered:  templateName => { if (templateName !== "quit" && !viewport.handleTemplateInputDuringTransition(templateName)) viewport.activeContent.fireAreasByTemplate(templateName) }
         onCtrlMappingTriggered: templateName => {
             if (templateName === "quit") { if (mainWindow.previewActive) mainWindow.exitPreview() }
-            else viewport.activeContent.fireAreasByTemplate(templateName)
+            else if (!viewport.handleTemplateInputDuringTransition(templateName)) viewport.activeContent.fireAreasByTemplate(templateName)
         }
     }
 
@@ -14447,7 +14908,7 @@ Window {
                     source: (model.enabled && (model.soundType || "loop") === "loop") ? model.filePath : ""
                     loops: MediaPlayer.Infinite
                     audioOutput: AudioOutput {
-                        volume: 1.0
+                        volume: appSettings.muted ? 0.0 : 1.0
                     }
 
                     readonly property int orbitingNodeId: {
@@ -14619,7 +15080,8 @@ Window {
                 if (tpl === "quit") {
                     mainWindow.exitPreview()
                 } else if (tpl !== "none") {
-                    viewport.activeContent.fireAreasByTemplate(tpl)
+                    if (!viewport.handleTemplateInputDuringTransition(tpl))
+                        viewport.activeContent.fireAreasByTemplate(tpl)
                 }
             }
         }

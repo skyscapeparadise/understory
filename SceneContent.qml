@@ -37,6 +37,7 @@ Item {
     // ── Layer mode ──────────────────────────────────────────────────────────
     // false = staging: all mouse events suppressed, tool overlays hidden.
     property bool isInteractive: true
+    property bool globalMuted: false
 
     // ── Load readiness ──────────────────────────────────────────────────────
     property int pendingLoads: 0
@@ -2430,7 +2431,7 @@ Item {
                         videoOutput: vidOutput
                         // Mute while staging so audio doesn't bleed through during pre-buffering.
                         audioOutput: AudioOutput {
-                            volume: sceneContent.isInteractive ? 1.0 : 0.0
+                            volume: sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? 1.0 : 0.0)
                         }
                         onPositionChanged: {
                             // True self-crossfade: B pre-rolls invisibly 300 ms before the fade
@@ -2555,7 +2556,7 @@ Item {
                         audioOutput: AudioOutput {
                             // Volume tracks vidOutputB.opacity: silent during pre-roll, fades
                             // in/out with the crossfade animation, full when B is primary.
-                            volume: vidOutputB.opacity * (sceneContent.isInteractive ? 1.0 : 0.0)
+                            volume: sceneContent.globalMuted ? 0.0 : vidOutputB.opacity * (sceneContent.isInteractive ? 1.0 : 0.0)
                         }
                         onPositionChanged: {
                             // Mirror of vidPlayer's pre-roll logic: start A early so its first
