@@ -4991,6 +4991,7 @@ Window {
                 buttonGridRef: buttonGrid
                 variablesModel: variablesModel
                 isInteractive: viewport.foregroundLayer === 0
+                previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
@@ -5023,6 +5024,7 @@ Window {
                 buttonGridRef: buttonGrid
                 variablesModel: variablesModel
                 isInteractive: viewport.foregroundLayer === 1
+                previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId

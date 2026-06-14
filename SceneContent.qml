@@ -37,6 +37,11 @@ Item {
     // ── Layer mode ──────────────────────────────────────────────────────────
     // false = staging: all mouse events suppressed, tool overlays hidden.
     property bool isInteractive: true
+    // Set to true when the viewport is in fullscreen preview.  Disables
+    // per-delegate layers so VideoOutput and Image render directly into the
+    // contentScaler FBO instead of through intermediate sub-FBOs that Qt
+    // sizes based on the screen-projected area (not story resolution).
+    property bool previewActive: false
     property bool globalMuted: false
 
     // ── Load readiness ──────────────────────────────────────────────────────
@@ -1689,7 +1694,7 @@ Item {
                     width: model.x2 - model.x1 + 56 / sceneContent.editorScaleFactor
                     height: model.y2 - model.y1 + 56 / sceneContent.editorScaleFactor
                     z: 100 + model.stackOrder
-                    layer.enabled: true
+                    layer.enabled: !sceneContent.previewActive
 
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedImages.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
@@ -2322,7 +2327,7 @@ Item {
                     width: model.x2 - model.x1 + 56 / sceneContent.editorScaleFactor
                     height: model.y2 - model.y1 + 56 / sceneContent.editorScaleFactor
                     z: 100 + model.stackOrder
-                    layer.enabled: true
+                    layer.enabled: !sceneContent.previewActive
 
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedVideos.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
@@ -2375,6 +2380,27 @@ Item {
                             vidDelegate.vidCfAIsPrimary = true
                             vidDelegate.vidCfActive = false
                             vidDelegate.vidCfPrerolling = false
+                        }
+                    }
+
+                    // Safety net: when this layer becomes the foreground, repair any degenerate
+                    // crossfade state that built up in staging. This happens when A reaches
+                    // EndOfMedia while in staging — the handoff to B fires but B was never
+                    // started (pre-roll requires isInteractive), leaving A invisible and B
+                    // showing a blank texture. Detect that state here and restart from A.
+                    readonly property bool _isInteractiveWatcher: sceneContent.isInteractive
+                    on_IsInteractiveWatcherChanged: {
+                        if (sceneContent.isInteractive && !vidDelegate.vidCfAIsPrimary &&
+                                vidOutputB.opacity > 0 &&
+                                vidPlayerB.playbackState !== MediaPlayer.PlayingState) {
+                            vidOutputBFadeIn.stop()
+                            vidOutputBFadeOut.stop()
+                            vidOutputB.opacity = 0.0
+                            vidDelegate.vidCfAIsPrimary = true
+                            vidDelegate.vidCfActive = false
+                            vidDelegate.vidCfPrerolling = false
+                            vidOutput.opacity = 1.0
+                            vidPlayer.play()
                         }
                     }
 
@@ -2513,14 +2539,21 @@ Item {
                             }
                             if (mediaStatus === MediaPlayer.EndOfMedia && model.vidLoop && model.vidCrossfade &&
                                     !model.inTransition && vidDelegate.vidCfAIsPrimary) {
-                                // A finished its cycle; B has been playing since the overlap zone.
-                                // Snap to a clean handoff: A invisible, B fully visible, B is primary.
-                                vidOutputBFadeIn.stop()
-                                vidDelegate.vidCfPrerolling = false
-                                vidOutput.opacity = 0.0
-                                vidOutputB.opacity = 1.0
-                                vidDelegate.vidCfAIsPrimary = false
-                                vidDelegate.vidCfActive = false
+                                if (!sceneContent.isInteractive) {
+                                    // Still in staging — B was never started (pre-roll requires
+                                    // isInteractive). Restart A so the video keeps looping until
+                                    // this layer becomes the foreground.
+                                    vidPlayer.play()
+                                } else {
+                                    // A finished its cycle; B has been playing since the overlap zone.
+                                    // Snap to a clean handoff: A invisible, B fully visible, B is primary.
+                                    vidOutputBFadeIn.stop()
+                                    vidDelegate.vidCfPrerolling = false
+                                    vidOutput.opacity = 0.0
+                                    vidOutputB.opacity = 1.0
+                                    vidDelegate.vidCfAIsPrimary = false
+                                    vidDelegate.vidCfActive = false
+                                }
                             }
                             if (mediaStatus === MediaPlayer.EndOfMedia && model.inTransition) {
                                 if (vidDelegate.transitionFreezeReady) {
