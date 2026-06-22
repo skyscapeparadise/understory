@@ -2690,7 +2690,8 @@ Item {
                     Image {
                         id: vidFreezeFrame
                         x: 28 / sceneContent.editorScaleFactor; y: 28 / sceneContent.editorScaleFactor
-                        width: parent.width - 56; height: parent.height - 56
+                        width: parent.width - 56 / sceneContent.editorScaleFactor
+                        height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 0.5
                         opacity: 0
                         fillMode: Image.Stretch
