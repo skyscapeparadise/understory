@@ -389,6 +389,7 @@ Window {
                         // Dimming overlay on hover
                         Rectangle {
                             anchors.fill: parent
+                            radius: 30
                             color: "black"
                             opacity: parent.hovered && !parent.isLast ? 0.35 : 0.0
                             Behavior on opacity {
@@ -886,6 +887,7 @@ Window {
                         // Dimming overlay on hover (existing scenes, suppressed while deleting)
                         Rectangle {
                             anchors.fill: parent
+                            radius: 30
                             color: "black"
                             opacity: hovered && !isLast && deleteProgress === 0 ? 0.25 : 0.0
                             Behavior on opacity {
