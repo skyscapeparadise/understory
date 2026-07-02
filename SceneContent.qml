@@ -6,6 +6,7 @@ import Qt5Compat.GraphicalEffects
 import QtQuick.Effects
 import QtQuick.Dialogs
 import Qt.labs.platform as Platform
+import "InteractivityEngine.js" as IE
 
 // SceneContent — one instance per scene layer (dual-buffer architecture).
 // The viewport instantiates two of these (sceneLayerA, sceneLayerB) and
@@ -79,39 +80,13 @@ Item {
     property real chapterPlayheadTime: 0
     property int  activeChapterId: -1
 
-    function evaluateWhenCondition(it) {
-        var chapterId  = (it.itemWhenChapterId !== undefined) ? it.itemWhenChapterId : -1
-        var op         = it.itemWhenOp || "="
-        var targetSecs = (it.itemWhenSeconds  !== undefined) ? it.itemWhenSeconds   : 0
-        if (chapterId >= 0 && sceneContent.activeChapterId !== chapterId) return false
-        var cur = sceneContent.chapterPlayheadTime
-        if (op === "<") return cur < targetSecs
-        if (op === ">") return cur > targetSecs
-        return Math.abs(cur - targetSecs) <= 3.0 / 25.0
-    }
-
-    function evaluateIfCondition(it) {
-        if (!it.itemConditionVar || !variablesModel) return false
-        for (var j = 0; j < variablesModel.count; j++) {
-            var vrow = variablesModel.get(j)
-            if (vrow.varName !== it.itemConditionVar) continue
-            var cur = vrow.varValue || ""
-            var test = it.itemConditionVal || ""
-            var op = it.itemConditionOp || "is"
-            if (vrow.varType === "number") {
-                var a = parseFloat(cur) || 0
-                var b = parseFloat(test) || 0
-                if (op === ">")   return a > b
-                if (op === "<")   return a < b
-                if (op === "not") return a !== b
-                return a === b
-            } else {
-                if (vrow.varType === "true or false" && test === "") test = "true"
-                if (op === "not") return cur !== test
-                return cur === test
-            }
+    function _ieContext() {
+        return {
+            viewport:            viewportRef,
+            variablesModel:      variablesModel,
+            chapterPlayheadTime: sceneContent.chapterPlayheadTime,
+            activeChapterId:     sceneContent.activeChapterId
         }
-        return false
     }
 
     // ── Scene management ────────────────────────────────────────────────────
@@ -481,70 +456,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var items = areaDelegate._cachedInteractivity
-                            var pendingJump = null
-                            var hasCueVideo = false
-                            var lastCondPassed = false
-                            for (var i = 0; i < items.length; i++) {
-                                var it = items[i]
-                                if (it.itemTrigger !== trigger) continue
-                                var shouldExec = false
-                                if (it.itemAction === "cue") {
-                                    shouldExec = true
-                                } else if (it.itemAction === "if") {
-                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
-                                    shouldExec = lastCondPassed
-                                } else if (it.itemAction === "else") {
-                                    shouldExec = !lastCondPassed
-                                } else if (it.itemAction === "where") {
-                                    lastCondPassed = false
-                                    shouldExec = false
-                                } else if (it.itemAction === "when") {
-                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
-                                    shouldExec = lastCondPassed
-                                }
-                                if (!shouldExec) continue
-                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
-                                    viewportRef.playCueVideo(it.itemVideoPath)
-                                    hasCueVideo = true
-                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
-                                    for (var j = 0; j < variablesModel.count; j++) {
-                                        var vrow = variablesModel.get(j)
-                                        if (vrow.varName === it.itemUpdateVar) {
-                                            var newVal
-                                            if (vrow.varType === "number") {
-                                                var numCur = parseFloat(vrow.varValue) || 0
-                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
-                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
-                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
-                                                else newVal = it.itemUpdateVal
-                                            } else {
-                                                newVal = it.itemUpdateVal
-                                            }
-                                            variablesModel.setProperty(j, "varValue", newVal)
-                                            break
-                                        }
-                                    }
-                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
-                                    if (!pendingJump) pendingJump = it
-                                }
-                            }
-                            if (pendingJump) {
-                                // itemTransitionSpeed is in seconds; convert to ms
-                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
-                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
-                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
-                                                        pendingJump.itemTransition    || "cut",
-                                                        ms,
-                                                        pendingJump.itemWipeFeather   || 0.0,
-                                                        pendingJump.itemWipeDirection || "right",
-                                                        pendingJump.itemPushDirection || "right",
-                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
-                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
-                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
-                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
-                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
-                            }
+                            IE.fire(trigger, areaDelegate._cachedInteractivity, sceneContent._ieContext())
                         }
 
                         onClicked: fireInteractivity("click")
@@ -1597,69 +1509,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var items = tbDelegate._cachedInteractivity
-                            var pendingJump = null
-                            var hasCueVideo = false
-                            var lastCondPassed = false
-                            for (var i = 0; i < items.length; i++) {
-                                var it = items[i]
-                                if (it.itemTrigger !== trigger) continue
-                                var shouldExec = false
-                                if (it.itemAction === "cue") {
-                                    shouldExec = true
-                                } else if (it.itemAction === "if") {
-                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
-                                    shouldExec = lastCondPassed
-                                } else if (it.itemAction === "else") {
-                                    shouldExec = !lastCondPassed
-                                } else if (it.itemAction === "where") {
-                                    lastCondPassed = false
-                                    shouldExec = false
-                                } else if (it.itemAction === "when") {
-                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
-                                    shouldExec = lastCondPassed
-                                }
-                                if (!shouldExec) continue
-                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
-                                    viewportRef.playCueVideo(it.itemVideoPath)
-                                    hasCueVideo = true
-                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
-                                    for (var j = 0; j < variablesModel.count; j++) {
-                                        var vrow = variablesModel.get(j)
-                                        if (vrow.varName === it.itemUpdateVar) {
-                                            var newVal
-                                            if (vrow.varType === "number") {
-                                                var numCur = parseFloat(vrow.varValue) || 0
-                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
-                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
-                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
-                                                else newVal = it.itemUpdateVal
-                                            } else {
-                                                newVal = it.itemUpdateVal
-                                            }
-                                            variablesModel.setProperty(j, "varValue", newVal)
-                                            break
-                                        }
-                                    }
-                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
-                                    if (!pendingJump) pendingJump = it
-                                }
-                            }
-                            if (pendingJump) {
-                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
-                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
-                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
-                                                        pendingJump.itemTransition    || "cut",
-                                                        ms,
-                                                        pendingJump.itemWipeFeather   || 0.0,
-                                                        pendingJump.itemWipeDirection || "right",
-                                                        pendingJump.itemPushDirection || "right",
-                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
-                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
-                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
-                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
-                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
-                            }
+                            IE.fire(trigger, tbDelegate._cachedInteractivity, sceneContent._ieContext())
                         }
 
                         onClicked: fireInteractivity("click")
@@ -2238,69 +2088,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var items = imgDelegate._cachedInteractivity
-                            var pendingJump = null
-                            var hasCueVideo = false
-                            var lastCondPassed = false
-                            for (var i = 0; i < items.length; i++) {
-                                var it = items[i]
-                                if (it.itemTrigger !== trigger) continue
-                                var shouldExec = false
-                                if (it.itemAction === "cue") {
-                                    shouldExec = true
-                                } else if (it.itemAction === "if") {
-                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
-                                    shouldExec = lastCondPassed
-                                } else if (it.itemAction === "else") {
-                                    shouldExec = !lastCondPassed
-                                } else if (it.itemAction === "where") {
-                                    lastCondPassed = false
-                                    shouldExec = false
-                                } else if (it.itemAction === "when") {
-                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
-                                    shouldExec = lastCondPassed
-                                }
-                                if (!shouldExec) continue
-                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
-                                    viewportRef.playCueVideo(it.itemVideoPath)
-                                    hasCueVideo = true
-                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
-                                    for (var j = 0; j < variablesModel.count; j++) {
-                                        var vrow = variablesModel.get(j)
-                                        if (vrow.varName === it.itemUpdateVar) {
-                                            var newVal
-                                            if (vrow.varType === "number") {
-                                                var numCur = parseFloat(vrow.varValue) || 0
-                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
-                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
-                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
-                                                else newVal = it.itemUpdateVal
-                                            } else {
-                                                newVal = it.itemUpdateVal
-                                            }
-                                            variablesModel.setProperty(j, "varValue", newVal)
-                                            break
-                                        }
-                                    }
-                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
-                                    if (!pendingJump) pendingJump = it
-                                }
-                            }
-                            if (pendingJump) {
-                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
-                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
-                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
-                                                        pendingJump.itemTransition    || "cut",
-                                                        ms,
-                                                        pendingJump.itemWipeFeather   || 0.0,
-                                                        pendingJump.itemWipeDirection || "right",
-                                                        pendingJump.itemPushDirection || "right",
-                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
-                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
-                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
-                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
-                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
-                            }
+                            IE.fire(trigger, imgDelegate._cachedInteractivity, sceneContent._ieContext())
                         }
 
                         onClicked: fireInteractivity("click")
@@ -3286,69 +3074,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var items = vidDelegate._cachedInteractivity
-                            var pendingJump = null
-                            var hasCueVideo = false
-                            var lastCondPassed = false
-                            for (var i = 0; i < items.length; i++) {
-                                var it = items[i]
-                                if (it.itemTrigger !== trigger) continue
-                                var shouldExec = false
-                                if (it.itemAction === "cue") {
-                                    shouldExec = true
-                                } else if (it.itemAction === "if") {
-                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
-                                    shouldExec = lastCondPassed
-                                } else if (it.itemAction === "else") {
-                                    shouldExec = !lastCondPassed
-                                } else if (it.itemAction === "where") {
-                                    lastCondPassed = false
-                                    shouldExec = false
-                                } else if (it.itemAction === "when") {
-                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
-                                    shouldExec = lastCondPassed
-                                }
-                                if (!shouldExec) continue
-                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
-                                    viewportRef.playCueVideo(it.itemVideoPath)
-                                    hasCueVideo = true
-                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
-                                    for (var j = 0; j < variablesModel.count; j++) {
-                                        var vrow = variablesModel.get(j)
-                                        if (vrow.varName === it.itemUpdateVar) {
-                                            var newVal
-                                            if (vrow.varType === "number") {
-                                                var numCur = parseFloat(vrow.varValue) || 0
-                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
-                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
-                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
-                                                else newVal = it.itemUpdateVal
-                                            } else {
-                                                newVal = it.itemUpdateVal
-                                            }
-                                            variablesModel.setProperty(j, "varValue", newVal)
-                                            break
-                                        }
-                                    }
-                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
-                                    if (!pendingJump) pendingJump = it
-                                }
-                            }
-                            if (pendingJump) {
-                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
-                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
-                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
-                                                        pendingJump.itemTransition    || "cut",
-                                                        ms,
-                                                        pendingJump.itemWipeFeather   || 0.0,
-                                                        pendingJump.itemWipeDirection || "right",
-                                                        pendingJump.itemPushDirection || "right",
-                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
-                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
-                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
-                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
-                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
-                            }
+                            IE.fire(trigger, vidDelegate._cachedInteractivity, sceneContent._ieContext())
                         }
 
                         onClicked: fireInteractivity("click")
@@ -3966,69 +3692,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            var items = shaderDelegate._cachedInteractivity
-                            var pendingJump = null
-                            var hasCueVideo = false
-                            var lastCondPassed = false
-                            for (var i = 0; i < items.length; i++) {
-                                var it = items[i]
-                                if (it.itemTrigger !== trigger) continue
-                                var shouldExec = false
-                                if (it.itemAction === "cue") {
-                                    shouldExec = true
-                                } else if (it.itemAction === "if") {
-                                    lastCondPassed = sceneContent.evaluateIfCondition(it)
-                                    shouldExec = lastCondPassed
-                                } else if (it.itemAction === "else") {
-                                    shouldExec = !lastCondPassed
-                                } else if (it.itemAction === "where") {
-                                    lastCondPassed = false
-                                    shouldExec = false
-                                } else if (it.itemAction === "when") {
-                                    lastCondPassed = sceneContent.evaluateWhenCondition(it)
-                                    shouldExec = lastCondPassed
-                                }
-                                if (!shouldExec) continue
-                                if (it.itemCommand === "video" && it.itemVideoTarget === "fill" && it.itemVideoPath) {
-                                    viewportRef.playCueVideo(it.itemVideoPath)
-                                    hasCueVideo = true
-                                } else if (it.itemCommand === "update" && it.itemUpdateVar !== "" && variablesModel) {
-                                    for (var j = 0; j < variablesModel.count; j++) {
-                                        var vrow = variablesModel.get(j)
-                                        if (vrow.varName === it.itemUpdateVar) {
-                                            var newVal
-                                            if (vrow.varType === "number") {
-                                                var numCur = parseFloat(vrow.varValue) || 0
-                                                var numDelta = parseFloat(it.itemUpdateVal) || 0
-                                                if (it.itemUpdateOp === "+") newVal = String(numCur + numDelta)
-                                                else if (it.itemUpdateOp === "-") newVal = String(numCur - numDelta)
-                                                else newVal = it.itemUpdateVal
-                                            } else {
-                                                newVal = it.itemUpdateVal
-                                            }
-                                            variablesModel.setProperty(j, "varValue", newVal)
-                                            break
-                                        }
-                                    }
-                                } else if (it.itemCommand === "jump" && it.itemTargetSceneId >= 0) {
-                                    if (!pendingJump) pendingJump = it
-                                }
-                            }
-                            if (pendingJump) {
-                                var ms = Math.round((pendingJump.itemTransitionSpeed || 1.0) * 1000)
-                                if (hasCueVideo) viewportRef.cueVideoHasJump = true
-                                viewportRef.jumpToScene(pendingJump.itemTargetSceneId,
-                                                        pendingJump.itemTransition    || "cut",
-                                                        ms,
-                                                        pendingJump.itemWipeFeather   || 0.0,
-                                                        pendingJump.itemWipeDirection || "right",
-                                                        pendingJump.itemPushDirection || "right",
-                                                        pendingJump.itemLookYaw         !== undefined ? pendingJump.itemLookYaw       : 90.0,
-                                                        pendingJump.itemLookPitch       !== undefined ? pendingJump.itemLookPitch     : 0.0,
-                                                        pendingJump.itemLookFovMM       !== undefined ? pendingJump.itemLookFovMM     : 24.0,
-                                                        pendingJump.itemLookOvershoot   !== undefined ? pendingJump.itemLookOvershoot : 1.0,
-                                                        pendingJump.itemLookShutter     !== undefined ? pendingJump.itemLookShutter   : 0.10)
-                            }
+                            IE.fire(trigger, shaderDelegate._cachedInteractivity, sceneContent._ieContext())
                         }
 
                         onClicked: fireInteractivity("click")
