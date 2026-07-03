@@ -3,10 +3,13 @@
 // ── Command registry ─────────────────────────────────────────────────────────
 // Add new command types here — one registerCommand call, nothing else to change.
 //
-// Handler signature: function(it, context, state)
+// Handler signature: function(it, context, state, itemIdx)
 //   it      — the interactivity item object
-//   context — { viewport, variablesModel, chapterPlayheadTime, activeChapterId }
+//   context — { viewport, variablesModel, chapterPlayheadTime, activeChapterId,
+//               elementType?, elementIdx? }
 //   state   — mutable dispatch state { pendingJump, hasCueVideo }
+//   itemIdx — this item's index within the fired list (identifies which cue,
+//             combined with context.elementType/elementIdx, for level metering)
 
 var _commands = {}
 
@@ -23,9 +26,12 @@ registerCommand("video", function(it, context, state) {
     }
 })
 
-registerCommand("sound", function(it, context) {
-    if (it.itemSoundPath)
-        context.viewport.playCueSound(it.itemSoundPath, it.itemSoundVolume !== undefined ? it.itemSoundVolume : 1.0)
+registerCommand("sound", function(it, context, state, itemIdx) {
+    if (!it.itemSoundPath) return
+    var volume = it.itemSoundVolume !== undefined ? it.itemSoundVolume : 1.0
+    var key = (context.elementType !== undefined && context.elementIdx !== undefined)
+        ? (context.elementType + ":" + context.elementIdx + ":" + itemIdx) : ""
+    context.viewport.playCueSound(it.itemSoundPath, volume, key)
 })
 
 registerCommand("update", function(it, context) {
@@ -124,7 +130,7 @@ function fire(trigger, items, context) {
         if (!shouldExec) continue
 
         var handler = _commands[it.itemCommand]
-        if (handler) handler(it, context, state)
+        if (handler) handler(it, context, state, i)
     }
 
     if (state.pendingJump) {

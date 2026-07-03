@@ -19,6 +19,21 @@ Item {
     property var activeVideosModel: null
     property var activeAudioTracksModel: null
     property var soundCommandSources: []
+    // Live levels for currently-playing "sound" cues — bound in from
+    // viewport.cueSoundLevels, keyed by "elementType:elementIdx:itemIdx".
+    property var cueSoundLevels: ({})
+
+    // Live levels for sound-node/video/audioTrack tracks, keyed by trackKey
+    // ("sound:N", "video:N", "audioTrack:N"). Kept separate from the ListModel
+    // rows themselves (and from mixerRevision) so the audio-buffer callback rate
+    // doesn't cascade into recomputing every structural mixer/track binding.
+    property var trackLevels: ({})
+
+    function setTrackLevel(key, level) {
+        var obj = Object.assign({}, trackLevels)
+        obj[key] = level
+        trackLevels = obj
+    }
     // Bound from mainWindow.currentLocationNodeName — the same location-match
     // predicate loopingSoundPool uses to decide whether a "sound" node can even
     // be heard in the current scene. Sound tracks orbiting any other node (or no
@@ -4675,6 +4690,7 @@ Item {
                         filePath: soundRow ? (soundRow.filePath || "") : ""
                         volume: soundRow && soundRow.mixerVolume !== undefined ? soundRow.mixerVolume : 1.0
                         pan: soundRow && soundRow.mixerPan !== undefined ? soundRow.mixerPan : 0.0
+                        level: root.trackLevels[trackKey] || 0.0
                         selected: root.mixerSelectedTrackKey === trackKey
                         onSelectedRequested: root.mixerSelectedTrackKey = trackKey
                         onVolumeDragged: value => root.soundsModel.setProperty(soundIdx, "mixerVolume", value)
@@ -4692,6 +4708,7 @@ Item {
                         filePath: model.filePath || ""
                         volume: model.mixerVolume !== undefined ? model.mixerVolume : 1.0
                         pan: model.mixerPan !== undefined ? model.mixerPan : 0.0
+                        level: root.trackLevels[trackKey] || 0.0
                         selected: root.mixerSelectedTrackKey === trackKey
                         onSelectedRequested: root.mixerSelectedTrackKey = trackKey
                         onVolumeDragged: value => root.activeVideosModel.setProperty(index, "mixerVolume", value)
@@ -4710,6 +4727,7 @@ Item {
                         filePath: model.filePath || ""
                         volume: model.mixerVolume !== undefined ? model.mixerVolume : 1.0
                         pan: model.mixerPan !== undefined ? model.mixerPan : 0.0
+                        level: root.trackLevels[trackKey] || 0.0
                         selected: root.mixerSelectedTrackKey === trackKey
                         isExtra: true
                         deletable: true
@@ -4734,6 +4752,7 @@ Item {
                         filePath: src.filePath || ""
                         volume: src.mixerVolume !== undefined ? src.mixerVolume : 1.0
                         pan: src.mixerPan !== undefined ? src.mixerPan : 0.0
+                        level: root.cueSoundLevels[src.elementType + ":" + src.elementIdx + ":" + src.itemIdx] || 0.0
                         selected: root.mixerSelectedTrackKey === trackKey
                         onSelectedRequested: root.mixerSelectedTrackKey = trackKey
                         onVolumeDragged: value => root.soundCommandSourceEdited(src.elementType, src.elementIdx, src.itemIdx, "itemSoundVolume", value)

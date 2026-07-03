@@ -23,10 +23,12 @@ import base64
 import ctypes
 import hashlib
 import json
+import math
 import queue as _queue
 import re
 import shutil
 import sqlite3
+import struct
 import subprocess
 import sys
 import threading
@@ -35,6 +37,7 @@ from urllib.parse import unquote, urlparse
 
 from PySide6.QtCore import Property, QObject, QSize, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication, QImage
+from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickImageProvider
 
@@ -130,6 +133,90 @@ class ShaderInspector(QObject):
         for sampler in info.get("combinedImageSamplers", []):
             uniforms.append({"name": sampler["name"], "type": "sampler2D"})
         return uniforms
+
+
+def _computeRmsLevel(buffer):
+    """RMS level (0..1) from a QAudioBuffer's raw PCM. QML can't read sample
+    data out of a QAudioBuffer itself, which is why this has to happen here."""
+    if not buffer.isValid() or buffer.sampleCount() == 0:
+        return 0.0
+    try:
+        raw = bytes(buffer.constData())
+    except Exception:
+        return 0.0
+    if not raw:
+        return 0.0
+
+    sample_format = buffer.format().sampleFormat()
+    try:
+        if sample_format == QAudioFormat.SampleFormat.Int16:
+            count = len(raw) // 2
+            if count == 0:
+                return 0.0
+            samples = struct.unpack(f"<{count}h", raw[: count * 2])
+            rms = math.sqrt(sum(s * s for s in samples) / count) / 32768.0
+        elif sample_format == QAudioFormat.SampleFormat.UInt8:
+            count = len(raw)
+            samples = [b - 128 for b in raw]
+            rms = math.sqrt(sum(s * s for s in samples) / count) / 128.0
+        elif sample_format == QAudioFormat.SampleFormat.Int32:
+            count = len(raw) // 4
+            if count == 0:
+                return 0.0
+            samples = struct.unpack(f"<{count}i", raw[: count * 4])
+            rms = math.sqrt(sum(s * s for s in samples) / count) / 2147483648.0
+        elif sample_format == QAudioFormat.SampleFormat.Float:
+            count = len(raw) // 4
+            if count == 0:
+                return 0.0
+            samples = struct.unpack(f"<{count}f", raw[: count * 4])
+            rms = math.sqrt(sum(s * s for s in samples) / count)
+        else:
+            return 0.0
+    except Exception:
+        return 0.0
+
+    return min(1.0, rms)
+
+
+class AudioLevelMeter(QObject):
+    """Wraps a QAudioBufferOutput attached to one MediaPlayer and emits
+    levelChanged(float) with a raw RMS level (0..1) for every decoded buffer.
+
+    QAudioBufferOutput isn't a QML type (it only exists on the Python/C++
+    side), so this is created here and handed to QML as a QObject instead of
+    being declared inline in QML like AudioOutput/VideoOutput are. QML applies
+    its own effective-volume scaling (mute state, ducking, etc.) on receipt,
+    since that state lives in QML, not here.
+    """
+
+    levelChanged = Signal(float)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bufferOutput = QAudioBufferOutput(self)
+        self._bufferOutput.audioBufferReceived.connect(self._onBuffer)
+
+    def attach(self, player):
+        player.setAudioBufferOutput(self._bufferOutput)
+
+    def _onBuffer(self, buffer):
+        self.levelChanged.emit(_computeRmsLevel(buffer))
+
+
+class AudioMeterFactory(QObject):
+    """Exposed to QML so each MediaPlayer can get its own AudioLevelMeter."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._meters = []
+
+    @Slot(QObject, result=QObject)
+    def createLevelMeter(self, player):
+        meter = AudioLevelMeter(self)
+        meter.attach(player)
+        self._meters.append(meter)
+        return meter
 
 
 class _Command:
@@ -1577,6 +1664,10 @@ engine.rootContext().setContextProperty("versionnumber", versionnumber)
 # Expose shader inspector so QML can detect uniforms from .frag.qsb files
 shaderInspector = ShaderInspector()
 engine.rootContext().setContextProperty("shaderInspector", shaderInspector)
+
+# Expose audio meter factory so QML can attach a real-level VU meter to any MediaPlayer
+audioMeterFactory = AudioMeterFactory()
+engine.rootContext().setContextProperty("audioMeterFactory", audioMeterFactory)
 
 # Expose story manager so QML can open/save/create .story files
 storyManager = StoryManager()

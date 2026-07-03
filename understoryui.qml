@@ -4439,8 +4439,18 @@ Window {
                 cueVideoPlayer.play();
             }
 
-            function playCueSound(soundPath, volume) {
-                cueSoundPool.play(soundPath, volume);
+            function playCueSound(soundPath, volume, key) {
+                cueSoundPool.play(soundPath, volume, key);
+            }
+
+            // Live levels for currently-playing "sound" cues, keyed by the same
+            // "elementType:elementIdx:itemIdx" string the mixer's soundCmd tracks use.
+            property var cueSoundLevels: ({})
+
+            function setCueSoundLevel(key, level) {
+                var obj = Object.assign({}, cueSoundLevels);
+                obj[key] = level;
+                cueSoundLevels = obj;
             }
 
             // Execute the pending transition — called when both video has ended and staging is ready.
@@ -6795,16 +6805,21 @@ Window {
 
             // One-shot pool for interactivity "sound" cues — rotates through a small
             // set of players so overlapping cue-fired sounds don't cut each other off.
+            // Each slot is tagged with whichever cue it's currently playing (a stable
+            // "elementType:elementIdx:itemIdx" key) so its buffer tap can feed that
+            // cue's mixer track meter — there's no fixed player-per-cue otherwise.
             Item {
                 id: cueSoundPool
                 property int nextSlot: 0
 
-                function play(path, volume) {
+                function play(path, volume, key) {
                     if (!path) return;
-                    var slot = cueSoundRepeater.itemAt(cueSoundPool.nextSlot);
+                    var wrapper = cueSoundRepeater.itemAt(cueSoundPool.nextSlot);
                     cueSoundPool.nextSlot = (cueSoundPool.nextSlot + 1) % cueSoundRepeater.count;
-                    if (!slot) return;
+                    if (!wrapper) return;
+                    var slot = wrapper.player;
                     slot.cueVolume = volume !== undefined ? volume : 1.0;
+                    slot.cueKey = key || "";
                     slot.source = path;
                     slot.play();
                 }
@@ -6812,13 +6827,38 @@ Window {
                 Repeater {
                     id: cueSoundRepeater
                     model: 6
-                    delegate: MediaPlayer {
-                        property real cueVolume: 1.0
-                        audioOutput: AudioOutput {
-                            volume: appSettings.muted ? 0.0 : cueVolume
+                    // Wrapped in a plain Item (rather than the MediaPlayer being the
+                    // delegate root) so there's a scope to hold the Connections that
+                    // relays this slot's meter — MediaPlayer has no default property
+                    // to hold a child Connections object directly.
+                    delegate: Item {
+                        property alias player: cueSoundSlot
+
+                        MediaPlayer {
+                            id: cueSoundSlot
+                            property real cueVolume: 1.0
+                            property string cueKey: ""
+                            audioOutput: AudioOutput {
+                                volume: appSettings.muted ? 0.0 : cueSoundSlot.cueVolume
+                            }
+                            property var _levelMeter: null
+                            Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(cueSoundSlot)
+                            onMediaStatusChanged: {
+                                if (mediaStatus === MediaPlayer.EndOfMedia) {
+                                    source = "";
+                                    if (cueKey !== "") viewport.setCueSoundLevel(cueKey, 0.0);
+                                    cueKey = "";
+                                }
+                            }
                         }
-                        onMediaStatusChanged: {
-                            if (mediaStatus === MediaPlayer.EndOfMedia) source = "";
+
+                        Connections {
+                            target: cueSoundSlot._levelMeter
+                            function onLevelChanged(rms) {
+                                if (cueSoundSlot.cueKey === "") return;
+                                var effVol = appSettings.muted ? 0.0 : cueSoundSlot.cueVolume;
+                                viewport.setCueSoundLevel(cueSoundSlot.cueKey, rms * effVol);
+                            }
                         }
                     }
                 }
@@ -15119,6 +15159,7 @@ Window {
         activeVideosModel: viewport.videosModel
         activeAudioTracksModel: viewport.audioTracksModel
         currentLocationNodeName: mainWindow.currentLocationNodeName
+        cueSoundLevels: viewport.cueSoundLevels
         currentSceneId: mainWindow.currentSceneId
         previewActive: mainWindow.previewActive
         onKeyMappingTriggered:  templateName => { if (templateName !== "quit" && !viewport.handleTemplateInputDuringTransition(templateName)) viewport.activeContent.fireAreasByTemplate(templateName) }
@@ -15405,6 +15446,8 @@ Window {
                     audioOutput: AudioOutput {
                         volume: appSettings.muted ? 0.0 : (model.mixerVolume !== undefined ? model.mixerVolume : 1.0)
                     }
+                    property var _levelMeter: null
+                    Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(loopPlayer)
 
                     readonly property int orbitingNodeId: {
                         var sIdx = index;
@@ -15468,6 +15511,14 @@ Window {
                             }
                             play();
                         }
+                    }
+                }
+
+                Connections {
+                    target: loopPlayer._levelMeter
+                    function onLevelChanged(rms) {
+                        var effVol = appSettings.muted ? 0.0 : (model.mixerVolume !== undefined ? model.mixerVolume : 1.0)
+                        nodeWorkspace.setTrackLevel("sound:" + index, rms * effVol)
                     }
                 }
             }

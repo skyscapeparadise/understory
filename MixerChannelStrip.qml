@@ -142,7 +142,12 @@ Item {
                 Layout.fillHeight: true
                 spacing: 4
 
-                // VU meter — green/yellow/red gradient, masked by `level` (placeholder).
+                // VU meter — green/yellow/red bands are fixed to absolute positions on
+                // the track (red only near the very top, most of the range is green),
+                // and a cover mask hides everything above the current level. The
+                // gradient rectangle deliberately stays full-height so a quiet level
+                // only reveals green rather than compressing the whole red-yellow-green
+                // range into whatever sliver is currently lit.
                 Item {
                     Layout.preferredWidth: 10
                     Layout.fillHeight: true
@@ -157,19 +162,28 @@ Item {
                     }
 
                     Rectangle {
-                        id: meterFill
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        height: parent.height * Math.max(0, Math.min(1, strip.level))
+                        id: meterGradient
+                        anchors.fill: parent
                         radius: 2
                         gradient: Gradient {
                             orientation: Gradient.Vertical
-                            GradientStop { position: 0.0; color: "#e04040" }
-                            GradientStop { position: 0.25; color: "#e0c040" }
-                            GradientStop { position: 0.65; color: "#4caf50" }
-                            GradientStop { position: 1.0; color: "#4caf50" }
+                            GradientStop { position: 0.0;  color: "#e04040" }
+                            GradientStop { position: 0.12; color: "#e0c040" }
+                            GradientStop { position: 0.28; color: "#4caf50" }
+                            GradientStop { position: 1.0;  color: "#4caf50" }
                         }
+                    }
+
+                    // No radius here — this is just a cutoff line, not a real corner.
+                    // Rounding it (on all 4 corners, since Rectangle can't do per-corner
+                    // radius) made the bottom edge dip inward into the green fill and
+                    // left a sliver of the gradient's rounded top corners exposed.
+                    Rectangle {
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        height: parent.height * (1 - Math.max(0, Math.min(1, strip.level)))
+                        color: "#0a0a0c"
                     }
                 }
 

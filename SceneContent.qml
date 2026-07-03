@@ -89,12 +89,18 @@ Item {
     property real chapterPlayheadTime: 0
     property int  activeChapterId: -1
 
-    function _ieContext() {
+    // elementType/elementIdx identify which on-canvas element is firing — the
+    // "sound" command needs these to build a stable key for its mixer track's
+    // live level meter (cue sounds play through a rotating one-shot pool, so
+    // there's no fixed player to attach a meter to otherwise).
+    function _ieContext(elementType, elementIdx) {
         return {
             viewport:            viewportRef,
             variablesModel:      variablesModel,
             chapterPlayheadTime: sceneContent.chapterPlayheadTime,
-            activeChapterId:     sceneContent.activeChapterId
+            activeChapterId:     sceneContent.activeChapterId,
+            elementType:         elementType,
+            elementIdx:          elementIdx
         }
     }
 
@@ -553,7 +559,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            IE.fire(trigger, areaDelegate._cachedInteractivity, sceneContent._ieContext())
+                            IE.fire(trigger, areaDelegate._cachedInteractivity, sceneContent._ieContext("area", index))
                         }
 
                         onClicked: fireInteractivity("click")
@@ -1606,7 +1612,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            IE.fire(trigger, tbDelegate._cachedInteractivity, sceneContent._ieContext())
+                            IE.fire(trigger, tbDelegate._cachedInteractivity, sceneContent._ieContext("text", index))
                         }
 
                         onClicked: fireInteractivity("click")
@@ -2185,7 +2191,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            IE.fire(trigger, imgDelegate._cachedInteractivity, sceneContent._ieContext())
+                            IE.fire(trigger, imgDelegate._cachedInteractivity, sceneContent._ieContext("image", index))
                         }
 
                         onClicked: fireInteractivity("click")
@@ -2344,6 +2350,13 @@ Item {
                         audioOutput: AudioOutput {
                             volume: sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
                         }
+                        // QAudioBufferOutput isn't a QML type — Python creates it and hands
+                        // back a per-player meter object with its own levelChanged signal.
+                        // The tap captures the decoded signal before the volume fader is
+                        // applied, so scale by the same expression used for audioOutput.volume
+                        // above — otherwise the meter would still read "loud" while muted/staging.
+                        property var _levelMeter: null
+                        Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(vidPlayer)
                         onPositionChanged: {
                             // True self-crossfade: B pre-rolls invisibly 300 ms before the fade
                             // zone so its first decoded frame is ready when the fade starts.
@@ -2463,6 +2476,15 @@ Item {
                             }
                         }
                     }
+
+                    Connections {
+                        target: vidPlayer._levelMeter
+                        function onLevelChanged(rms) {
+                            var effVol = sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
+                            if (sceneContent.nodeWorkspaceRef) sceneContent.nodeWorkspaceRef.setTrackLevel("video:" + index, rms * effVol)
+                        }
+                    }
+
                     // Secondary player for crossfade loops — starts from position 0 as A
                     // nears its end, fading vidOutputB in over vidOutput for a seamless loop.
                     MediaPlayer {
@@ -2476,6 +2498,8 @@ Item {
                             // in/out with the crossfade animation, full when B is primary.
                             volume: sceneContent.globalMuted ? 0.0 : vidOutputB.opacity * (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
                         }
+                        property var _levelMeter: null
+                        Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(vidPlayerB)
                         onPositionChanged: {
                             // Mirror of vidPlayer's pre-roll logic: start A early so its first
                             // decoded frame is ready before B fades out and reveals A below.
@@ -2556,6 +2580,15 @@ Item {
                             }
                         }
                     }
+
+                    Connections {
+                        target: vidPlayerB._levelMeter
+                        function onLevelChanged(rms) {
+                            var effVol = sceneContent.globalMuted ? 0.0 : vidOutputB.opacity * (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
+                            if (sceneContent.nodeWorkspaceRef) sceneContent.nodeWorkspaceRef.setTrackLevel("video:" + index, rms * effVol)
+                        }
+                    }
+
                     // Crossfade secondary output — rendered above vidOutput (z:0.1) so B can
                     // dissolve in over A. Opacity starts at 0 and is animated by vidOutputBFadeIn/Out.
                     VideoOutput {
@@ -3171,7 +3204,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            IE.fire(trigger, vidDelegate._cachedInteractivity, sceneContent._ieContext())
+                            IE.fire(trigger, vidDelegate._cachedInteractivity, sceneContent._ieContext("video", index))
                         }
 
                         onClicked: fireInteractivity("click")
@@ -3789,7 +3822,7 @@ Item {
 
                         function fireInteractivity(trigger) {
                             if (viewportRef.cueVideoActive) return
-                            IE.fire(trigger, shaderDelegate._cachedInteractivity, sceneContent._ieContext())
+                            IE.fire(trigger, shaderDelegate._cachedInteractivity, sceneContent._ieContext("shader", index))
                         }
 
                         onClicked: fireInteractivity("click")
@@ -3825,6 +3858,8 @@ Item {
                         audioOutput: AudioOutput {
                             volume: sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
                         }
+                        property var _levelMeter: null
+                        Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(audioTrackPlayer)
 
                         readonly property bool shouldBePlaying: {
                             if (!sceneContent.isInteractive || !model.filePath) return false;
@@ -3857,6 +3892,14 @@ Item {
                                 if (duration > 0) position = syncPosition();
                                 play();
                             }
+                        }
+                    }
+
+                    Connections {
+                        target: audioTrackPlayer._levelMeter
+                        function onLevelChanged(rms) {
+                            var effVol = sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
+                            if (sceneContent.nodeWorkspaceRef) sceneContent.nodeWorkspaceRef.setTrackLevel("audioTrack:" + index, rms * effVol)
                         }
                     }
                 }
