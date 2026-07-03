@@ -37,7 +37,15 @@ from urllib.parse import unquote, urlparse
 
 from PySide6.QtCore import Property, QObject, QSize, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication, QImage
-from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat
+from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat, QAudioSink
+
+try:
+    import numpy as _np
+
+    _HAS_NUMPY = True
+except Exception:
+    _np = None
+    _HAS_NUMPY = False
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickImageProvider
 
@@ -179,15 +187,91 @@ def _computeRmsLevel(buffer):
     return min(1.0, rms)
 
 
-class AudioLevelMeter(QObject):
-    """Wraps a QAudioBufferOutput attached to one MediaPlayer and emits
-    levelChanged(float) with a raw RMS level (0..1) for every decoded buffer.
+_SAMPLE_DTYPES = {
+    QAudioFormat.SampleFormat.Int16: ("int16", "h", -32768, 32767),
+    QAudioFormat.SampleFormat.Int32: ("int32", "i", -2147483648, 2147483647),
+    QAudioFormat.SampleFormat.Float: ("float32", "f", -1.0, 1.0),
+    QAudioFormat.SampleFormat.UInt8: ("uint8", "B", 0, 255),
+}
 
-    QAudioBufferOutput isn't a QML type (it only exists on the Python/C++
-    side), so this is created here and handed to QML as a QObject instead of
-    being declared inline in QML like AudioOutput/VideoOutput are. QML applies
-    its own effective-volume scaling (mute state, ducking, etc.) on receipt,
-    since that state lives in QML, not here.
+
+def _panGains(pan, volume):
+    pan = max(-1.0, min(1.0, pan))
+    left = (1.0 if pan <= 0.0 else (1.0 - pan)) * volume
+    right = (1.0 if pan >= 0.0 else (1.0 + pan)) * volume
+    return left, right
+
+
+def _applyPanBytes(raw, sample_format, channel_count, pan, volume):
+    """Re-pans raw PCM to stereo (upmixing mono if needed) and returns new raw
+    bytes ready to hand to a stereo QAudioSink, or None if the format/channel
+    layout isn't one this can process (caller should just skip writing)."""
+    info = _SAMPLE_DTYPES.get(sample_format)
+    if info is None or channel_count not in (1, 2):
+        return None
+    dtype, fmt_char, lo, hi = info
+    left_gain, right_gain = _panGains(pan, volume)
+    is_uint8 = dtype == "uint8"
+
+    if _HAS_NUMPY:
+        arr = _np.frombuffer(raw, dtype=dtype).astype(_np.float64)
+        if is_uint8:
+            arr = arr - 128.0
+        if channel_count == 1:
+            left = arr * left_gain
+            right = arr * right_gain
+        else:
+            stereo = arr.reshape(-1, 2)
+            left = stereo[:, 0] * left_gain
+            right = stereo[:, 1] * right_gain
+        out = _np.empty(left.size * 2, dtype=_np.float64)
+        out[0::2] = left
+        out[1::2] = right
+        if is_uint8:
+            out = out + 128.0
+        out = _np.clip(out, lo, hi)
+        return out.astype(dtype).tobytes()
+
+    # Pure-Python fallback (no numpy installed) — noticeably slower per buffer;
+    # fine for a track or two, but multiple simultaneous panned tracks without
+    # numpy installed risk audible crackle/underrun under real-time playback.
+    stride = struct.calcsize(fmt_char)
+    count = len(raw) // stride
+    if count == 0:
+        return None
+    samples = struct.unpack(f"<{count}{fmt_char}", raw[: count * stride])
+
+    def clamp(v):
+        v = lo if v < lo else (hi if v > hi else v)
+        return v if dtype == "float32" else int(v)
+
+    out = []
+    if channel_count == 1:
+        for s in samples:
+            v = (s - 128) if is_uint8 else s
+            l = v * left_gain
+            r = v * right_gain
+            out.append(clamp(l + 128 if is_uint8 else l))
+            out.append(clamp(r + 128 if is_uint8 else r))
+    else:
+        for i in range(0, count - 1, 2):
+            lv = (samples[i] - 128) if is_uint8 else samples[i]
+            rv = (samples[i + 1] - 128) if is_uint8 else samples[i + 1]
+            l = lv * left_gain
+            r = rv * right_gain
+            out.append(clamp(l + 128 if is_uint8 else l))
+            out.append(clamp(r + 128 if is_uint8 else r))
+    return struct.pack(f"<{len(out)}{fmt_char}", *out)
+
+
+class AudioLevelMeter(QObject):
+    """Wraps a QAudioBufferOutput attached to one MediaPlayer. Emits
+    levelChanged(float) with a raw RMS level (0..1) for every decoded buffer,
+    for the mixer's VU meters — and, since QMediaPlayer's built-in AudioOutput
+    has no pan control at all, also re-pans the decoded audio in software and
+    plays it through a private QAudioSink. QML mutes the built-in AudioOutput
+    and calls setPan()/setVolume() here instead; this is the actual audible
+    output path once a meter is attached.
     """
 
     levelChanged = Signal(float)
@@ -196,12 +280,52 @@ class AudioLevelMeter(QObject):
         super().__init__(parent)
         self._bufferOutput = QAudioBufferOutput(self)
         self._bufferOutput.audioBufferReceived.connect(self._onBuffer)
+        self._sink = None
+        self._sinkFormat = None
+        self._sinkDevice = None
+        self._pan = 0.0
+        self._volume = 1.0
 
     def attach(self, player):
         player.setAudioBufferOutput(self._bufferOutput)
 
+    @Slot(float)
+    def setPan(self, pan):
+        self._pan = pan
+
+    @Slot(float)
+    def setVolume(self, volume):
+        self._volume = volume
+
+    def _ensureSink(self, buffer_format):
+        out_format = QAudioFormat(buffer_format)
+        out_format.setChannelConfig(QAudioFormat.ChannelConfig.ChannelConfigStereo)
+        out_format.setChannelCount(2)
+        if self._sink is not None and self._sinkFormat == out_format:
+            return
+        if self._sink is not None:
+            self._sink.stop()
+        self._sinkFormat = out_format
+        self._sink = QAudioSink(out_format, self)
+        self._sinkDevice = self._sink.start()
+
     def _onBuffer(self, buffer):
         self.levelChanged.emit(_computeRmsLevel(buffer))
+        if not buffer.isValid() or buffer.sampleCount() == 0:
+            return
+        try:
+            raw = bytes(buffer.constData())
+        except Exception:
+            return
+        if not raw:
+            return
+        fmt = buffer.format()
+        panned = _applyPanBytes(raw, fmt.sampleFormat(), fmt.channelCount(), self._pan, self._volume)
+        if panned is None:
+            return
+        self._ensureSink(fmt)
+        if self._sinkDevice:
+            self._sinkDevice.write(panned)
 
 
 class AudioMeterFactory(QObject):

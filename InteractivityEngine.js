@@ -29,9 +29,10 @@ registerCommand("video", function(it, context, state) {
 registerCommand("sound", function(it, context, state, itemIdx) {
     if (!it.itemSoundPath) return
     var volume = it.itemSoundVolume !== undefined ? it.itemSoundVolume : 1.0
+    var pan = it.itemSoundPan !== undefined ? it.itemSoundPan : 0.0
     var key = (context.elementType !== undefined && context.elementIdx !== undefined)
         ? (context.elementType + ":" + context.elementIdx + ":" + itemIdx) : ""
-    context.viewport.playCueSound(it.itemSoundPath, volume, key)
+    context.viewport.playCueSound(it.itemSoundPath, volume, pan, key)
 })
 
 registerCommand("update", function(it, context) {

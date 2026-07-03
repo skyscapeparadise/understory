@@ -4439,8 +4439,8 @@ Window {
                 cueVideoPlayer.play();
             }
 
-            function playCueSound(soundPath, volume, key) {
-                cueSoundPool.play(soundPath, volume, key);
+            function playCueSound(soundPath, volume, pan, key) {
+                cueSoundPool.play(soundPath, volume, pan, key);
             }
 
             // Live levels for currently-playing "sound" cues, keyed by the same
@@ -6812,13 +6812,14 @@ Window {
                 id: cueSoundPool
                 property int nextSlot: 0
 
-                function play(path, volume, key) {
+                function play(path, volume, pan, key) {
                     if (!path) return;
                     var wrapper = cueSoundRepeater.itemAt(cueSoundPool.nextSlot);
                     cueSoundPool.nextSlot = (cueSoundPool.nextSlot + 1) % cueSoundRepeater.count;
                     if (!wrapper) return;
                     var slot = wrapper.player;
                     slot.cueVolume = volume !== undefined ? volume : 1.0;
+                    slot.cuePan = pan !== undefined ? pan : 0.0;
                     slot.cueKey = key || "";
                     slot.source = path;
                     slot.play();
@@ -6837,9 +6838,11 @@ Window {
                         MediaPlayer {
                             id: cueSoundSlot
                             property real cueVolume: 1.0
+                            property real cuePan: 0.0
                             property string cueKey: ""
+                            // Silenced permanently — see vidPlayer in SceneContent.qml for why.
                             audioOutput: AudioOutput {
-                                volume: appSettings.muted ? 0.0 : cueSoundSlot.cueVolume
+                                volume: 0.0
                             }
                             property var _levelMeter: null
                             Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(cueSoundSlot)
@@ -6858,6 +6861,8 @@ Window {
                                 if (cueSoundSlot.cueKey === "") return;
                                 var effVol = appSettings.muted ? 0.0 : cueSoundSlot.cueVolume;
                                 viewport.setCueSoundLevel(cueSoundSlot.cueKey, rms * effVol);
+                                cueSoundSlot._levelMeter.setVolume(effVol);
+                                cueSoundSlot._levelMeter.setPan(cueSoundSlot.cuePan);
                             }
                         }
                     }
@@ -15443,8 +15448,9 @@ Window {
                     id: loopPlayer
                     source: (model.enabled && (isSyncType ? syncGroup !== null : (model.soundType || "loop") === "loop")) ? model.filePath : ""
                     loops: (isSyncType ? syncShouldLoop : true) ? MediaPlayer.Infinite : 1
+                    // Silenced permanently — see vidPlayer in SceneContent.qml for why.
                     audioOutput: AudioOutput {
-                        volume: appSettings.muted ? 0.0 : (model.mixerVolume !== undefined ? model.mixerVolume : 1.0)
+                        volume: 0.0
                     }
                     property var _levelMeter: null
                     Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(loopPlayer)
@@ -15519,6 +15525,8 @@ Window {
                     function onLevelChanged(rms) {
                         var effVol = appSettings.muted ? 0.0 : (model.mixerVolume !== undefined ? model.mixerVolume : 1.0)
                         nodeWorkspace.setTrackLevel("sound:" + index, rms * effVol)
+                        loopPlayer._levelMeter.setVolume(effVol)
+                        loopPlayer._levelMeter.setPan(model.mixerPan !== undefined ? model.mixerPan : 0.0)
                     }
                 }
             }

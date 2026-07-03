@@ -238,6 +238,18 @@ Item {
                     value: strip.pan
                     onMoved: strip.panDragged(value)
 
+                    // Double-click to recenter — TapHandler takes a passive grab so it
+                    // doesn't block the Slider's own drag handling.
+                    TapHandler {
+                        acceptedButtons: Qt.LeftButton
+                        onTapped: {
+                            if (tapCount === 2) {
+                                panSlider.value = 0.0
+                                strip.panDragged(0.0)
+                            }
+                        }
+                    }
+
                     background: Rectangle {
                         x: panSlider.leftPadding
                         y: panSlider.topPadding + panSlider.availableHeight / 2 - height / 2

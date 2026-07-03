@@ -2346,15 +2346,15 @@ Item {
                         autoPlay: true
                         loops: model.inTransition ? 1 : (model.vidLoop && !model.vidCrossfade ? MediaPlayer.Infinite : 1)
                         videoOutput: vidOutput
-                        // Mute while staging so audio doesn't bleed through during pre-buffering.
+                        // Silenced permanently — real audible output now comes from the
+                        // panner's private QAudioSink (see _levelMeter below), since
+                        // AudioOutput has no pan control at all.
                         audioOutput: AudioOutput {
-                            volume: sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
+                            volume: 0.0
                         }
                         // QAudioBufferOutput isn't a QML type — Python creates it and hands
-                        // back a per-player meter object with its own levelChanged signal.
-                        // The tap captures the decoded signal before the volume fader is
-                        // applied, so scale by the same expression used for audioOutput.volume
-                        // above — otherwise the meter would still read "loud" while muted/staging.
+                        // back a per-player meter+panner object with its own levelChanged
+                        // signal, plus setPan()/setVolume() this file calls below.
                         property var _levelMeter: null
                         Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(vidPlayer)
                         onPositionChanged: {
@@ -2482,6 +2482,8 @@ Item {
                         function onLevelChanged(rms) {
                             var effVol = sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
                             if (sceneContent.nodeWorkspaceRef) sceneContent.nodeWorkspaceRef.setTrackLevel("video:" + index, rms * effVol)
+                            vidPlayer._levelMeter.setVolume(effVol)
+                            vidPlayer._levelMeter.setPan(model.mixerPan !== undefined ? model.mixerPan : 0.0)
                         }
                     }
 
@@ -2493,10 +2495,9 @@ Item {
                         autoPlay: false
                         loops: 1
                         videoOutput: vidOutputB
+                        // Silenced permanently — see vidPlayer above.
                         audioOutput: AudioOutput {
-                            // Volume tracks vidOutputB.opacity: silent during pre-roll, fades
-                            // in/out with the crossfade animation, full when B is primary.
-                            volume: sceneContent.globalMuted ? 0.0 : vidOutputB.opacity * (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
+                            volume: 0.0
                         }
                         property var _levelMeter: null
                         Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(vidPlayerB)
@@ -2586,6 +2587,8 @@ Item {
                         function onLevelChanged(rms) {
                             var effVol = sceneContent.globalMuted ? 0.0 : vidOutputB.opacity * (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
                             if (sceneContent.nodeWorkspaceRef) sceneContent.nodeWorkspaceRef.setTrackLevel("video:" + index, rms * effVol)
+                            vidPlayerB._levelMeter.setVolume(effVol)
+                            vidPlayerB._levelMeter.setPan(model.mixerPan !== undefined ? model.mixerPan : 0.0)
                         }
                     }
 
@@ -3855,8 +3858,9 @@ Item {
                         id: audioTrackPlayer
                         source: (sceneContent.isInteractive && model.filePath) ? model.filePath : ""
                         loops: syncShouldLoop ? MediaPlayer.Infinite : 1
+                        // Silenced permanently — see vidPlayer in the video repeater above.
                         audioOutput: AudioOutput {
-                            volume: sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
+                            volume: 0.0
                         }
                         property var _levelMeter: null
                         Component.onCompleted: _levelMeter = audioMeterFactory.createLevelMeter(audioTrackPlayer)
@@ -3900,6 +3904,8 @@ Item {
                         function onLevelChanged(rms) {
                             var effVol = sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
                             if (sceneContent.nodeWorkspaceRef) sceneContent.nodeWorkspaceRef.setTrackLevel("audioTrack:" + index, rms * effVol)
+                            audioTrackPlayer._levelMeter.setVolume(effVol)
+                            audioTrackPlayer._levelMeter.setPan(model.mixerPan !== undefined ? model.mixerPan : 0.0)
                         }
                     }
                 }
