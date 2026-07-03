@@ -27,6 +27,11 @@ Item {
     property alias charactersModel: charactersModel
     property alias chaptersModel: chaptersModel
     property alias syncGroupsModel: syncGroupsModel
+    // Bound from mainWindow — lets the tread subsystem record a visit whenever
+    // a simulate/preview session starts on whatever scene is currently open.
+    property int currentSceneId: -1
+    property bool previewActive: false
+    property alias treadModel: treadModel
 
     //
     // MODELS
@@ -71,6 +76,61 @@ Item {
     ListModel { id: convTreesModel }
     // convNodeSourcesModel: live source rows for the currently selected node
     ListModel { id: convNodeSourcesModel }
+
+    // treadModel rows: { sceneId:int, sceneName:string, locationName:string,
+    // locationColor:string, chapterName:string, timecodeStr:string, thumbnailRev:int }
+    // A chronological log of every scene visited during the current simulate/preview
+    // session — not persisted with the story (a future save-game system will own that).
+    // Cleared on onStoryOpened below.
+    ListModel { id: treadModel }
+
+    // Appends a tread entry for sceneId, unless it's the same scene as the last entry
+    // (repeated re-entries into simulate on an unchanged scene shouldn't spam the log).
+    function treadRecordVisit(sceneId) {
+        if (sceneId < 0) return
+        if (treadModel.count > 0 && treadModel.get(treadModel.count - 1).sceneId === sceneId) return
+
+        var locName = storyManager.getEditorState("location_node_" + sceneId)
+        if (locName === "") locName = storyManager.getEditorState("location_" + sceneId)
+        var locColor = "#3a3a3a"
+        for (var i = 0; i < nodesModel.count; i++) {
+            if (nodesModel.get(i).name === locName) {
+                locColor = nodesModel.get(i).nodeColor
+                break
+            }
+        }
+
+        var chapName = ""
+        for (var j = 0; j < chaptersModel.count; j++) {
+            if (chaptersModel.get(j).chapterId === root.activeChapterId) {
+                chapName = chaptersModel.get(j).chapterName
+                break
+            }
+        }
+
+        treadModel.append({
+            sceneId: sceneId,
+            sceneName: storyManager.getSceneName(sceneId),
+            locationName: locName,
+            locationColor: locColor,
+            chapterName: chapName,
+            timecodeStr: root.secondsToTimecode(root.playheadTime),
+            thumbnailRev: storyManager.hasThumbnail(sceneId) ? 1 : 0
+        })
+    }
+
+    function treadUniqueSceneCount() {
+        var seen = ({})
+        var n = 0
+        for (var i = 0; i < treadModel.count; i++) {
+            var sid = treadModel.get(i).sceneId
+            if (!seen[sid]) {
+                seen[sid] = true
+                n++
+            }
+        }
+        return n
+    }
 
     property int nextNodeId: 0
     property int activeChapterId: 0
@@ -156,6 +216,12 @@ Item {
     signal ctrlMappingTriggered(string templateName)
     property string simulateTool: "select"
     signal keyMappingTriggered(string templateName)
+
+    // Starting a simulate/preview session logs whatever scene is already open as the
+    // first tread entry — jumps taken from there on are recorded by treadRecordVisit
+    // calls from performSwap() in understoryui.qml.
+    onSimulateToolChanged: if (simulateTool === "simulate") root.treadRecordVisit(root.currentSceneId)
+    onPreviewActiveChanged: if (previewActive) root.treadRecordVisit(root.currentSceneId)
 
     onActiveWorkspaceTabChanged: {
         if (activeWorkspaceTab !== 4) kbPressedKeys = ({})
@@ -472,6 +538,8 @@ Item {
                 convTreesModel.append({ treeId: convs[j].id, treeName: convs[j].name })
             root.activeConvTreeId = convId
             root.loadConvFromDb(convId)
+
+            treadModel.clear()
         }
         function onStoryChanged() {
             root.timecodeFormat = storyManager.getTimecodeFormat()
@@ -2226,6 +2294,35 @@ Item {
             anchors.left: parent.left
             anchors.leftMargin: 20
             visible: root.activeWorkspaceTab === 3
+        }
+
+        Text {
+            id: treadVisitCountText
+            anchors.top: treadHeading.bottom
+            anchors.topMargin: 6
+            anchors.left: parent.left
+            anchors.leftMargin: 20
+            visible: root.activeWorkspaceTab === 3
+            text: treadModel.count === 0 ? "no scenes visited yet — start simulate or preview to begin tracking"
+                                          : treadModel.count + (treadModel.count === 1 ? " scene visited" : " scenes visited")
+            font.pixelSize: 11
+            color: "#555"
+            wrapMode: Text.WordWrap
+            width: 320
+        }
+
+        Text {
+            anchors.top: treadVisitCountText.bottom
+            anchors.topMargin: 2
+            anchors.left: parent.left
+            anchors.leftMargin: 20
+            visible: root.activeWorkspaceTab === 3 && treadModel.count > 0
+            text: {
+                var n = root.treadUniqueSceneCount()
+                return n + (n === 1 ? " unique scene" : " unique scenes")
+            }
+            font.pixelSize: 11
+            color: "#555"
         }
 
         //
@@ -4230,6 +4327,126 @@ Item {
                 onEntered: convShowAllBtn.hovered = true
                 onExited:  convShowAllBtn.hovered = false
                 onClicked: root.convShowAll()
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ Tread history
+    //
+    // Chronological visit log, laid out as columns that fill top-to-bottom then
+    // left-to-right (GridView's TopToBottom flow) to suit the wide-and-short stage.
+    // Each entry is color-accented to match its scene's location node (nodesModel),
+    // so traversal patterns across a location are visible at a glance.
+    Rectangle {
+        id: treadStage
+        x: 360
+        y: 0
+        width: parent.width - 360 - 36
+        height: parent.height - 50
+        color: "#1a1a1d"
+        clip: true
+        visible: root.activeWorkspaceTab === 3
+
+        GridView {
+            id: treadGridView
+            anchors.fill: parent
+            anchors.margins: 12
+            cellWidth: 240
+            cellHeight: 38
+            flow: GridView.TopToBottom
+            model: treadModel
+            boundsBehavior: Flickable.StopAtBounds
+            flickableDirection: Flickable.HorizontalFlick
+
+            ScrollBar.horizontal: ScrollBar {
+                policy: ScrollBar.AsNeeded
+            }
+
+            // New visits land in the rightmost column — keep that edge in view so the
+            // most recent activity stays visible as the log grows past the stage width.
+            Connections {
+                target: treadModel
+                function onCountChanged() { treadGridView.positionViewAtEnd() }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.NoButton
+                onWheel: wheel => {
+                    var maxX = Math.max(0, treadGridView.contentWidth - treadGridView.width)
+                    treadGridView.contentX = Math.max(0, Math.min(treadGridView.contentX - wheel.angleDelta.y, maxX))
+                }
+            }
+
+            delegate: Item {
+                id: treadEntry
+                width: treadGridView.cellWidth - 10
+                height: treadGridView.cellHeight - 6
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: 3
+                    radius: 1
+                    color: model.locationColor
+                }
+
+                Item {
+                    id: treadThumb
+                    anchors.left: parent.left
+                    anchors.leftMargin: 9
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 26
+                    height: 26
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 4
+                        color: "black"
+                        border.color: "#333"
+                        border.width: 1
+                        visible: model.thumbnailRev <= 0
+                    }
+
+                    Item {
+                        anchors.fill: parent
+                        visible: model.thumbnailRev > 0
+                        layer.enabled: true
+                        layer.effect: OpacityMask {
+                            maskSource: Rectangle { width: treadThumb.width; height: treadThumb.height; radius: 4; color: "white" }
+                        }
+                        Image {
+                            anchors.fill: parent
+                            source: model.thumbnailRev > 0 ? ("image://thumbnails/" + model.sceneId + "?rev=" + model.thumbnailRev) : ""
+                            fillMode: Image.PreserveAspectCrop
+                            cache: false
+                        }
+                    }
+                }
+
+                Column {
+                    anchors.left: treadThumb.right
+                    anchors.leftMargin: 6
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 1
+
+                    Text {
+                        text: model.sceneName
+                        color: "white"
+                        font.pixelSize: 11
+                        elide: Text.ElideRight
+                        width: parent.width
+                    }
+                    Text {
+                        text: (model.chapterName !== "" ? model.chapterName + " · " : "") + model.timecodeStr
+                        color: "#666"
+                        font.pixelSize: 9
+                        elide: Text.ElideRight
+                        width: parent.width
+                    }
+                }
             }
         }
     }

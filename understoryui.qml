@@ -4665,6 +4665,7 @@ Window {
                 nextStackOrder = activeContent.nextStackOrder;
                 mainWindow.currentSceneId = pendingJumpSceneId;
                 sceneNameInput.text = pendingJumpSceneName;
+                nodeWorkspace.treadRecordVisit(pendingJumpSceneId);
                 navigationSettings.loadNavLinks(pendingJumpSceneId);
                 selectSettings.stableOrbitCache = ({});
                 selectSettings.elementTransitionDest = ({});
@@ -14856,6 +14857,8 @@ Window {
         activeVideosModel: viewport.videosModel
         activeAudioTracksModel: viewport.audioTracksModel
         currentLocationNodeName: mainWindow.currentLocationNodeName
+        currentSceneId: mainWindow.currentSceneId
+        previewActive: mainWindow.previewActive
         onKeyMappingTriggered:  templateName => { if (templateName !== "quit" && !viewport.handleTemplateInputDuringTransition(templateName)) viewport.activeContent.fireAreasByTemplate(templateName) }
         onCtrlMappingTriggered: templateName => {
             if (templateName === "quit") { if (mainWindow.previewActive) mainWindow.exitPreview() }
