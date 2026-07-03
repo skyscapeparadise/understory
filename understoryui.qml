@@ -6594,12 +6594,14 @@ Window {
                                             var pickedName = model.sceneName || storyManager.getSceneName(pickedId);
                                             var idx = sceneEditorButtons.interactivityPickerTargetIdx;
                                             if (sceneEditorButtons.interactivityPickerModel) {
-                                                sceneEditorButtons.interactivityPickerModel.setProperty(idx, "itemTargetSceneId", pickedId);
-                                                sceneEditorButtons.interactivityPickerModel.setProperty(idx, "itemTargetSceneName", pickedName);
+                                                sceneEditorButtons.interactivityPickerModel.setProperty(idx, sceneEditorButtons.interactivityPickerIdField, pickedId);
+                                                sceneEditorButtons.interactivityPickerModel.setProperty(idx, sceneEditorButtons.interactivityPickerNameField, pickedName);
                                             }
                                             sceneEditorButtons.interactivityPickerOpen = false;
                                             sceneEditorButtons.interactivityPickerTargetIdx = -1;
                                             sceneEditorButtons.interactivityPickerModel = null;
+                                            sceneEditorButtons.interactivityPickerIdField = "itemTargetSceneId";
+                                            sceneEditorButtons.interactivityPickerNameField = "itemTargetSceneName";
                                         } else {
                                             var targetId = scenesRectModel.get(index).sceneId;
                                             if (targetId !== mainWindow.currentSceneId) {
@@ -7027,6 +7029,11 @@ Window {
                 property bool interactivityPickerOpen: false
                 property int interactivityPickerTargetIdx: -1
                 property var interactivityPickerModel: null
+                // Which role pair a picked scene gets written into — lets non-jump
+                // pickers (e.g. the "how" condition's scene selectors) reuse this same
+                // overlay/click-handling machinery instead of duplicating it.
+                property string interactivityPickerIdField: "itemTargetSceneId"
+                property string interactivityPickerNameField: "itemTargetSceneName"
 
                 onNavigationOpenChanged: {
                     if (!navigationOpen)
@@ -12740,6 +12747,9 @@ Window {
                                 condIfVar: c.condIfVar, condIfOp: c.condIfOp, condIfVal: c.condIfVal,
                                 condWhereNetworkId: c.condWhereNetworkId, condWhereCharName: c.condWhereCharName,
                                 condWhereOp: c.condWhereOp, condWhereNodeName: c.condWhereNodeName,
+                                condHowChapterId: c.condHowChapterId, condHowSceneId: c.condHowSceneId,
+                                condHowSceneName: c.condHowSceneName, condHowOp: c.condHowOp,
+                                condHowSceneId2: c.condHowSceneId2, condHowSceneName2: c.condHowSceneName2,
                                 condActionsJson: c.condActionsJson
                             })
                         }
@@ -12774,6 +12784,12 @@ Window {
                                 condWhereCharName: c.condWhereCharName || "",
                                 condWhereOp: c.condWhereOp || "is at",
                                 condWhereNodeName: c.condWhereNodeName || "",
+                                condHowChapterId: c.condHowChapterId !== undefined ? c.condHowChapterId : -1,
+                                condHowSceneId: c.condHowSceneId !== undefined ? c.condHowSceneId : -1,
+                                condHowSceneName: c.condHowSceneName || "",
+                                condHowOp: c.condHowOp || "visited",
+                                condHowSceneId2: c.condHowSceneId2 !== undefined ? c.condHowSceneId2 : -1,
+                                condHowSceneName2: c.condHowSceneName2 || "",
                                 condActionsJson: c.condActionsJson || "[]",
                                 condPrevPassed: false
                             })
@@ -12959,7 +12975,10 @@ Window {
                                     condWhenFormat: "", condWhenTC: "",
                                     condIfVar: "", condIfOp: "is", condIfVal: "",
                                     condWhereNetworkId: -1, condWhereCharName: "", condWhereOp: "is at",
-                                    condWhereNodeName: "", condActionsJson: "[]", condPrevPassed: false
+                                    condWhereNodeName: "",
+                                    condHowChapterId: -1, condHowSceneId: -1, condHowSceneName: "",
+                                    condHowOp: "visited", condHowSceneId2: -1, condHowSceneName2: "",
+                                    condActionsJson: "[]", condPrevPassed: false
                                 })
                                 sceneSettings.activeConditionId = newId
                                 conditionActionsModel.clear()
@@ -13089,6 +13108,11 @@ Window {
                                                         return condIfVar + " " + condIfOp + " " + condIfVal
                                                     } else if (condType === "where") {
                                                         return condWhereCharName + " " + condWhereOp + " " + condWhereNodeName
+                                                    } else if (condType === "how") {
+                                                        var sceneLabel = condHowSceneName !== "" ? condHowSceneName : "?"
+                                                        if (condHowOp === "before" || condHowOp === "after")
+                                                            return sceneLabel + " " + condHowOp + " " + (condHowSceneName2 !== "" ? condHowSceneName2 : "?")
+                                                        return sceneLabel + " " + condHowOp
                                                     }
                                                     return ""
                                                 }
@@ -13141,7 +13165,7 @@ Window {
                                 id: condTypeCombo
                                 Layout.preferredWidth: 60
                                 Layout.preferredHeight: 22
-                                model: ["when", "if", "where"]
+                                model: ["when", "if", "where", "how"]
                                 Component.onCompleted: {
                                     var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
                                     if (idx >= 0) currentIndex = model.indexOf(conditionsModel.get(idx).condType)
@@ -13558,6 +13582,244 @@ Window {
                                     onEditingFinished: {
                                         var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
                                         if (idx >= 0) conditionsModel.setProperty(idx, "condIfVal", text)
+                                    }
+                                }
+                            }
+
+                            // ── how-specific controls ──
+                            // Checks the tread history: whether a scene was visited (or not),
+                            // and optionally its order relative to a second scene.
+                            ComboBox {
+                                id: condHowChapterCombo
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    return idx >= 0 && conditionsModel.get(idx).condType === "how"
+                                }
+                                Layout.preferredWidth: 52
+                                Layout.preferredHeight: 22
+                                model: {
+                                    var arr = []
+                                    for (var i = 0; i < nodeWorkspace.chaptersModel.count; i++) {
+                                        var ch = nodeWorkspace.chaptersModel.get(i)
+                                        arr.push({ id: ch.chapterId, name: ch.chapterName })
+                                    }
+                                    return arr
+                                }
+                                Component.onCompleted: {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx < 0) return
+                                    var chId = conditionsModel.get(idx).condHowChapterId
+                                    for (var i = 0; i < condHowChapterCombo.model.length; i++) {
+                                        if (condHowChapterCombo.model[i].id === chId) { currentIndex = i; return }
+                                    }
+                                    currentIndex = condHowChapterCombo.model.length > 0 ? 0 : -1
+                                }
+                                Connections {
+                                    target: sceneSettings
+                                    function onActiveConditionIdChanged() {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        if (idx < 0) { condHowChapterCombo.currentIndex = -1; return }
+                                        var chId = conditionsModel.get(idx).condHowChapterId
+                                        for (var i = 0; i < condHowChapterCombo.model.length; i++) {
+                                            if (condHowChapterCombo.model[i].id === chId) { condHowChapterCombo.currentIndex = i; return }
+                                        }
+                                        condHowChapterCombo.currentIndex = condHowChapterCombo.model.length > 0 ? 0 : -1
+                                    }
+                                }
+                                onActivated: function(i) {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx >= 0 && i >= 0 && i < model.length)
+                                        conditionsModel.setProperty(idx, "condHowChapterId", model[i].id)
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 12
+                                    text: {
+                                        var i = condHowChapterCombo.currentIndex
+                                        var m = condHowChapterCombo.model
+                                        return (i >= 0 && i < m.length) ? (m[i].name || "") : ""
+                                    }
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 3; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                HoverHandler { id: condHowChapterComboHover }
+                                background: Rectangle {
+                                    radius: 4; color: "transparent"
+                                    border.color: condHowChapterComboHover.hovered ? "#80cfff" : "white"; border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+                                }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 52; height: 20; padding: 0
+                                    contentItem: Text { text: (modelData && modelData.name) ? modelData.name : ""; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#2a6060" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: Math.max(condHowChapterCombo.width, 80); padding: 1
+                                    height: Math.min(condHowChapterCombo.model.length * 20 + 2, 102)
+                                    background: Rectangle { color: "#0d4040"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: condHowChapterCombo.delegateModel; currentIndex: condHowChapterCombo.currentIndex }
+                                }
+                            }
+
+                            Rectangle {
+                                id: condHowScene1Btn
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    return idx >= 0 && conditionsModel.get(idx).condType === "how"
+                                }
+                                Layout.preferredWidth: 70
+                                Layout.preferredHeight: 22
+                                radius: 4
+                                property bool hovered: false
+                                property bool toggled: sceneEditorButtons.interactivityPickerOpen
+                                    && sceneEditorButtons.interactivityPickerIdField === "condHowSceneId"
+                                    && sceneEditorButtons.interactivityPickerTargetIdx === sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                color: toggled || hovered ? "white" : "transparent"
+                                border.color: "white"
+                                border.width: 1
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                                Text {
+                                    anchors.centerIn: parent
+                                    property string sceneLabel: {
+                                        sceneSettings.conditionsRevision
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        return idx >= 0 ? (conditionsModel.get(idx).condHowSceneName || "") : ""
+                                    }
+                                    text: sceneLabel !== "" ? sceneLabel : "+ scene"
+                                    font.pixelSize: 10
+                                    color: (condHowScene1Btn.toggled || condHowScene1Btn.hovered) ? "darkslategrey" : "white"
+                                    elide: Text.ElideRight
+                                    width: condHowScene1Btn.width - 8
+                                    horizontalAlignment: Text.AlignHCenter
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onEntered: condHowScene1Btn.hovered = true
+                                    onExited: condHowScene1Btn.hovered = false
+                                    onClicked: {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        if (idx < 0) return
+                                        sceneEditorButtons.interactivityPickerTargetIdx = idx
+                                        sceneEditorButtons.interactivityPickerModel = conditionsModel
+                                        sceneEditorButtons.interactivityPickerIdField = "condHowSceneId"
+                                        sceneEditorButtons.interactivityPickerNameField = "condHowSceneName"
+                                        sceneEditorButtons.interactivityPickerOpen = !sceneEditorButtons.interactivityPickerOpen
+                                    }
+                                }
+                            }
+
+                            ComboBox {
+                                id: condHowOpCombo
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    return idx >= 0 && conditionsModel.get(idx).condType === "how"
+                                }
+                                Layout.preferredWidth: 66
+                                Layout.preferredHeight: 22
+                                model: ["visited", "not yet", "before", "after"]
+                                Component.onCompleted: {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx < 0) return
+                                    var op = conditionsModel.get(idx).condHowOp || "visited"
+                                    currentIndex = Math.max(0, model.indexOf(op))
+                                }
+                                Connections {
+                                    target: sceneSettings
+                                    function onActiveConditionIdChanged() {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        if (idx < 0) return
+                                        var op = conditionsModel.get(idx).condHowOp || "visited"
+                                        condHowOpCombo.currentIndex = Math.max(0, condHowOpCombo.model.indexOf(op))
+                                    }
+                                }
+                                onActivated: function(i) {
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx >= 0) conditionsModel.setProperty(idx, "condHowOp", model[i])
+                                }
+                                contentItem: Text {
+                                    leftPadding: 4; rightPadding: 12; text: parent.displayText
+                                    font.pixelSize: 10; color: "white"
+                                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                }
+                                indicator: Text {
+                                    x: parent.width - width - 3; anchors.verticalCenter: parent.verticalCenter
+                                    text: "▾"; font.pixelSize: 9; color: "white"
+                                }
+                                HoverHandler { id: condHowOpComboHover }
+                                background: Rectangle {
+                                    radius: 4; color: "transparent"
+                                    border.color: condHowOpComboHover.hovered ? "#80cfff" : "white"; border.width: 1
+                                    Behavior on border.color { ColorAnimation { duration: 100 } }
+                                }
+                                delegate: ItemDelegate {
+                                    width: parent ? parent.width : 66; height: 20; padding: 0
+                                    contentItem: Text { text: modelData; font.pixelSize: 10; color: "white"; leftPadding: 4; verticalAlignment: Text.AlignVCenter }
+                                    background: Rectangle { color: (highlighted || hovered) ? "#2a6060" : "transparent" }
+                                }
+                                popup: Popup {
+                                    y: parent.height + 2; width: Math.max(condHowOpCombo.width, 70); padding: 1
+                                    height: condHowOpCombo.model.length * 20 + 2
+                                    background: Rectangle { color: "#0d4040"; border.color: "white"; border.width: 1; radius: 4 }
+                                    contentItem: ListView { clip: true; model: condHowOpCombo.delegateModel; currentIndex: condHowOpCombo.currentIndex }
+                                }
+                            }
+
+                            Rectangle {
+                                id: condHowScene2Btn
+                                visible: {
+                                    sceneSettings.conditionsRevision
+                                    var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                    if (idx < 0 || conditionsModel.get(idx).condType !== "how") return false
+                                    var op = conditionsModel.get(idx).condHowOp
+                                    return op === "before" || op === "after"
+                                }
+                                Layout.preferredWidth: 70
+                                Layout.preferredHeight: 22
+                                radius: 4
+                                property bool hovered: false
+                                property bool toggled: sceneEditorButtons.interactivityPickerOpen
+                                    && sceneEditorButtons.interactivityPickerIdField === "condHowSceneId2"
+                                    && sceneEditorButtons.interactivityPickerTargetIdx === sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                color: toggled || hovered ? "white" : "transparent"
+                                border.color: "white"
+                                border.width: 1
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                                Text {
+                                    anchors.centerIn: parent
+                                    property string sceneLabel: {
+                                        sceneSettings.conditionsRevision
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        return idx >= 0 ? (conditionsModel.get(idx).condHowSceneName2 || "") : ""
+                                    }
+                                    text: sceneLabel !== "" ? sceneLabel : "+ scene"
+                                    font.pixelSize: 10
+                                    color: (condHowScene2Btn.toggled || condHowScene2Btn.hovered) ? "darkslategrey" : "white"
+                                    elide: Text.ElideRight
+                                    width: condHowScene2Btn.width - 8
+                                    horizontalAlignment: Text.AlignHCenter
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onEntered: condHowScene2Btn.hovered = true
+                                    onExited: condHowScene2Btn.hovered = false
+                                    onClicked: {
+                                        var idx = sceneSettings.findCondIdx(sceneSettings.activeConditionId)
+                                        if (idx < 0) return
+                                        sceneEditorButtons.interactivityPickerTargetIdx = idx
+                                        sceneEditorButtons.interactivityPickerModel = conditionsModel
+                                        sceneEditorButtons.interactivityPickerIdField = "condHowSceneId2"
+                                        sceneEditorButtons.interactivityPickerNameField = "condHowSceneName2"
+                                        sceneEditorButtons.interactivityPickerOpen = !sceneEditorButtons.interactivityPickerOpen
                                     }
                                 }
                             }
