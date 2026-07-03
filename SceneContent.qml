@@ -26,6 +26,7 @@ Item {
     property var viewportRef:    null
     property var buttonGridRef:  null
     property var variablesModel: null
+    property var nodeWorkspaceRef: null
 
     // Scale factor from story-resolution coordinates to the 960×540 editor
     // viewport.  In the editor this equals mainWindow.editorScale (e.g. 0.5 for
@@ -76,6 +77,14 @@ Item {
     ListModel { id: shadersModelInst }
     readonly property alias shadersModel: shadersModelInst
 
+    // audioTracksModelInst rows: manually-added mixer tracks (via the "+" button or a
+    // file dropped straight onto the mixer) that aren't tied to any other on-canvas
+    // element. Behave like ambient background audio for the scene: loop continuously
+    // unless assigned to a sync group, in which case the sync group's start timecode
+    // and end behavior (loop/freeze/hide) drive playback instead.
+    ListModel { id: audioTracksModelInst }
+    readonly property alias audioTracksModel: audioTracksModelInst
+
     // ── Timeline state (bound by viewport from NodeWorkspace) ───────────────
     property real chapterPlayheadTime: 0
     property int  activeChapterId: -1
@@ -120,6 +129,7 @@ Item {
         imagesModelInst.clear()
         videosModelInst.clear()
         shadersModelInst.clear()
+        audioTracksModelInst.clear()
         nextStackOrder = 0
         if (viewportRef) viewportRef.clearSelection()
     }
@@ -190,6 +200,10 @@ Item {
                     vidLoop: el.vidLoop !== undefined ? el.vidLoop : true,
                     vidCrossfade: el.vidCrossfade || false,
                     vidCrossfadePct: el.vidCrossfadePct !== undefined ? el.vidCrossfadePct : 5,
+                    mixerTrackName: el.mixerTrackName || "",
+                    mixerVolume: el.mixerVolume !== undefined ? el.mixerVolume : 1.0,
+                    mixerPan: el.mixerPan !== undefined ? el.mixerPan : 0.0,
+                    syncGroupId: el.syncGroupId !== undefined ? el.syncGroupId : -1,
                     inTransition: false
                 })
             } else if (el.type === "shader") {
@@ -204,6 +218,14 @@ Item {
                     sourcesJson: el.sourcesJson || "[]",
                     template: el.template || "none",
                     locked: el.locked || false
+                })
+            } else if (el.type === "audioTrack") {
+                audioTracksModelInst.append({
+                    filePath: el.filePath || "",
+                    mixerTrackName: el.mixerTrackName || "",
+                    mixerVolume: el.mixerVolume !== undefined ? el.mixerVolume : 1.0,
+                    mixerPan: el.mixerPan !== undefined ? el.mixerPan : 0.0,
+                    syncGroupId: el.syncGroupId !== undefined ? el.syncGroupId : -1
                 })
             }
             if (z >= nextStackOrder) nextStackOrder = z + 1
@@ -266,7 +288,11 @@ Item {
                 locked: m.locked || false,
                 vidLoop: m.vidLoop !== undefined ? m.vidLoop : true,
                 vidCrossfade: m.vidCrossfade || false,
-                vidCrossfadePct: m.vidCrossfadePct !== undefined ? m.vidCrossfadePct : 5 })
+                vidCrossfadePct: m.vidCrossfadePct !== undefined ? m.vidCrossfadePct : 5,
+                mixerTrackName: m.mixerTrackName || "",
+                mixerVolume: m.mixerVolume !== undefined ? m.mixerVolume : 1.0,
+                mixerPan: m.mixerPan !== undefined ? m.mixerPan : 0.0,
+                syncGroupId: m.syncGroupId !== undefined ? m.syncGroupId : -1 })
         }
         for (i = 0; i < shadersModelInst.count; i++) {
             m = shadersModelInst.get(i)
@@ -282,6 +308,15 @@ Item {
                 template: m.template || "none",
                 locked: m.locked || false })
         }
+        for (i = 0; i < audioTracksModelInst.count; i++) {
+            m = audioTracksModelInst.get(i)
+            elements.push({ type: "audioTrack",
+                filePath: m.filePath || "",
+                mixerTrackName: m.mixerTrackName || "",
+                mixerVolume: m.mixerVolume !== undefined ? m.mixerVolume : 1.0,
+                mixerPan: m.mixerPan !== undefined ? m.mixerPan : 0.0,
+                syncGroupId: m.syncGroupId !== undefined ? m.syncGroupId : -1 })
+        }
         return JSON.stringify(elements)
     }
 
@@ -293,6 +328,7 @@ Item {
                 itemTrigger: e.itemTrigger, itemAction: e.itemAction,
                 itemCommand: e.itemCommand, itemTransition: e.itemTransition,
                 itemTransitionSpeed: e.itemTransitionSpeed,
+                itemSoundSpeed: e.itemSoundSpeed, itemSoundSpeedLinked: e.itemSoundSpeedLinked,
                 itemWipeFeather: e.itemWipeFeather, itemWipeDirection: e.itemWipeDirection,
                 itemPushDirection: e.itemPushDirection,
                 itemLookYaw: e.itemLookYaw, itemLookPitch: e.itemLookPitch,
@@ -300,6 +336,8 @@ Item {
                 itemTargetSceneId: e.itemTargetSceneId, itemTargetSceneName: e.itemTargetSceneName,
                 itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
                 itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
+                itemSoundVolume: e.itemSoundVolume, itemSoundPan: e.itemSoundPan,
+                itemSoundTrackName: e.itemSoundTrackName, itemSoundSyncGroupId: e.itemSoundSyncGroupId,
                 itemVideoPath: e.itemVideoPath, itemVideoTarget: e.itemVideoTarget,
                 itemUpdateVar: e.itemUpdateVar, itemUpdateOp: e.itemUpdateOp, itemUpdateVal: e.itemUpdateVal,
                 itemWhereNetworkId: e.itemWhereNetworkId, itemWhereCharName: e.itemWhereCharName,
@@ -323,6 +361,8 @@ Item {
                 itemCommand:         e.itemCommand         || "jump",
                 itemTransition:      e.itemTransition      || "cut",
                 itemTransitionSpeed: e.itemTransitionSpeed !== undefined ? e.itemTransitionSpeed : 1.0,
+                itemSoundSpeed:      e.itemSoundSpeed       !== undefined ? e.itemSoundSpeed       : 1.0,
+                itemSoundSpeedLinked: e.itemSoundSpeedLinked !== undefined ? e.itemSoundSpeedLinked : true,
                 itemWipeFeather:     e.itemWipeFeather     !== undefined ? e.itemWipeFeather     : 0.0,
                 itemWipeDirection:   e.itemWipeDirection   || "right",
                 itemPushDirection:   e.itemPushDirection   || "right",
@@ -337,6 +377,10 @@ Item {
                 itemConditionOp:     e.itemConditionOp     || "is",
                 itemConditionVal:    e.itemConditionVal    || "",
                 itemSoundPath:       e.itemSoundPath       || "",
+                itemSoundVolume:     e.itemSoundVolume     !== undefined ? e.itemSoundVolume : 1.0,
+                itemSoundPan:        e.itemSoundPan        !== undefined ? e.itemSoundPan    : 0.0,
+                itemSoundTrackName:  e.itemSoundTrackName  || "",
+                itemSoundSyncGroupId: e.itemSoundSyncGroupId !== undefined ? e.itemSoundSyncGroupId : -1,
                 itemVideoPath:       e.itemVideoPath       || "",
                 itemVideoTarget:     e.itemVideoTarget     || "fill",
                 itemUpdateVar:       e.itemUpdateVar       || "",
@@ -357,6 +401,59 @@ Item {
 
     function parseInteractivityJson(json) {
         try { return JSON.parse(json || "[]") } catch(e) { return [] }
+    }
+
+    // Scans every on-canvas element's interactivity list for "sound" cue commands
+    // and returns a flat descriptor array for the audio mixer. Not live-reactive —
+    // callers re-fetch this (e.g. when the mixer tab opens or the scene changes).
+    function collectSoundCommandSources() {
+        var result = []
+        var groups = [
+            { model: areasModelInst,      elementType: "area" },
+            { model: textBoxesModelInst,  elementType: "text" },
+            { model: imagesModelInst,     elementType: "image" },
+            { model: videosModelInst,     elementType: "video" },
+            { model: shadersModelInst,    elementType: "shader" }
+        ]
+        for (var g = 0; g < groups.length; g++) {
+            var mdl = groups[g].model
+            for (var i = 0; i < mdl.count; i++) {
+                var el = mdl.get(i)
+                var items = parseInteractivityJson(el.interactivityJson)
+                for (var j = 0; j < items.length; j++) {
+                    var it = items[j]
+                    if (it.itemCommand !== "sound") continue
+                    result.push({
+                        elementType: groups[g].elementType,
+                        elementIdx: i,
+                        itemIdx: j,
+                        elementName: el.name || "",
+                        filePath: it.itemSoundPath || "",
+                        mixerTrackName: it.itemSoundTrackName || "",
+                        mixerVolume: it.itemSoundVolume !== undefined ? it.itemSoundVolume : 1.0,
+                        mixerPan: it.itemSoundPan !== undefined ? it.itemSoundPan : 0.0,
+                        syncGroupId: it.itemSoundSyncGroupId !== undefined ? it.itemSoundSyncGroupId : -1
+                    })
+                }
+            }
+        }
+        return result
+    }
+
+    // Writes an edited mixer field back into the owning element's interactivityJson
+    // for a "sound" cue command descriptor produced by collectSoundCommandSources().
+    function setSoundCommandSourceProp(elementType, elementIdx, itemIdx, key, value) {
+        var modelMap = {
+            area: areasModelInst, text: textBoxesModelInst, image: imagesModelInst,
+            video: videosModelInst, shader: shadersModelInst
+        }
+        var mdl = modelMap[elementType]
+        if (!mdl || elementIdx < 0 || elementIdx >= mdl.count) return
+        var el = mdl.get(elementIdx)
+        var items = parseInteractivityJson(el.interactivityJson)
+        if (itemIdx < 0 || itemIdx >= items.length) return
+        items[itemIdx][key] = value
+        mdl.setProperty(elementIdx, "interactivityJson", JSON.stringify(items))
     }
 
     // Expose shader delegate for external code that needs to update live uniforms.
@@ -2245,7 +2342,7 @@ Item {
                         videoOutput: vidOutput
                         // Mute while staging so audio doesn't bleed through during pre-buffering.
                         audioOutput: AudioOutput {
-                            volume: sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? 1.0 : 0.0)
+                            volume: sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
                         }
                         onPositionChanged: {
                             // True self-crossfade: B pre-rolls invisibly 300 ms before the fade
@@ -2377,7 +2474,7 @@ Item {
                         audioOutput: AudioOutput {
                             // Volume tracks vidOutputB.opacity: silent during pre-roll, fades
                             // in/out with the crossfade animation, full when B is primary.
-                            volume: sceneContent.globalMuted ? 0.0 : vidOutputB.opacity * (sceneContent.isInteractive ? 1.0 : 0.0)
+                            volume: sceneContent.globalMuted ? 0.0 : vidOutputB.opacity * (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
                         }
                         onPositionChanged: {
                             // Mirror of vidPlayer's pre-roll logic: start A early so its first
@@ -3704,6 +3801,62 @@ Item {
                         function onHoveredShaderIndexChanged() {
                             if (viewportRef.hoveredShaderIndex === index)
                                 shaderSimulateMouseArea.fireInteractivity("hover")
+                        }
+                    }
+                }
+            }
+
+            // Manually-added mixer tracks ("+" button / drop-on-mixer). Non-visual —
+            // loop continuously unless assigned to a sync group, in which case the
+            // group's start timecode + end behavior (loop/freeze/hide) drive playback.
+            Repeater {
+                id: audioTracksRepeater
+                model: audioTracksModel
+                delegate: Item {
+                    readonly property var syncGroup: (model.syncGroupId !== undefined && model.syncGroupId >= 0 && sceneContent.nodeWorkspaceRef)
+                        ? sceneContent.nodeWorkspaceRef.syncGroupById(model.syncGroupId) : null
+                    readonly property real syncStartSeconds: syncGroup ? sceneContent.nodeWorkspaceRef.timecodeToSeconds(syncGroup.startTimecode) : 0
+                    readonly property bool syncShouldLoop: syncGroup ? (syncGroup.endBehavior === "loop") : true
+
+                    MediaPlayer {
+                        id: audioTrackPlayer
+                        source: (sceneContent.isInteractive && model.filePath) ? model.filePath : ""
+                        loops: syncShouldLoop ? MediaPlayer.Infinite : 1
+                        audioOutput: AudioOutput {
+                            volume: sceneContent.globalMuted ? 0.0 : (sceneContent.isInteractive ? (model.mixerVolume !== undefined ? model.mixerVolume : 1.0) : 0.0)
+                        }
+
+                        readonly property bool shouldBePlaying: {
+                            if (!sceneContent.isInteractive || !model.filePath) return false;
+                            if (!syncGroup) return true;
+                            var elapsed = sceneContent.chapterPlayheadTime - syncStartSeconds;
+                            if (elapsed < 0) return false;
+                            if (!syncShouldLoop && duration > 0 && elapsed * 1000 >= duration) return false;
+                            return true;
+                        }
+
+                        function syncPosition() {
+                            if (!syncGroup || duration <= 0) return 0;
+                            var elapsedMs = (sceneContent.chapterPlayheadTime - syncStartSeconds) * 1000;
+                            return syncShouldLoop ? (elapsedMs % duration) : Math.min(elapsedMs, duration);
+                        }
+
+                        onShouldBePlayingChanged: {
+                            if (shouldBePlaying) {
+                                if (playbackState !== MediaPlayer.PlayingState) {
+                                    if (duration > 0) position = syncPosition();
+                                    play();
+                                }
+                            } else {
+                                stop();
+                            }
+                        }
+
+                        onMediaStatusChanged: {
+                            if (mediaStatus === MediaPlayer.LoadedMedia && shouldBePlaying) {
+                                if (duration > 0) position = syncPosition();
+                                play();
+                            }
                         }
                     }
                 }

@@ -23,6 +23,11 @@ registerCommand("video", function(it, context, state) {
     }
 })
 
+registerCommand("sound", function(it, context) {
+    if (it.itemSoundPath)
+        context.viewport.playCueSound(it.itemSoundPath, it.itemSoundVolume !== undefined ? it.itemSoundVolume : 1.0)
+})
+
 registerCommand("update", function(it, context) {
     if (!it.itemUpdateVar || !context.variablesModel) return
     var vm = context.variablesModel
@@ -125,6 +130,7 @@ function fire(trigger, items, context) {
     if (state.pendingJump) {
         var pj = state.pendingJump
         var ms = Math.round((pj.itemTransitionSpeed || 1.0) * 1000)
+        var soundMs = Math.round((pj.itemSoundSpeed !== undefined ? pj.itemSoundSpeed : (pj.itemTransitionSpeed || 1.0)) * 1000)
         if (state.hasCueVideo) context.viewport.cueVideoHasJump = true
         context.viewport.jumpToScene(
             pj.itemTargetSceneId,
@@ -137,7 +143,8 @@ function fire(trigger, items, context) {
             pj.itemLookPitch       !== undefined ? pj.itemLookPitch     : 0.0,
             pj.itemLookFovMM       !== undefined ? pj.itemLookFovMM     : 24.0,
             pj.itemLookOvershoot   !== undefined ? pj.itemLookOvershoot : 1.0,
-            pj.itemLookShutter     !== undefined ? pj.itemLookShutter   : 0.10
+            pj.itemLookShutter     !== undefined ? pj.itemLookShutter   : 0.10,
+            soundMs
         )
     }
 }

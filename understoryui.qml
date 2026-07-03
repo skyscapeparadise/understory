@@ -1226,7 +1226,9 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0
+                    lookPitch: 0.0,
+                    soundSpeed: 1.0,
+                    cutSoundSpeed: 0.3
                 },
                 {
                     transition: "cut",
@@ -1239,7 +1241,9 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0
+                    lookPitch: 0.0,
+                    soundSpeed: 1.0,
+                    cutSoundSpeed: 0.3
                 },
                 {
                     transition: "cut",
@@ -1252,7 +1256,9 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0
+                    lookPitch: 0.0,
+                    soundSpeed: 1.0,
+                    cutSoundSpeed: 0.3
                 },
                 {
                     transition: "cut",
@@ -1265,7 +1271,9 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0
+                    lookPitch: 0.0,
+                    soundSpeed: 1.0,
+                    cutSoundSpeed: 0.3
                 },
                 {
                     transition: "cut",
@@ -1278,7 +1286,9 @@ Window {
                     lookOvershoot: 1.0,
                     lookShutter: 0.10,
                     lookYaw: 90.0,
-                    lookPitch: 0.0
+                    lookPitch: 0.0,
+                    soundSpeed: 1.0,
+                    cutSoundSpeed: 0.3
                 }
             ]
             // index 0 = default, 1 = north, 2 = south, 3 = east, 4 = west
@@ -1366,6 +1376,11 @@ Window {
                                 continue;
                             items[j].itemTransition = td.transition || "cut";
                             items[j].itemTransitionSpeed = td.transition === "look" ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4) : (td.speed !== undefined ? td.speed : 1.0);
+                            if (items[j].itemSoundSpeedLinked !== false) {
+                                items[j].itemSoundSpeed = (items[j].itemTransition === "cut")
+                                    ? (td.cutSoundSpeed !== undefined ? td.cutSoundSpeed : 0.3)
+                                    : (td.soundSpeed !== undefined ? td.soundSpeed : 1.0);
+                            }
                             items[j].itemPushDirection = td.pushDir || "right";
                             items[j].itemWipeFeather = td.wipeFeather !== undefined ? td.wipeFeather : 0.0;
                             items[j].itemWipeDirection = td.wipeDir || "right";
@@ -1416,6 +1431,11 @@ Window {
                                 continue;
                             items[j].itemTransition = td.transition || "cut";
                             items[j].itemTransitionSpeed = td.transition === "look" ? (td.lookSpeed !== undefined ? td.lookSpeed : 0.4) : (td.speed !== undefined ? td.speed : 1.0);
+                            if (items[j].itemSoundSpeedLinked !== false) {
+                                items[j].itemSoundSpeed = (items[j].itemTransition === "cut")
+                                    ? (td.cutSoundSpeed !== undefined ? td.cutSoundSpeed : 0.3)
+                                    : (td.soundSpeed !== undefined ? td.soundSpeed : 1.0);
+                            }
                             items[j].itemPushDirection = td.pushDir || "right";
                             items[j].itemWipeFeather = td.wipeFeather !== undefined ? td.wipeFeather : 0.0;
                             items[j].itemWipeDirection = td.wipeDir || "right";
@@ -2107,6 +2127,12 @@ Window {
                                 var s = td.speed || 1.0;
                                 dSpeedSlider.value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0;
                                 dSpeedField.text = s.toFixed(1);
+                                var ss = td.soundSpeed !== undefined ? td.soundSpeed : 1.0;
+                                dSoundSpeedSlider.value = ss <= 2.0 ? ss / 4.0 : 0.5 + (ss - 2.0) / 16.0;
+                                dSoundSpeedField.text = ss.toFixed(1);
+                                var css = td.cutSoundSpeed !== undefined ? td.cutSoundSpeed : 0.3;
+                                dCutSoundSpeedSlider.value = css <= 2.0 ? css / 4.0 : 0.5 + (css - 2.0) / 16.0;
+                                dCutSoundSpeedField.text = css.toFixed(1);
                                 dFeatherSlider.value = td.wipeFeather || 0.0;
                                 dFeatherField.text = Math.round((td.wipeFeather || 0.0) * 200).toString();
                                 var ls = td.lookSpeed || 0.4;
@@ -2330,6 +2356,198 @@ Window {
                                             anchors.fill: parent
                                             onClicked: storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "pushDir", modelData)
                                         }
+                                    }
+                                }
+                            }
+
+                            // sound-transition-speed default (non-cut types)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                visible: dirDelegate.td.transition !== "cut"
+                                Text {
+                                    text: "sound speed"
+                                    font.pixelSize: 10
+                                    color: "#aaa"
+                                    Layout.preferredHeight: 22
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                Slider {
+                                    id: dSoundSpeedSlider
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    Layout.preferredHeight: 22
+                                    from: 0
+                                    to: 1
+                                    stepSize: 0
+                                    Component.onCompleted: {
+                                        var s = dirDelegate.td.soundSpeed !== undefined ? dirDelegate.td.soundSpeed : 1.0;
+                                        value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0;
+                                    }
+                                    onMoved: {
+                                        var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0;
+                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "soundSpeed", Math.round(speed * 100) / 100);
+                                    }
+                                    background: Rectangle {
+                                        x: dSoundSpeedSlider.leftPadding
+                                        y: dSoundSpeedSlider.topPadding + dSoundSpeedSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 200
+                                        implicitHeight: 4
+                                        width: dSoundSpeedSlider.availableWidth
+                                        height: 4
+                                        radius: 2
+                                        color: "#333"
+                                        Rectangle {
+                                            width: dSoundSpeedSlider.visualPosition * parent.width
+                                            height: parent.height
+                                            color: "#5DA9A4"
+                                            radius: 2
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: dSoundSpeedSlider.leftPadding + dSoundSpeedSlider.visualPosition * (dSoundSpeedSlider.availableWidth - width)
+                                        y: dSoundSpeedSlider.topPadding + dSoundSpeedSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 12
+                                        implicitHeight: 12
+                                        radius: 6
+                                        color: dSoundSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: 52
+                                    Layout.preferredHeight: 22
+                                    color: "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    radius: 4
+                                    TextInput {
+                                        id: dSoundSpeedField
+                                        anchors.left: parent.left
+                                        anchors.right: dSoundSpeedSec.left
+                                        anchors.leftMargin: 4
+                                        anchors.rightMargin: 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: "white"
+                                        font.pixelSize: 10
+                                        clip: true
+                                        selectByMouse: true
+                                        validator: DoubleValidator {
+                                            bottom: 0.0
+                                            top: 10.0
+                                        }
+                                        Component.onCompleted: text = (dirDelegate.td.soundSpeed !== undefined ? dirDelegate.td.soundSpeed : 1.0).toFixed(1)
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: {
+                                            var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0));
+                                            text = speed.toFixed(1);
+                                            storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "soundSpeed", speed);
+                                        }
+                                    }
+                                    Text {
+                                        id: dSoundSpeedSec
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "sec"
+                                        font.pixelSize: 10
+                                        color: "#aaa"
+                                    }
+                                }
+                            }
+
+                            // cut-transition sound-speed default (cut has no visual duration, but sound can still fade)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                visible: dirDelegate.td.transition === "cut"
+                                Text {
+                                    text: "cut sound speed"
+                                    font.pixelSize: 10
+                                    color: "#aaa"
+                                    Layout.preferredHeight: 22
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                Slider {
+                                    id: dCutSoundSpeedSlider
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    Layout.preferredHeight: 22
+                                    from: 0
+                                    to: 1
+                                    stepSize: 0
+                                    Component.onCompleted: {
+                                        var s = dirDelegate.td.cutSoundSpeed !== undefined ? dirDelegate.td.cutSoundSpeed : 0.3;
+                                        value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0;
+                                    }
+                                    onMoved: {
+                                        var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0;
+                                        storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "cutSoundSpeed", Math.round(speed * 100) / 100);
+                                    }
+                                    background: Rectangle {
+                                        x: dCutSoundSpeedSlider.leftPadding
+                                        y: dCutSoundSpeedSlider.topPadding + dCutSoundSpeedSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 200
+                                        implicitHeight: 4
+                                        width: dCutSoundSpeedSlider.availableWidth
+                                        height: 4
+                                        radius: 2
+                                        color: "#333"
+                                        Rectangle {
+                                            width: dCutSoundSpeedSlider.visualPosition * parent.width
+                                            height: parent.height
+                                            color: "#5DA9A4"
+                                            radius: 2
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: dCutSoundSpeedSlider.leftPadding + dCutSoundSpeedSlider.visualPosition * (dCutSoundSpeedSlider.availableWidth - width)
+                                        y: dCutSoundSpeedSlider.topPadding + dCutSoundSpeedSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 12
+                                        implicitHeight: 12
+                                        radius: 6
+                                        color: dCutSoundSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: 52
+                                    Layout.preferredHeight: 22
+                                    color: "transparent"
+                                    border.color: "white"
+                                    border.width: 1
+                                    radius: 4
+                                    TextInput {
+                                        id: dCutSoundSpeedField
+                                        anchors.left: parent.left
+                                        anchors.right: dCutSoundSpeedSec.left
+                                        anchors.leftMargin: 4
+                                        anchors.rightMargin: 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: "white"
+                                        font.pixelSize: 10
+                                        clip: true
+                                        selectByMouse: true
+                                        validator: DoubleValidator {
+                                            bottom: 0.0
+                                            top: 10.0
+                                        }
+                                        Component.onCompleted: text = (dirDelegate.td.cutSoundSpeed !== undefined ? dirDelegate.td.cutSoundSpeed : 0.3).toFixed(1)
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: {
+                                            var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0));
+                                            text = speed.toFixed(1);
+                                            storyHubSettingsView.setTransProp(dirDelegate.dirIdx, "cutSoundSpeed", speed);
+                                        }
+                                    }
+                                    Text {
+                                        id: dCutSoundSpeedSec
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "sec"
+                                        font.pixelSize: 10
+                                        color: "#aaa"
                                     }
                                 }
                             }
@@ -3550,6 +3768,10 @@ Window {
             property string pendingJumpSceneName: ""
             property string pendingTransition: "cut"
             property real pendingDuration: 500   // ms
+            // How long the mixer should animate track volume/pan changes across this jump —
+            // tracks pendingDuration by default, but can diverge (see itemSoundSpeed).
+            property real pendingSoundDurationMs: 500
+            property real currentSoundTransitionMs: 500
 
             // ── Dissolve transition state ────────────────────────────────────────
             property bool dissolving: false
@@ -3608,6 +3830,15 @@ Window {
             property var imagesModel: activeContent ? activeContent.imagesModel : null
             property var videosModel: activeContent ? activeContent.videosModel : null
             property var shadersModel: activeContent ? activeContent.shadersModel : null
+            property var audioTracksModel: activeContent ? activeContent.audioTracksModel : null
+
+            function collectSoundCommandSources() {
+                return activeContent ? activeContent.collectSoundCommandSources() : [];
+            }
+
+            function setSoundCommandSourceProp(elementType, elementIdx, itemIdx, key, value) {
+                if (activeContent) activeContent.setSoundCommandSourceProp(elementType, elementIdx, itemIdx, key, value);
+            }
 
             property real areaX1: 0
             property real areaY1: 0
@@ -4208,6 +4439,10 @@ Window {
                 cueVideoPlayer.play();
             }
 
+            function playCueSound(soundPath, volume) {
+                cueSoundPool.play(soundPath, volume);
+            }
+
             // Execute the pending transition — called when both video has ended and staging is ready.
             function commitCueVideoTransition() {
                 var dirMap = {
@@ -4319,7 +4554,7 @@ Window {
                 onTriggered: viewport.preWarmNextScene()
             }
 
-            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection, lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal, lookShutterVal) {
+            function jumpToScene(targetSceneId, transition, durationMs, wipeFeather, wipeDirection, pushDirection, lookYawDeg, lookPitchDeg, lookFovMMVal, lookOvershootVal, lookShutterVal, soundDurationMs) {
                 if (targetSceneId < 0 || targetSceneId === mainWindow.currentSceneId)
                     return;
                 if (dissolving || wiping || sliding || looking || transitionLoading) {
@@ -4330,7 +4565,7 @@ Window {
                                    wipeDirection: wipeDirection, pushDirection: pushDirection,
                                    lookYawDeg: lookYawDeg, lookPitchDeg: lookPitchDeg,
                                    lookFovMMVal: lookFovMMVal, lookOvershootVal: lookOvershootVal,
-                                   lookShutterVal: lookShutterVal };
+                                   lookShutterVal: lookShutterVal, soundDurationMs: soundDurationMs };
                         if (tMode === "queue") {
                             queuedJump = qj;   // overwrite any prior queued jump (most recent wins)
                             return;
@@ -4354,6 +4589,8 @@ Window {
                 pendingJumpSceneName = storyManager.getSceneName(targetSceneId);
                 pendingTransition = transition || "cut";
                 pendingDuration = durationMs !== undefined ? durationMs : 500;
+                pendingSoundDurationMs = soundDurationMs !== undefined ? soundDurationMs : pendingDuration;
+                currentSoundTransitionMs = pendingSoundDurationMs;
                 pendingWipeFeather = wipeFeather !== undefined ? wipeFeather : 0.0;
                 pendingWipeDirection = wipeDirection || "right";
                 pendingSlideDirection = pushDirection || "right";
@@ -4489,7 +4726,7 @@ Window {
                     queuedJump = null;
                     jumpToScene(j.sceneId, j.transition, j.durationMs, j.wipeFeather, j.wipeDirection,
                                 j.pushDirection, j.lookYawDeg, j.lookPitchDeg, j.lookFovMMVal,
-                                j.lookOvershootVal, j.lookShutterVal);
+                                j.lookOvershootVal, j.lookShutterVal, j.soundDurationMs);
                 }
             }
 
@@ -4993,6 +5230,7 @@ Window {
                 viewportRef: viewport
                 buttonGridRef: buttonGrid
                 variablesModel: variablesModel
+                nodeWorkspaceRef: nodeWorkspace
                 isInteractive: viewport.foregroundLayer === 0
                 previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
@@ -5026,6 +5264,7 @@ Window {
                 viewportRef: viewport
                 buttonGridRef: buttonGrid
                 variablesModel: variablesModel
+                nodeWorkspaceRef: nodeWorkspace
                 isInteractive: viewport.foregroundLayer === 1
                 previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
@@ -6548,6 +6787,37 @@ Window {
                     id: cueVideoOutput
                     anchors.fill: parent
                     fillMode: VideoOutput.PreserveAspectFit
+                }
+            }
+
+            // One-shot pool for interactivity "sound" cues — rotates through a small
+            // set of players so overlapping cue-fired sounds don't cut each other off.
+            Item {
+                id: cueSoundPool
+                property int nextSlot: 0
+
+                function play(path, volume) {
+                    if (!path) return;
+                    var slot = cueSoundRepeater.itemAt(cueSoundPool.nextSlot);
+                    cueSoundPool.nextSlot = (cueSoundPool.nextSlot + 1) % cueSoundRepeater.count;
+                    if (!slot) return;
+                    slot.cueVolume = volume !== undefined ? volume : 1.0;
+                    slot.source = path;
+                    slot.play();
+                }
+
+                Repeater {
+                    id: cueSoundRepeater
+                    model: 6
+                    delegate: MediaPlayer {
+                        property real cueVolume: 1.0
+                        audioOutput: AudioOutput {
+                            volume: appSettings.muted ? 0.0 : cueVolume
+                        }
+                        onMediaStatusChanged: {
+                            if (mediaStatus === MediaPlayer.EndOfMedia) source = "";
+                        }
+                    }
                 }
             }
 
@@ -11027,6 +11297,7 @@ Window {
                                 networksModel: nodeWorkspace.networksModel
                                 chaptersModel: nodeWorkspace.chaptersModel
                                 timecodeFormat: nodeWorkspace.timecodeFormat
+                                cutSoundSpeedDefault: storyHubSettingsView.dirTransitions[0].cutSoundSpeed !== undefined ? storyHubSettingsView.dirTransitions[0].cutSoundSpeed : 0.3
                             }
 
                             Item {
@@ -12372,6 +12643,7 @@ Window {
                                 itemTrigger: e.itemTrigger, itemAction: e.itemAction,
                                 itemCommand: e.itemCommand, itemTransition: e.itemTransition,
                                 itemTransitionSpeed: e.itemTransitionSpeed,
+                                itemSoundSpeed: e.itemSoundSpeed, itemSoundSpeedLinked: e.itemSoundSpeedLinked,
                                 itemWipeFeather: e.itemWipeFeather, itemWipeDirection: e.itemWipeDirection,
                                 itemPushDirection: e.itemPushDirection,
                                 itemLookYaw: e.itemLookYaw, itemLookPitch: e.itemLookPitch,
@@ -12380,6 +12652,8 @@ Window {
                                 itemTargetSceneId: e.itemTargetSceneId, itemTargetSceneName: e.itemTargetSceneName,
                                 itemConditionVar: e.itemConditionVar, itemConditionOp: e.itemConditionOp,
                                 itemConditionVal: e.itemConditionVal, itemSoundPath: e.itemSoundPath,
+                                itemSoundVolume: e.itemSoundVolume, itemSoundPan: e.itemSoundPan,
+                                itemSoundTrackName: e.itemSoundTrackName, itemSoundSyncGroupId: e.itemSoundSyncGroupId,
                                 itemVideoPath: e.itemVideoPath, itemVideoTarget: e.itemVideoTarget,
                                 itemUpdateVar: e.itemUpdateVar, itemUpdateOp: e.itemUpdateOp,
                                 itemUpdateVal: e.itemUpdateVal,
@@ -12405,6 +12679,8 @@ Window {
                                 itemCommand: e.itemCommand || "jump",
                                 itemTransition: e.itemTransition || "cut",
                                 itemTransitionSpeed: e.itemTransitionSpeed !== undefined ? e.itemTransitionSpeed : 1.0,
+                                itemSoundSpeed: e.itemSoundSpeed !== undefined ? e.itemSoundSpeed : 1.0,
+                                itemSoundSpeedLinked: e.itemSoundSpeedLinked !== undefined ? e.itemSoundSpeedLinked : true,
                                 itemWipeFeather: e.itemWipeFeather !== undefined ? e.itemWipeFeather : 0.0,
                                 itemWipeDirection: e.itemWipeDirection || "right",
                                 itemPushDirection: e.itemPushDirection || "right",
@@ -12419,6 +12695,10 @@ Window {
                                 itemConditionOp: e.itemConditionOp || "is",
                                 itemConditionVal: e.itemConditionVal || "",
                                 itemSoundPath: e.itemSoundPath || "",
+                                itemSoundVolume: e.itemSoundVolume !== undefined ? e.itemSoundVolume : 1.0,
+                                itemSoundPan: e.itemSoundPan !== undefined ? e.itemSoundPan : 0.0,
+                                itemSoundTrackName: e.itemSoundTrackName || "",
+                                itemSoundSyncGroupId: e.itemSoundSyncGroupId !== undefined ? e.itemSoundSyncGroupId : -1,
                                 itemVideoPath: e.itemVideoPath || "",
                                 itemVideoTarget: e.itemVideoTarget || "fill",
                                 itemUpdateVar: e.itemUpdateVar || "",
@@ -13314,6 +13594,7 @@ Window {
                             networksModel: nodeWorkspace.networksModel
                             chaptersModel: nodeWorkspace.chaptersModel
                             timecodeFormat: nodeWorkspace.timecodeFormat
+                            cutSoundSpeedDefault: storyHubSettingsView.dirTransitions[0].cutSoundSpeed !== undefined ? storyHubSettingsView.dirTransitions[0].cutSoundSpeed : 0.3
                         }
                     }
                 }
@@ -14572,10 +14853,28 @@ Window {
         width: 1365
         height: 300
         simulateTool: buttonGrid.selectedTool
+        activeVideosModel: viewport.videosModel
+        activeAudioTracksModel: viewport.audioTracksModel
+        currentLocationNodeName: mainWindow.currentLocationNodeName
         onKeyMappingTriggered:  templateName => { if (templateName !== "quit" && !viewport.handleTemplateInputDuringTransition(templateName)) viewport.activeContent.fireAreasByTemplate(templateName) }
         onCtrlMappingTriggered: templateName => {
             if (templateName === "quit") { if (mainWindow.previewActive) mainWindow.exitPreview() }
             else if (!viewport.handleTemplateInputDuringTransition(templateName)) viewport.activeContent.fireAreasByTemplate(templateName)
+        }
+        onActiveWorkspaceTabChanged: {
+            if (activeWorkspaceTab === 1) soundCommandSources = viewport.collectSoundCommandSources()
+        }
+        onSoundCommandSourceEdited: (elementType, elementIdx, itemIdx, key, value) => {
+            viewport.setSoundCommandSourceProp(elementType, elementIdx, itemIdx, key, value)
+            soundCommandSources = viewport.collectSoundCommandSources()
+        }
+    }
+
+    Connections {
+        target: mainWindow
+        function onCurrentSceneIdChanged() {
+            if (nodeWorkspace.activeWorkspaceTab === 1)
+                nodeWorkspace.soundCommandSources = viewport.collectSoundCommandSources()
         }
     }
 
@@ -14828,12 +15127,18 @@ Window {
         Repeater {
             model: nodeWorkspace.soundsModel
             delegate: Item {
+                readonly property bool isSyncType: (model.soundType || "loop") === "sync"
+                readonly property var syncGroup: isSyncType && model.syncGroupId !== undefined && model.syncGroupId >= 0
+                    ? nodeWorkspace.syncGroupById(model.syncGroupId) : null
+                readonly property real syncStartSeconds: syncGroup ? nodeWorkspace.timecodeToSeconds(syncGroup.startTimecode) : 0
+                readonly property bool syncShouldLoop: syncGroup ? (syncGroup.endBehavior === "loop") : false
+
                 MediaPlayer {
                     id: loopPlayer
-                    source: (model.enabled && (model.soundType || "loop") === "loop") ? model.filePath : ""
-                    loops: MediaPlayer.Infinite
+                    source: (model.enabled && (isSyncType ? syncGroup !== null : (model.soundType || "loop") === "loop")) ? model.filePath : ""
+                    loops: (isSyncType ? syncShouldLoop : true) ? MediaPlayer.Infinite : 1
                     audioOutput: AudioOutput {
-                        volume: appSettings.muted ? 0.0 : 1.0
+                        volume: appSettings.muted ? 0.0 : (model.mixerVolume !== undefined ? model.mixerVolume : 1.0)
                     }
 
                     readonly property int orbitingNodeId: {
@@ -14848,8 +15153,18 @@ Window {
                     }
 
                     readonly property bool shouldBePlaying: {
-                        if (orbitingNodeId === -1 || !model.enabled || (model.soundType || "loop") !== "loop" || !storyManager.isOpen || mainWindow.currentSceneId === -1)
+                        if (!model.enabled || !storyManager.isOpen || mainWindow.currentSceneId === -1)
                             return false;
+
+                        if (isSyncType) {
+                            if (!syncGroup) return false;
+                            var elapsed = nodeWorkspace.playheadTime - syncStartSeconds;
+                            if (elapsed < 0) return false;
+                            if (!syncShouldLoop && duration > 0 && elapsed * 1000 >= duration) return false;
+                            return true;
+                        }
+
+                        if (orbitingNodeId === -1) return false;
                         if (mainWindow.currentLocationNodeName === "")
                             return false;
 
@@ -14862,12 +15177,17 @@ Window {
                         return false;
                     }
 
+                    function syncPosition() {
+                        if (duration <= 0) return 0;
+                        var elapsedMs = (nodeWorkspace.playheadTime - syncStartSeconds) * 1000;
+                        return syncShouldLoop ? (elapsedMs % duration) : Math.min(elapsedMs, duration);
+                    }
+
                     onShouldBePlayingChanged: {
                         if (shouldBePlaying) {
                             if (playbackState !== MediaPlayer.PlayingState) {
                                 if (duration > 0) {
-                                    var elapsed = Date.now() % duration;
-                                    position = elapsed;
+                                    position = isSyncType ? syncPosition() : (Date.now() % duration);
                                 }
                                 play();
                             }
@@ -14879,8 +15199,7 @@ Window {
                     onMediaStatusChanged: {
                         if (mediaStatus === MediaPlayer.LoadedMedia && shouldBePlaying) {
                             if (duration > 0) {
-                                var elapsed = Date.now() % duration;
-                                position = elapsed;
+                                position = isSyncType ? syncPosition() : (Date.now() % duration);
                             }
                             play();
                         }

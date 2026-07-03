@@ -56,6 +56,22 @@ Item {
         return list
     }
 
+    // Story-wide default for the sound-transition speed of a "cut" jump, editable
+    // alongside the other transition defaults; only used when an item's sound
+    // speed is linked and its transition type is "cut".
+    property real cutSoundSpeedDefault: 0.3
+
+    // Keeps itemSoundSpeed tracking the item's visual transition speed while
+    // itemSoundSpeedLinked is true. Call after any edit to itemTransition or
+    // itemTransitionSpeed. Diverges permanently once the user drags the sound
+    // slider directly (that sets itemSoundSpeedLinked to false elsewhere).
+    function syncSoundSpeedIfLinked(idx) {
+        var it = root.interactivityModel.get(idx)
+        if (!it || it.itemSoundSpeedLinked === false) return
+        var speed = (it.itemTransition === "cut") ? root.cutSoundSpeedDefault : (it.itemTransitionSpeed !== undefined ? it.itemTransitionSpeed : 1.0)
+        root.interactivityModel.setProperty(idx, "itemSoundSpeed", speed)
+    }
+
     function formatTimecode(totalSeconds) {
         function pad2(n) { return (n < 10 ? "0" : "") + Math.floor(n) }
         var fmt = root.timecodeFormat
@@ -227,7 +243,7 @@ Item {
                                 defaultCommand = "sound"; insertIdx = i; break
                             }
                         }
-                        var newItem = { itemTrigger: tab, itemAction: "cue", itemCommand: defaultCommand, itemTransition: "cut", itemTransitionSpeed: 0.4, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.0, itemLookShutter: 0.10, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemVideoPath: "", itemVideoTarget: "fill", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "", itemWhereNetworkId: -1, itemWhereCharName: "", itemWhereOp: "is at", itemWhereNodeName: "", itemWhenChapterId: -1, itemWhenOp: "=", itemWhenSeconds: 0.0, itemWhenFormat: "", itemWhenTC: "" }
+                        var newItem = { itemTrigger: tab, itemAction: "cue", itemCommand: defaultCommand, itemTransition: "cut", itemTransitionSpeed: 0.4, itemSoundSpeed: 0.4, itemSoundSpeedLinked: true, itemWipeFeather: 0.15, itemWipeDirection: "right", itemPushDirection: "right", itemLookYaw: 90.0, itemLookPitch: 0.0, itemLookFovMM: 24.0, itemLookOvershoot: 1.0, itemLookShutter: 0.10, itemTargetSceneId: -1, itemTargetSceneName: "", itemConditionVar: "", itemConditionOp: "is", itemConditionVal: "", itemSoundPath: "", itemSoundVolume: 1.0, itemSoundPan: 0.0, itemSoundTrackName: "", itemSoundSyncGroupId: -1, itemVideoPath: "", itemVideoTarget: "fill", itemUpdateVar: "", itemUpdateOp: "=", itemUpdateVal: "", itemWhereNetworkId: -1, itemWhereCharName: "", itemWhereOp: "is at", itemWhereNodeName: "", itemWhenChapterId: -1, itemWhenOp: "=", itemWhenSeconds: 0.0, itemWhenFormat: "", itemWhenTC: "" }
                         if (insertIdx >= 0) root.interactivityModel.insert(insertIdx, newItem)
                         else root.interactivityModel.append(newItem)
                     }
@@ -1116,6 +1132,7 @@ Item {
                                             anchors.fill: parent
                                             onClicked: {
                                                 root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemTransition", modelData.key)
+                                                root.syncSoundSpeedIfLinked(interactivityDelegate.listIdx)
                                             }
                                         }
                                     }
@@ -1152,6 +1169,7 @@ Item {
                                         var rounded = Math.round(speed * 100) / 100
                                         root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemTransitionSpeed", rounded)
                                         transSpeedField.text = rounded.toFixed(1)
+                                        root.syncSoundSpeedIfLinked(interactivityDelegate.listIdx)
                                     }
                                     background: Rectangle {
                                         x: transSpeedSlider.leftPadding
@@ -1191,6 +1209,7 @@ Item {
                                             text = speed.toFixed(1)
                                             root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemTransitionSpeed", speed)
                                             transSpeedSlider.value = speed <= 2.0 ? speed / 4.0 : 0.5 + (speed - 2.0) / 16.0
+                                            root.syncSoundSpeedIfLinked(interactivityDelegate.listIdx)
                                         }
                                     }
                                     Text {
@@ -1230,6 +1249,122 @@ Item {
                                             anchors.fill: parent
                                             onClicked: root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemPushDirection", modelData)
                                         }
+                                    }
+                                }
+                            }
+                        }
+
+                        Item {
+                            width: parent.width
+                            height: itemCommand === "jump" ? 22 : 0
+                            visible: itemCommand === "jump"
+
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 6
+
+                                Text {
+                                    text: "sound"; font.pixelSize: 10; color: "#aaa"
+                                    Layout.preferredHeight: 22
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+
+                                Rectangle {
+                                    Layout.preferredWidth: 22
+                                    Layout.preferredHeight: 22
+                                    radius: 4
+                                    color: itemSoundSpeedLinked !== false ? "white" : "transparent"
+                                    border.color: "white"; border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                    Image {
+                                        id: soundLinkIcon
+                                        anchors.centerIn: parent
+                                        width: 13; height: 13
+                                        source: "icons/lock.svg"
+                                        fillMode: Image.PreserveAspectFit
+                                        visible: false
+                                    }
+                                    ColorOverlay {
+                                        anchors.fill: soundLinkIcon
+                                        source: soundLinkIcon
+                                        color: itemSoundSpeedLinked !== false ? "#477B78" : "white"
+                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: {
+                                            root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemSoundSpeedLinked", true)
+                                            root.syncSoundSpeedIfLinked(interactivityDelegate.listIdx)
+                                            var it = root.interactivityModel.get(interactivityDelegate.listIdx)
+                                            var s = it.itemSoundSpeed || 1.0
+                                            soundSpeedSlider.value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                                            soundSpeedField.text = s.toFixed(1)
+                                        }
+                                    }
+                                }
+
+                                Slider {
+                                    id: soundSpeedSlider
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 22
+                                    from: 0; to: 1; stepSize: 0
+                                    Component.onCompleted: {
+                                        var s = itemSoundSpeed || 1.0
+                                        value = s <= 2.0 ? s / 4.0 : 0.5 + (s - 2.0) / 16.0
+                                    }
+                                    onMoved: {
+                                        var speed = value <= 0.5 ? value * 4.0 : 2.0 + (value - 0.5) * 16.0
+                                        var rounded = Math.round(speed * 100) / 100
+                                        root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemSoundSpeed", rounded)
+                                        root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemSoundSpeedLinked", false)
+                                        soundSpeedField.text = rounded.toFixed(1)
+                                    }
+                                    background: Rectangle {
+                                        x: soundSpeedSlider.leftPadding
+                                        y: soundSpeedSlider.topPadding + soundSpeedSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 200; implicitHeight: 4
+                                        width: soundSpeedSlider.availableWidth; height: 4
+                                        radius: 2; color: "#333"
+                                        Rectangle {
+                                            width: soundSpeedSlider.visualPosition * parent.width
+                                            height: parent.height; color: "#5DA9A4"; radius: 2
+                                        }
+                                    }
+                                    handle: Rectangle {
+                                        x: soundSpeedSlider.leftPadding + soundSpeedSlider.visualPosition * (soundSpeedSlider.availableWidth - width)
+                                        y: soundSpeedSlider.topPadding + soundSpeedSlider.availableHeight / 2 - height / 2
+                                        implicitWidth: 12; implicitHeight: 12; radius: 6
+                                        color: soundSpeedSlider.pressed ? "#80cfff" : "#5DA9A4"
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.preferredWidth: 52
+                                    Layout.preferredHeight: 22
+                                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                                    TextInput {
+                                        id: soundSpeedField
+                                        anchors.left: parent.left; anchors.right: soundSpeedSuffix.left
+                                        anchors.leftMargin: 4; anchors.rightMargin: 2
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: "white"; font.pixelSize: 10; clip: true; selectByMouse: true
+                                        validator: DoubleValidator { bottom: 0.0; top: 10.0 }
+                                        Component.onCompleted: text = (itemSoundSpeed || 1.0).toFixed(1)
+                                        Keys.onReturnPressed: focus = false
+                                        Keys.onEscapePressed: focus = false
+                                        onEditingFinished: {
+                                            var speed = Math.min(10.0, Math.max(0.0, parseFloat(text) || 0.0))
+                                            text = speed.toFixed(1)
+                                            root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemSoundSpeed", speed)
+                                            root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemSoundSpeedLinked", false)
+                                            soundSpeedSlider.value = speed <= 2.0 ? speed / 4.0 : 0.5 + (speed - 2.0) / 16.0
+                                        }
+                                    }
+                                    Text {
+                                        id: soundSpeedSuffix
+                                        anchors.right: parent.right; anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "sec"; font.pixelSize: 10; color: "#aaa"
                                     }
                                 }
                             }
@@ -1368,6 +1503,7 @@ Item {
                                                 var rounded = Math.round(speed * 100) / 100
                                                 root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemTransitionSpeed", rounded)
                                                 lookSpeedField.text = rounded.toFixed(1)
+                                                root.syncSoundSpeedIfLinked(interactivityDelegate.listIdx)
                                             }
                                             background: Rectangle {
                                                 x: lookSpeedSlider.leftPadding; y: lookSpeedSlider.topPadding + lookSpeedSlider.availableHeight / 2 - height / 2
@@ -1396,6 +1532,7 @@ Item {
                                                     text = speed.toFixed(1)
                                                     root.interactivityModel.setProperty(interactivityDelegate.listIdx, "itemTransitionSpeed", speed)
                                                     lookSpeedSlider.value = speed <= 2.0 ? speed / 4.0 : 0.5 + (speed - 2.0) / 16.0
+                                                    root.syncSoundSpeedIfLinked(interactivityDelegate.listIdx)
                                                 }
                                             }
                                             Text { id: lookSpeedSec; anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; text: "sec"; font.pixelSize: 10; color: "#aaa" }

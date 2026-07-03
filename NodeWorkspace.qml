@@ -11,8 +11,22 @@ Item {
     property alias networksModel: networksModel
     property alias orbitsModel: orbitsModel
     property alias soundsModel: soundsModel
+    // Live models for the scene currently open in the editor — bound in from
+    // understoryui.qml (off viewport.videosModel / viewport.audioTracksModel) so
+    // the mixer's channel strips stay in sync automatically. Interactivity "sound"
+    // cues aren't a live model (they're embedded per-element JSON), so those are
+    // snapshotted into soundCommandSources instead and refreshed on demand.
+    property var activeVideosModel: null
+    property var activeAudioTracksModel: null
+    property var soundCommandSources: []
+    // Bound from mainWindow.currentLocationNodeName — the same location-match
+    // predicate loopingSoundPool uses to decide whether a "sound" node can even
+    // be heard in the current scene. Sound tracks orbiting any other node (or no
+    // node at all) don't get a mixer strip, since they couldn't play here anyway.
+    property string currentLocationNodeName: ""
     property alias charactersModel: charactersModel
     property alias chaptersModel: chaptersModel
+    property alias syncGroupsModel: syncGroupsModel
 
     //
     // MODELS
@@ -41,6 +55,12 @@ Item {
     ListModel {
         id: chaptersModel
     }
+    // syncGroupsModel rows: { groupId:int, groupName:string, startTimecode:string, endBehavior:string }
+    // endBehavior: "loop" | "freeze" | "hide" — holds the sync groups for root.activeChapterId only,
+    // reloaded whenever the active chapter changes.
+    ListModel {
+        id: syncGroupsModel
+    }
 
     // convNodesModel rows: { id:int, x:real, y:real, name:string, nodeType:string, sources:string }
     // nodeType: "enter" | "topic" | "exit" — sources is a JSON array string
@@ -55,6 +75,7 @@ Item {
     property int nextNodeId: 0
     property int activeChapterId: 0
     property int nextChapterId: 1
+    property int nextSyncGroupId: 0
 
     // Drag-circle state (character/sound circle dragged from list onto canvas)
     property bool   isDraggingCircle:      false
@@ -441,10 +462,7 @@ Item {
                 networksModel.append({ netId: nets[i].id, netName: nets[i].name, netColor: nets[i].color })
             root.networkId = netId
             root.loadFromDb(netId)
-            chaptersModel.clear()
-            chaptersModel.append({ chapterId: 0, chapterName: "1" })
-            root.activeChapterId = 0
-            root.nextChapterId = 1
+            root.loadChapters()
             root.timecodeFormat = storyManager.getTimecodeFormat()
 
             var convId = storyManager.ensureDefaultConversation()
@@ -479,7 +497,9 @@ Item {
         var sounds = []
         for (var i = 0; i < soundsModel.count; i++) {
             var s = soundsModel.get(i)
-            sounds.push({ enabled: s.enabled, soundName: s.soundName, filePath: s.filePath, soundType: s.soundType || "loop" })
+            sounds.push({ enabled: s.enabled, soundName: s.soundName, filePath: s.filePath, soundType: s.soundType || "loop",
+                mixerTrackName: s.mixerTrackName || "", mixerVolume: s.mixerVolume !== undefined ? s.mixerVolume : 1.0,
+                mixerPan: s.mixerPan !== undefined ? s.mixerPan : 0.0, syncGroupId: s.syncGroupId !== undefined ? s.syncGroupId : -1 })
         }
         var orbits = []
         for (var i = 0; i < orbitsModel.count; i++) {
@@ -528,8 +548,12 @@ Item {
             charactersModel.append(chars[i])
 
         var snds = data.sounds || []
-        for (var i = 0; i < snds.length; i++)
-            soundsModel.append(snds[i])
+        for (var i = 0; i < snds.length; i++) {
+            var sn = snds[i]
+            soundsModel.append({ enabled: sn.enabled, soundName: sn.soundName, filePath: sn.filePath, soundType: sn.soundType || "loop",
+                mixerTrackName: sn.mixerTrackName || "", mixerVolume: sn.mixerVolume !== undefined ? sn.mixerVolume : 1.0,
+                mixerPan: sn.mixerPan !== undefined ? sn.mixerPan : 0.0, syncGroupId: sn.syncGroupId !== undefined ? sn.syncGroupId : -1 })
+        }
 
         var orbs = data.orbits || []
         for (var i = 0; i < orbs.length; i++)
@@ -924,20 +948,57 @@ Item {
         }
     }
 
+    function saveChapters() {
+        var chapters = []
+        for (var i = 0; i < chaptersModel.count; i++) {
+            var c = chaptersModel.get(i)
+            chapters.push({ chapterId: c.chapterId, chapterName: c.chapterName })
+        }
+        storyManager.setEditorState("chapters", JSON.stringify({
+            chapters: chapters,
+            activeChapterId: root.activeChapterId,
+            nextChapterId: root.nextChapterId
+        }))
+    }
+
+    function loadChapters() {
+        chaptersModel.clear()
+        var raw = storyManager.getEditorState("chapters")
+        var data
+        try { data = raw !== "" ? JSON.parse(raw) : null } catch(e) { data = null }
+
+        if (data && data.chapters && data.chapters.length > 0) {
+            for (var i = 0; i < data.chapters.length; i++)
+                chaptersModel.append(data.chapters[i])
+            root.activeChapterId = data.activeChapterId !== undefined ? data.activeChapterId : data.chapters[0].chapterId
+            root.nextChapterId = data.nextChapterId !== undefined ? data.nextChapterId : (data.chapters.length)
+        } else {
+            chaptersModel.append({ chapterId: 0, chapterName: "1" })
+            root.activeChapterId = 0
+            root.nextChapterId = 1
+        }
+        root.loadSyncGroups()
+    }
+
     function createNewChapter() {
         var newId = root.nextChapterId++
         chaptersModel.append({ chapterId: newId, chapterName: String(chaptersModel.count + 1) })
         root.activeChapterId = newId
+        root.saveChapters()
+        root.loadSyncGroups()
     }
 
     function switchToChapter(chapterId) {
         root.activeChapterId = chapterId
+        root.saveChapters()
+        root.loadSyncGroups()
     }
 
     function renameChapterInModel(chapterId, name) {
         for (var i = 0; i < chaptersModel.count; i++) {
             if (chaptersModel.get(i).chapterId === chapterId) {
                 chaptersModel.setProperty(i, "chapterName", name)
+                root.saveChapters()
                 return
             }
         }
@@ -949,6 +1010,96 @@ Item {
         chaptersModel.remove(idx)
         if (wasActive)
             root.activeChapterId = chaptersModel.get(0).chapterId
+        root.saveChapters()
+        if (wasActive)
+            root.loadSyncGroups()
+    }
+
+    // ------------------------------------------------------------------ sync groups (per chapter)
+
+    function saveSyncGroups() {
+        var groups = []
+        for (var i = 0; i < syncGroupsModel.count; i++) {
+            var g = syncGroupsModel.get(i)
+            groups.push({ groupId: g.groupId, groupName: g.groupName, startTimecode: g.startTimecode, endBehavior: g.endBehavior })
+        }
+        storyManager.setEditorState("sync_groups_" + root.activeChapterId, JSON.stringify({
+            groups: groups,
+            nextSyncGroupId: root.nextSyncGroupId
+        }))
+    }
+
+    function loadSyncGroups() {
+        syncGroupsModel.clear()
+        var raw = storyManager.getEditorState("sync_groups_" + root.activeChapterId)
+        var data
+        try { data = raw !== "" ? JSON.parse(raw) : null } catch(e) { data = null }
+
+        if (data && data.groups) {
+            for (var i = 0; i < data.groups.length; i++)
+                syncGroupsModel.append(data.groups[i])
+            root.nextSyncGroupId = data.nextSyncGroupId !== undefined ? data.nextSyncGroupId : data.groups.length
+        } else {
+            root.nextSyncGroupId = 0
+        }
+    }
+
+    function addSyncGroup() {
+        var newId = root.nextSyncGroupId++
+        syncGroupsModel.append({ groupId: newId, groupName: "sync " + (syncGroupsModel.count + 1), startTimecode: "00:00:00:00", endBehavior: "loop" })
+        root.saveSyncGroups()
+        return newId
+    }
+
+    function renameSyncGroup(groupId, name) {
+        for (var i = 0; i < syncGroupsModel.count; i++) {
+            if (syncGroupsModel.get(i).groupId === groupId) {
+                syncGroupsModel.setProperty(i, "groupName", name)
+                root.saveSyncGroups()
+                return
+            }
+        }
+    }
+
+    function setSyncGroupProp(groupId, key, value) {
+        for (var i = 0; i < syncGroupsModel.count; i++) {
+            if (syncGroupsModel.get(i).groupId === groupId) {
+                syncGroupsModel.setProperty(i, key, value)
+                root.saveSyncGroups()
+                return
+            }
+        }
+    }
+
+    function deleteSyncGroup(groupId) {
+        for (var i = 0; i < syncGroupsModel.count; i++) {
+            if (syncGroupsModel.get(i).groupId === groupId) {
+                syncGroupsModel.remove(i)
+                root.saveSyncGroups()
+                return
+            }
+        }
+    }
+
+    // Seconds since chapter start for a sync group's start timecode, or 0 if unset/unparseable.
+    function timecodeToSeconds(tc) {
+        if (!tc) return 0
+        var secs = timecodeDisplay.parseSMPTE(tc, root.timecodeFormat)
+        return secs >= 0 ? secs : 0
+    }
+
+    // Formats seconds as an "HH:MM:SS:FF" string — used by the sync group editor's
+    // "mark" button to capture the current playhead position.
+    function secondsToTimecode(secs) {
+        return timecodeDisplay.formatSMPTE(secs, root.timecodeFormat)
+    }
+
+    function syncGroupById(groupId) {
+        for (var i = 0; i < syncGroupsModel.count; i++) {
+            var g = syncGroupsModel.get(i)
+            if (g.groupId === groupId) return g
+        }
+        return null
     }
 
     function createNewNetwork() {
@@ -1359,6 +1510,81 @@ Item {
             anchors.left: parent.left
             anchors.leftMargin: 20
             visible: root.activeWorkspaceTab === 1
+        }
+
+        Text {
+            anchors.top: trackHeading.bottom
+            anchors.topMargin: 24
+            anchors.left: parent.left
+            anchors.leftMargin: 20
+            visible: root.activeWorkspaceTab === 1 && root.selectedTrackInfo === null
+            text: "select a track in the mixer"
+            font.pixelSize: 12
+            color: "#555"
+        }
+
+        ScrollView {
+            id: trackScrollView
+            anchors.top: trackHeading.bottom
+            anchors.topMargin: 20
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            anchors.bottomMargin: 8
+            clip: true
+            visible: root.activeWorkspaceTab === 1 && root.selectedTrackInfo !== null
+
+        Column {
+            id: trackSubpanel
+            width: trackScrollView.availableWidth
+            spacing: 16
+
+            Column {
+                width: parent.width
+                spacing: 4
+                Text { text: "name"; font.pixelSize: 10; color: "#aaa" }
+                Rectangle {
+                    width: parent.width; height: 26
+                    color: "transparent"; border.color: "white"; border.width: 1; radius: 4
+                    TextInput {
+                        id: trackNameField
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        color: "white"; font.pixelSize: 12; clip: true; selectByMouse: true
+                        text: root.selectedTrackInfo ? root.selectedTrackInfo.trackName : ""
+                        Keys.onReturnPressed: focus = false
+                        Keys.onEscapePressed: focus = false
+                        onEditingFinished: root.setSelectedTrackName(text)
+                    }
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: 4
+                Text { text: "source"; font.pixelSize: 10; color: "#aaa" }
+                Text {
+                    width: parent.width
+                    text: (root.selectedTrackInfo && root.selectedTrackInfo.filePath) ? root.selectedTrackInfo.filePath.toString().replace(/.*[\/\\]/, "") : "(no file)"
+                    color: "white"; font.pixelSize: 11
+                    elide: Text.ElideMiddle
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: 6
+                Text { text: "sync group"; font.pixelSize: 10; color: "#aaa" }
+
+                SyncGroupEditor {
+                    nodeWorkspace: root
+                    syncGroupId: root.selectedTrackInfo ? root.selectedTrackInfo.syncGroupId : -1
+                    onSyncGroupIdEdited: groupId => root.setSelectedTrackSyncGroup(groupId)
+                }
+            }
+        }
         }
 
         FileDialog {
@@ -2428,7 +2654,7 @@ Item {
                     delegate: Item {
                         id: soundDelegate
                         width: parent.width
-                        height: 26
+                        height: (model.soundType === "sync") ? (26 + 8 + syncSection.height) : 26
                         property int idx: index
                         property bool on: model.enabled
                         property real deleteProgress: 0.0
@@ -2476,7 +2702,11 @@ Item {
                         }
 
                         RowLayout {
-                            anchors.fill: parent
+                            id: soundRowLayout
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            height: 26
                             spacing: 4
 
                             // Toggle icon button
@@ -2740,6 +2970,18 @@ Item {
                             }
 
                         }
+
+                        SyncGroupEditor {
+                            id: syncSection
+                            anchors.top: soundRowLayout.bottom
+                            anchors.topMargin: 8
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            visible: model.soundType === "sync"
+                            nodeWorkspace: root
+                            syncGroupId: model.syncGroupId !== undefined ? model.syncGroupId : -1
+                            onSyncGroupIdEdited: groupId => soundsModel.setProperty(soundDelegate.idx, "syncGroupId", groupId)
+                        }
                     }
                 }
 
@@ -2777,7 +3019,8 @@ Item {
                         hoverEnabled: true
                         onEntered: parent.hovered = true
                         onExited: parent.hovered = false
-                        onClicked: soundsModel.append({ enabled: true, soundName: "", filePath: "", soundType: "loop" })
+                        onClicked: soundsModel.append({ enabled: true, soundName: "", filePath: "", soundType: "loop",
+                            mixerTrackName: "", mixerVolume: 1.0, mixerPan: 0.0, syncGroupId: -1 })
                     }
                 }
             }
@@ -4012,6 +4255,270 @@ Item {
         pressedButtons: root.ctrlPressedButtons
     }
 
+    // ------------------------------------------------------------------ audio mixer
+    // Emitted when a "sound" interactivity-cue track is edited — those aren't a live
+    // ListModel (they're embedded JSON per canvas element), so understoryui.qml
+    // must write the edit back through viewport and hand us a fresh snapshot.
+    signal soundCommandSourceEdited(string elementType, int elementIdx, int itemIdx, string key, var value)
+
+    property string mixerSelectedTrackKey: ""
+    property int mixerRevision: 0
+
+    Connections {
+        target: root.soundsModel
+        function onDataChanged()  { root.mixerRevision++ }
+        function onRowsInserted() { root.mixerRevision++ }
+        function onRowsRemoved()  { root.mixerRevision++ }
+    }
+    Connections {
+        target: root.activeVideosModel
+        function onDataChanged()  { root.mixerRevision++ }
+        function onRowsInserted() { root.mixerRevision++ }
+        function onRowsRemoved()  { root.mixerRevision++ }
+    }
+    Connections {
+        target: root.activeAudioTracksModel
+        function onDataChanged()  { root.mixerRevision++ }
+        function onRowsInserted() { root.mixerRevision++ }
+        function onRowsRemoved()  { root.mixerRevision++ }
+    }
+    Connections {
+        target: root.orbitsModel
+        function onDataChanged()  { root.mixerRevision++ }
+        function onRowsInserted() { root.mixerRevision++ }
+        function onRowsRemoved()  { root.mixerRevision++ }
+    }
+    Connections {
+        target: root.nodesModel
+        function onDataChanged()  { root.mixerRevision++ }
+        function onRowsInserted() { root.mixerRevision++ }
+        function onRowsRemoved()  { root.mixerRevision++ }
+    }
+    Connections {
+        target: root.syncGroupsModel
+        function onDataChanged()  { root.mixerRevision++ }
+        function onRowsInserted() { root.mixerRevision++ }
+        function onRowsRemoved()  { root.mixerRevision++ }
+    }
+
+    // True if the sound at soundsModel[idx] is currently orbited onto the node
+    // matching root.currentLocationNodeName — i.e. it could actually be heard in
+    // the scene that's open right now. Mirrors loopingSoundPool's shouldBePlaying
+    // location check in understoryui.qml.
+    function isSoundAtCurrentLocation(idx) {
+        if (root.currentLocationNodeName === "") return false
+        var orbitNodeId = -1
+        for (var j = 0; j < root.orbitsModel.count; j++) {
+            var o = root.orbitsModel.get(j)
+            if (o.circleType === "sound" && o.itemIdx === idx) { orbitNodeId = o.nodeId; break }
+        }
+        if (orbitNodeId === -1) return false
+        for (var k = 0; k < root.nodesModel.count; k++) {
+            if (root.nodesModel.get(k).id === orbitNodeId && root.nodesModel.get(k).name === root.currentLocationNodeName)
+                return true
+        }
+        return false
+    }
+
+    // Indices into soundsModel currently visible in the mixer — recomputed
+    // whenever sounds/orbits/nodes change or the scene's location changes.
+    property var visibleSoundIndices: {
+        mixerRevision
+        root.currentLocationNodeName
+        var result = []
+        for (var i = 0; i < root.soundsModel.count; i++) {
+            if (root.isSoundAtCurrentLocation(i)) result.push(i)
+        }
+        return result
+    }
+
+    // Resolves mixerSelectedTrackKey ("type:index") against whichever model owns
+    // that track. Returns null if the key doesn't (or no longer) resolve — including
+    // a "sound" track that's no longer at the current scene's location.
+    property var selectedTrackInfo: {
+        mixerRevision
+        root.soundCommandSources
+        var key = root.mixerSelectedTrackKey
+        if (!key) return null
+        var parts = key.split(":")
+        var type = parts[0]
+        var idx = parseInt(parts[1], 10)
+        if (type === "sound" && root.soundsModel && idx >= 0 && idx < root.soundsModel.count && root.isSoundAtCurrentLocation(idx)) {
+            var s = root.soundsModel.get(idx)
+            return { type: type, idx: idx, trackName: s.mixerTrackName || s.soundName || "", filePath: s.filePath || "", syncGroupId: s.syncGroupId !== undefined ? s.syncGroupId : -1 }
+        } else if (type === "video" && root.activeVideosModel && idx >= 0 && idx < root.activeVideosModel.count) {
+            var v = root.activeVideosModel.get(idx)
+            return { type: type, idx: idx, trackName: v.mixerTrackName || "", filePath: v.filePath || "", syncGroupId: v.syncGroupId !== undefined ? v.syncGroupId : -1 }
+        } else if (type === "audioTrack" && root.activeAudioTracksModel && idx >= 0 && idx < root.activeAudioTracksModel.count) {
+            var a = root.activeAudioTracksModel.get(idx)
+            return { type: type, idx: idx, trackName: a.mixerTrackName || "", filePath: a.filePath || "", syncGroupId: a.syncGroupId !== undefined ? a.syncGroupId : -1 }
+        } else if (type === "soundCmd" && idx >= 0 && idx < root.soundCommandSources.length) {
+            var c = root.soundCommandSources[idx]
+            return { type: type, idx: idx, elementType: c.elementType, elementIdx: c.elementIdx, itemIdx: c.itemIdx, trackName: c.mixerTrackName || "", filePath: c.filePath || "", syncGroupId: c.syncGroupId !== undefined ? c.syncGroupId : -1 }
+        }
+        return null
+    }
+
+    function setSelectedTrackName(name) {
+        var info = root.selectedTrackInfo
+        if (!info) return
+        if (info.type === "sound") root.soundsModel.setProperty(info.idx, "mixerTrackName", name)
+        else if (info.type === "video") root.activeVideosModel.setProperty(info.idx, "mixerTrackName", name)
+        else if (info.type === "audioTrack") root.activeAudioTracksModel.setProperty(info.idx, "mixerTrackName", name)
+        else if (info.type === "soundCmd") root.soundCommandSourceEdited(info.elementType, info.elementIdx, info.itemIdx, "itemSoundTrackName", name)
+    }
+
+    function setSelectedTrackSyncGroup(groupId) {
+        var info = root.selectedTrackInfo
+        if (!info) return
+        if (info.type === "sound") root.soundsModel.setProperty(info.idx, "syncGroupId", groupId)
+        else if (info.type === "video") root.activeVideosModel.setProperty(info.idx, "syncGroupId", groupId)
+        else if (info.type === "audioTrack") root.activeAudioTracksModel.setProperty(info.idx, "syncGroupId", groupId)
+        else if (info.type === "soundCmd") root.soundCommandSourceEdited(info.elementType, info.elementIdx, info.itemIdx, "itemSoundSyncGroupId", groupId)
+    }
+
+    Item {
+        id: mixerStage
+        x: 360
+        y: 0
+        width: parent.width - 360 - 36
+        height: parent.height - 50
+        visible: root.activeWorkspaceTab === 1
+
+        Rectangle {
+            anchors.fill: parent
+            color: "#101013"
+        }
+
+        DropArea {
+            anchors.fill: parent
+            onDropped: drop => {
+                if (drop.hasUrls && root.activeAudioTracksModel)
+                    root.activeAudioTracksModel.append({ filePath: drop.urls[0].toString(), mixerTrackName: "", mixerVolume: 1.0, mixerPan: 0.0, syncGroupId: -1 })
+            }
+        }
+
+        Rectangle {
+            id: addTrackButton
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 8
+            width: 26; height: 26
+            radius: 4
+            color: addTrackMouse.containsMouse ? "white" : "transparent"
+            border.color: "white"; border.width: 1
+            Behavior on color { ColorAnimation { duration: 100 } }
+            Text {
+                anchors.centerIn: parent
+                anchors.horizontalCenterOffset: -0.5
+                text: "+"
+                font.pixelSize: 18; font.bold: true
+                color: addTrackMouse.containsMouse ? "darkslategrey" : "white"
+            }
+            MouseArea {
+                id: addTrackMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: {
+                    if (root.activeAudioTracksModel)
+                        root.activeAudioTracksModel.append({ filePath: "", mixerTrackName: "", mixerVolume: 1.0, mixerPan: 0.0, syncGroupId: -1 })
+                }
+            }
+        }
+
+        Flickable {
+            id: mixerFlick
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.topMargin: 40
+            anchors.margins: 8
+            contentWidth: stripsRow.width
+            contentHeight: height
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            Row {
+                id: stripsRow
+                height: mixerFlick.height
+                spacing: 6
+
+                // Only sounds currently orbited onto the scene's location node get a
+                // track — one that couldn't play here shouldn't show up at all.
+                Repeater {
+                    model: root.visibleSoundIndices
+                    delegate: MixerChannelStrip {
+                        id: soundStrip
+                        readonly property int soundIdx: modelData
+                        readonly property var soundRow: { root.mixerRevision; root.soundsModel.get(soundIdx) }
+                        height: stripsRow.height
+                        trackKey: "sound:" + soundIdx
+                        displayName: soundRow ? (soundRow.mixerTrackName || soundRow.soundName || "") : ""
+                        filePath: soundRow ? (soundRow.filePath || "") : ""
+                        volume: soundRow && soundRow.mixerVolume !== undefined ? soundRow.mixerVolume : 1.0
+                        pan: soundRow && soundRow.mixerPan !== undefined ? soundRow.mixerPan : 0.0
+                        selected: root.mixerSelectedTrackKey === trackKey
+                        onSelectedRequested: root.mixerSelectedTrackKey = trackKey
+                        onVolumeDragged: value => root.soundsModel.setProperty(soundIdx, "mixerVolume", value)
+                        onPanDragged: value => root.soundsModel.setProperty(soundIdx, "mixerPan", value)
+                        onFileDropped: path => root.soundsModel.setProperty(soundIdx, "filePath", path)
+                    }
+                }
+
+                Repeater {
+                    model: root.activeVideosModel
+                    delegate: MixerChannelStrip {
+                        height: stripsRow.height
+                        trackKey: "video:" + index
+                        displayName: model.mixerTrackName || ""
+                        filePath: model.filePath || ""
+                        volume: model.mixerVolume !== undefined ? model.mixerVolume : 1.0
+                        pan: model.mixerPan !== undefined ? model.mixerPan : 0.0
+                        selected: root.mixerSelectedTrackKey === trackKey
+                        onSelectedRequested: root.mixerSelectedTrackKey = trackKey
+                        onVolumeDragged: value => root.activeVideosModel.setProperty(index, "mixerVolume", value)
+                        onPanDragged: value => root.activeVideosModel.setProperty(index, "mixerPan", value)
+                    }
+                }
+
+                Repeater {
+                    model: root.activeAudioTracksModel
+                    delegate: MixerChannelStrip {
+                        height: stripsRow.height
+                        trackKey: "audioTrack:" + index
+                        displayName: model.mixerTrackName || ""
+                        filePath: model.filePath || ""
+                        volume: model.mixerVolume !== undefined ? model.mixerVolume : 1.0
+                        pan: model.mixerPan !== undefined ? model.mixerPan : 0.0
+                        selected: root.mixerSelectedTrackKey === trackKey
+                        onSelectedRequested: root.mixerSelectedTrackKey = trackKey
+                        onVolumeDragged: value => root.activeAudioTracksModel.setProperty(index, "mixerVolume", value)
+                        onPanDragged: value => root.activeAudioTracksModel.setProperty(index, "mixerPan", value)
+                        onFileDropped: path => root.activeAudioTracksModel.setProperty(index, "filePath", path)
+                    }
+                }
+
+                Repeater {
+                    model: root.soundCommandSources
+                    delegate: MixerChannelStrip {
+                        height: stripsRow.height
+                        readonly property var src: modelData
+                        trackKey: "soundCmd:" + index
+                        displayName: src.mixerTrackName || ""
+                        filePath: src.filePath || ""
+                        volume: src.mixerVolume !== undefined ? src.mixerVolume : 1.0
+                        pan: src.mixerPan !== undefined ? src.mixerPan : 0.0
+                        selected: root.mixerSelectedTrackKey === trackKey
+                        onSelectedRequested: root.mixerSelectedTrackKey = trackKey
+                        onVolumeDragged: value => root.soundCommandSourceEdited(src.elementType, src.elementIdx, src.itemIdx, "itemSoundVolume", value)
+                        onPanDragged: value => root.soundCommandSourceEdited(src.elementType, src.elementIdx, src.itemIdx, "itemSoundPan", value)
+                    }
+                }
+            }
+        }
+    }
+
     //
     // Right workspace tab strip
     //
@@ -4398,8 +4905,10 @@ Item {
                                     chapBtn.deleteProgress = 0
                                 } else if (chapterBar.draggingIdx === index) {
                                     var targetIdx = chapterBar.computeDropTarget(chapterBar.dragGhostX)
-                                    if (targetIdx !== index)
+                                    if (targetIdx !== index) {
                                         chaptersModel.move(index, targetIdx, 1)
+                                        root.saveChapters()
+                                    }
                                     chapterBar.draggingIdx = -1
                                     chapterBar.wasDragging = true
                                 }
