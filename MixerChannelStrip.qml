@@ -18,11 +18,18 @@ Item {
     // audio-buffer tap sets this. Deliberately NOT derived from the fader position.
     property real level: 0.0
     property bool selected: false
+    // True for standalone tracks dropped/added straight into the mixer (not tied
+    // to a sound node, video element, or interactivity "sound" cue) — tinted
+    // differently so authors can tell them apart, and only these are deletable.
+    property bool isExtra: false
+    property bool deletable: false
+    property real deleteProgress: 0.0
 
     signal selectedRequested()
     signal volumeDragged(real value)
     signal panDragged(real value)
     signal fileDropped(string path)
+    signal deleteRequested()
 
     width: 72
     height: parent ? parent.height : 220
@@ -30,13 +37,25 @@ Item {
     readonly property string fileBaseName: filePath ? filePath.toString().replace(/.*[\/\\]/, "") : ""
     readonly property string headerText: displayName !== "" ? displayName : fileBaseName
 
+    NumberAnimation {
+        id: stripDeleteAnim
+        target: strip
+        property: "deleteProgress"
+        to: 1.0
+        duration: 1200
+        easing.type: Easing.Linear
+        onFinished: {
+            if (strip.deleteProgress >= 1.0) strip.deleteRequested()
+        }
+    }
+
     Rectangle {
         id: stripBg
         anchors.fill: parent
         anchors.margins: 2
         radius: 4
-        color: strip.selected ? "#233a3a" : "#1c1c20"
-        border.color: strip.selected ? "#5DA9A4" : "#2a2a30"
+        color: strip.selected ? (strip.isExtra ? "#3a2a23" : "#233a3a") : (strip.isExtra ? "#241c1c" : "#1c1c20")
+        border.color: strip.selected ? "#5DA9A4" : (strip.isExtra ? "#3a2a2a" : "#2a2a30")
         border.width: strip.selected ? 2 : 1
         Behavior on color { ColorAnimation { duration: 100 } }
         Behavior on border.color { ColorAnimation { duration: 100 } }
@@ -44,6 +63,27 @@ Item {
         MouseArea {
             anchors.fill: parent
             onClicked: strip.selectedRequested()
+        }
+
+        // Right-click and hold to delete — only wired up for deletable (extra)
+        // tracks; tracks tied to a real media object/source can't be removed here.
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.RightButton
+            enabled: strip.deletable
+            z: 10
+            onPressed: mouse => { strip.deleteProgress = 0; stripDeleteAnim.start() }
+            onReleased: mouse => { stripDeleteAnim.stop(); strip.deleteProgress = 0 }
+            onExited: { stripDeleteAnim.stop(); strip.deleteProgress = 0 }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 4
+            color: "#ff4444"
+            opacity: strip.deleteProgress * 0.75
+            visible: strip.deleteProgress > 0
+            z: 9
         }
 
         ColumnLayout {

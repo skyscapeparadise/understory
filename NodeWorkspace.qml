@@ -4699,6 +4699,8 @@ Item {
                     }
                 }
 
+                // Standalone tracks added straight into the mixer — tinted differently
+                // and, unlike every other source type, deletable right from here.
                 Repeater {
                     model: root.activeAudioTracksModel
                     delegate: MixerChannelStrip {
@@ -4709,10 +4711,16 @@ Item {
                         volume: model.mixerVolume !== undefined ? model.mixerVolume : 1.0
                         pan: model.mixerPan !== undefined ? model.mixerPan : 0.0
                         selected: root.mixerSelectedTrackKey === trackKey
+                        isExtra: true
+                        deletable: true
                         onSelectedRequested: root.mixerSelectedTrackKey = trackKey
                         onVolumeDragged: value => root.activeAudioTracksModel.setProperty(index, "mixerVolume", value)
                         onPanDragged: value => root.activeAudioTracksModel.setProperty(index, "mixerPan", value)
                         onFileDropped: path => root.activeAudioTracksModel.setProperty(index, "filePath", path)
+                        onDeleteRequested: {
+                            if (root.mixerSelectedTrackKey === trackKey) root.mixerSelectedTrackKey = ""
+                            root.activeAudioTracksModel.remove(index)
+                        }
                     }
                 }
 
