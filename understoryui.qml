@@ -4125,8 +4125,12 @@ Window {
             property int posRevision: 0
 
             function checkOcclusion() {
-                var vw = viewport.width;
-                var vh = viewport.height;
+                // Image/video rects are stored in story-space coordinates (see toStoryX/Y),
+                // not the fixed 960×540 editor viewport — must compare against the story's
+                // actual resolution or coverage never reaches 100% for stories smaller than
+                // 960×540 (bgOccluded would incorrectly stay false forever).
+                var vw = mainWindow.storyWidth;
+                var vh = mainWindow.storyHeight;
                 var rects = [];
 
                 // Images are opaque unless they're a format that supports alpha
@@ -4854,14 +4858,18 @@ Window {
             ShaderEffect {
                 id: viewportBgShader
                 anchors.fill: parent
-                visible: !viewport.bgOccluded
+                // Editor-only decoration — never render in preview (wastes GPU and, since
+                // this item spans the fixed 960×540 viewport box rather than the story's
+                // actual — possibly smaller — content area, can peek out past the content
+                // in preview for stories under 960×540).
+                visible: !mainWindow.previewActive && !viewport.bgOccluded
                 fragmentShader: "cloudyeditorbg.frag.qsb"
                 property real time: 0
                 property real scale: 25.0         // feature size — lower = bigger clouds, higher = finer
                 property real driftSpeed: 0.25   // how fast the noise evolves
                 property real intensity: 0.10    // contrast/strength of the effect
                 NumberAnimation on time {
-                    running: sceneEditor.visible && !viewport.bgOccluded
+                    running: sceneEditor.visible && !mainWindow.previewActive && !viewport.bgOccluded
                     from: 0
                     to: 1000
                     duration: 1000000
