@@ -188,6 +188,13 @@ Item {
                 imagesModelInst.append({
                     x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
                     filePath: el.filePath || "",
+                    // baseFilePath is the authored/persisted source -- only a user
+                    // edit (file picker, drag-drop, clearSources) ever changes it.
+                    // filePath is the live/rendered value that the how-condition
+                    // system (evaluateAllSourcesForContent etc.) is free to
+                    // overwrite every scene load without corrupting what gets
+                    // saved back to the database (see collectElements() below).
+                    baseFilePath: el.filePath || "",
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
@@ -199,6 +206,7 @@ Item {
                 videosModelInst.append({
                     x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
                     filePath: el.filePath || "",
+                    baseFilePath: el.filePath || "",  // see image case above
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
@@ -219,6 +227,8 @@ Item {
                     x1: el.x, y1: el.y, x2: el.x + el.w, y2: el.y + el.h,
                     fragPath:     el.fragPath     || "",
                     vertPath:     el.vertPath     || "",
+                    baseFragPath: el.fragPath     || "",  // see image case above
+                    baseVertPath: el.vertPath     || "",
                     uniformsJson: el.uniformsJson || "[]",
                     name: el.name || "", stackOrder: z,
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
@@ -348,6 +358,24 @@ Item {
         nativeElementsJson = JSON.stringify(elems)
     }
 
+    // Coalesces rebuild requests fired synchronously in a loop (e.g. a "how
+    // condition" sourcesJson evaluation swapping several image rows' paths
+    // one after another, each one triggering the image delegate's
+    // onTrackedFilePathChanged) into a single _buildNativeElements() call.
+    // Qt.callLater still runs before Qt's next scene-graph sync, so the
+    // native pipeline's beforeSynchronizing-driven snapshot never observes a
+    // stale intermediate JSON -- this only removes N-1 redundant rebuilds
+    // per swap pass, it isn't load-bearing for correctness on its own.
+    property bool _nativeElementsRebuildScheduled: false
+    function _scheduleNativeElementsRebuild() {
+        if (sceneContent._nativeElementsRebuildScheduled) return
+        sceneContent._nativeElementsRebuildScheduled = true
+        Qt.callLater(function() {
+            sceneContent._nativeElementsRebuildScheduled = false
+            sceneContent._buildNativeElements()
+        })
+    }
+
     // Serialize this layer's scene to a JSON string for DB persistence.
     // Note: caller is responsible for flushing selectSettings.saveCurrentInteractivity()
     // before calling this if the select tool is active.
@@ -384,7 +412,9 @@ Item {
             elements.push({ type: "image",
                 x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
-                name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
+                // Persist baseFilePath (the authored source), not filePath (the
+                // how-condition system's live/resolved value) -- see loadScene().
+                name: m.name || "", z_order: m.stackOrder, filePath: m.baseFilePath,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
                 sourcesJson: m.sourcesJson || "[]",
@@ -396,7 +426,8 @@ Item {
             elements.push({ type: "video",
                 x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
-                name: m.name || "", z_order: m.stackOrder, filePath: m.filePath,
+                // See the image case above -- persist baseFilePath, not filePath.
+                name: m.name || "", z_order: m.stackOrder, filePath: m.baseFilePath,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
                 sourcesJson: m.sourcesJson || "[]",
@@ -416,7 +447,9 @@ Item {
                 x: Math.min(m.x1, m.x2), y: Math.min(m.y1, m.y2),
                 w: Math.abs(m.x2 - m.x1), h: Math.abs(m.y2 - m.y1),
                 name: m.name || "", z_order: m.stackOrder,
-                fragPath: m.fragPath, vertPath: m.vertPath,
+                // Persist baseFragPath/baseVertPath (authored), not fragPath/
+                // vertPath (the how-condition system's live/resolved value).
+                fragPath: m.baseFragPath, vertPath: m.baseVertPath,
                 uniformsJson: m.uniformsJson,
                 cursor: m.cursor || "select", cursorPath: m.cursorPath || "",
                 interactivityJson: m.interactivityJson || "[]",
@@ -1858,7 +1891,7 @@ Item {
                     // so this catches every swap _buildNativeElements()'s own one-time
                     // build at loadScene() would otherwise miss.
                     readonly property string trackedFilePath: model.filePath
-                    onTrackedFilePathChanged: sceneContent._buildNativeElements()
+                    onTrackedFilePathChanged: sceneContent._scheduleNativeElementsRebuild()
 
                     // Image fill
                     Image {

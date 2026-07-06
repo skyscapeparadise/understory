@@ -5128,6 +5128,7 @@ Window {
                             x2: viewport.toStoryX(Math.max(viewport.imgX1, viewport.imgX2)),
                             y2: viewport.toStoryY(Math.max(viewport.imgY1, viewport.imgY2)),
                             filePath: imageSettings.selectedFilePath,
+                            baseFilePath: imageSettings.selectedFilePath,
                             name: imageSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false,
@@ -5203,10 +5204,14 @@ Window {
                             x2: viewport.toStoryX(Math.max(viewport.vidX1, viewport.vidX2)),
                             y2: viewport.toStoryY(Math.max(viewport.vidY1, viewport.vidY2)),
                             filePath: videoSettings.selectedFilePath,
+                            baseFilePath: videoSettings.selectedFilePath,
                             name: videoSpatialProps.propName,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false,
                             sourcesJson: "[]",
+                            vidLoop: true,
+                            vidCrossfade: false,
+                            vidCrossfadePct: 5,
                             inTransition: false
                         });
                         viewport.selectVideo(viewport.videosModel.count - 1);
@@ -5268,6 +5273,8 @@ Window {
                                 y2: bounds.y2,
                                 fragPath: newshaderSettings.fragFilePath,
                                 vertPath: newshaderSettings.vertFilePath,
+                                baseFragPath: newshaderSettings.fragFilePath,
+                                baseVertPath: newshaderSettings.vertFilePath,
                                 name: newshaderSettings.propName,
                                 stackOrder: viewport.nextStackOrder++,
                                 uniformsJson: newshaderSettings.buildCurrentUniformsList(),
@@ -6262,6 +6269,8 @@ Window {
                             y2: b.y2,
                             fragPath: newshaderSettings.fragFilePath,
                             vertPath: newshaderSettings.vertFilePath,
+                            baseFragPath: newshaderSettings.fragFilePath,
+                            baseVertPath: newshaderSettings.vertFilePath,
                             name: newshaderSettings.propName,
                             stackOrder: viewport.nextStackOrder++,
                             uniformsJson: newshaderSettings.buildCurrentUniformsList(),
@@ -6291,6 +6300,7 @@ Window {
                         targetSourceIdx = -1;
                     } else if (selectSettings.hasActiveImage) {
                         viewport.imagesModel.setProperty(viewport.selectedImages[0], "filePath", path);
+                        viewport.imagesModel.setProperty(viewport.selectedImages[0], "baseFilePath", path);
                     }
                 }
                 onRejected: { targetSourceIdx = -1 }
@@ -6309,6 +6319,7 @@ Window {
                         targetSourceIdx = -1;
                     } else if (selectSettings.hasActiveVideo) {
                         viewport.videosModel.setProperty(viewport.selectedVideos[0], "filePath", path);
+                        viewport.videosModel.setProperty(viewport.selectedVideos[0], "baseFilePath", path);
                     }
                 }
                 onRejected: { targetSourceIdx = -1 }
@@ -6328,6 +6339,7 @@ Window {
                     } else if (selectSettings.hasActiveShader) {
                         var idx = viewport.selectedShaders[0];
                         viewport.shadersModel.setProperty(idx, "fragPath", path);
+                        viewport.shadersModel.setProperty(idx, "baseFragPath", path);
                         viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(viewport.buildUniformsList(shaderInspector.inspectShader(path))));
                         selectSettings.refreshShaderUniforms();
                     }
@@ -6340,8 +6352,10 @@ Window {
                 title: "Select compiled vertex shader"
                 nameFilters: ["Compiled vertex shaders (*.vert.qsb)"]
                 onAccepted: {
-                    if (selectSettings.hasActiveShader)
+                    if (selectSettings.hasActiveShader) {
                         viewport.shadersModel.setProperty(viewport.selectedShaders[0], "vertPath", selectedFile.toString());
+                        viewport.shadersModel.setProperty(viewport.selectedShaders[0], "baseVertPath", selectedFile.toString());
+                    }
                 }
             }
 
@@ -6379,6 +6393,7 @@ Window {
                             x2: x2,
                             y2: y2,
                             filePath: viewport.dropPendingImagePath,
+                            baseFilePath: viewport.dropPendingImagePath,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false,
                             sourcesJson: "[]"
@@ -6424,6 +6439,7 @@ Window {
                             x2: x2,
                             y2: y2,
                             filePath: viewport.dropPendingVideoPath,
+                            baseFilePath: viewport.dropPendingVideoPath,
                             stackOrder: viewport.nextStackOrder++,
                             locked: false,
                             sourcesJson: "[]",
@@ -7297,13 +7313,21 @@ Window {
                                         mainWindow.y = mainWindow.y + 150;
                                     }
                                 } else if (modelData === "close scene") {
-                                    // Capture thumbnail, save scene state, then initiate transition
+                                    // Capture thumbnail, save scene state, then initiate transition.
+                                    // Elements are collected synchronously here, alongside
+                                    // savedSceneId, rather than inside the async grabToImage
+                                    // callback below -- if the editor switches to a different
+                                    // scene while the thumbnail capture is still in flight (e.g.
+                                    // a quick close-then-open-next-scene), collectSceneElements()
+                                    // read inside the callback would return the *new* scene's
+                                    // elements, which then got saved under this (old) scene's id,
+                                    // silently overwriting it with a different scene's content.
                                     var savedSceneId = mainWindow.currentSceneId;
+                                    var savedElems = viewport.collectSceneElements();
                                     viewport.captureAndSaveThumbnail(savedSceneId, function () {
                                         if (savedSceneId !== -1) {
                                             storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
-                                            var elems = viewport.collectSceneElements()
-                                            storyManager.saveSceneElements(savedSceneId, elems);
+                                            storyManager.saveSceneElements(savedSceneId, savedElems);
                                         }
                                         sceneScript.saveVariablesToDb();
                                         nodeWorkspace.saveToDb();
@@ -8167,13 +8191,17 @@ Window {
                         for (var i = 0; i < selectSourcesModel.count; i++) {
                             var item = selectSourcesModel.get(i);
                             if (item.srcCondition === "else") {
-                                if (syncedType === "image" && syncedIdx < viewport.imagesModel.count)
+                                if (syncedType === "image" && syncedIdx < viewport.imagesModel.count) {
                                     viewport.imagesModel.setProperty(syncedIdx, "filePath", item.srcFilePath);
-                                else if (syncedType === "video" && syncedIdx < viewport.videosModel.count)
+                                    viewport.imagesModel.setProperty(syncedIdx, "baseFilePath", item.srcFilePath);
+                                } else if (syncedType === "video" && syncedIdx < viewport.videosModel.count) {
                                     viewport.videosModel.setProperty(syncedIdx, "filePath", item.srcFilePath);
-                                else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count) {
+                                    viewport.videosModel.setProperty(syncedIdx, "baseFilePath", item.srcFilePath);
+                                } else if (syncedType === "shader" && syncedIdx < viewport.shadersModel.count) {
                                     viewport.shadersModel.setProperty(syncedIdx, "fragPath", item.srcFragPath);
                                     viewport.shadersModel.setProperty(syncedIdx, "vertPath", item.srcVertPath);
+                                    viewport.shadersModel.setProperty(syncedIdx, "baseFragPath", item.srcFragPath);
+                                    viewport.shadersModel.setProperty(syncedIdx, "baseVertPath", item.srcVertPath);
                                 }
                                 break;
                             }
@@ -9283,8 +9311,10 @@ Window {
                                     DropArea {
                                         anchors.fill: parent
                                         onDropped: drop => {
-                                            if (drop.hasUrls && selectSettings.hasActiveImage)
+                                            if (drop.hasUrls && selectSettings.hasActiveImage) {
                                                 viewport.imagesModel.setProperty(viewport.selectedImages[0], "filePath", drop.urls[0].toString());
+                                                viewport.imagesModel.setProperty(viewport.selectedImages[0], "baseFilePath", drop.urls[0].toString());
+                                            }
                                         }
                                     }
                                 }
@@ -9727,8 +9757,10 @@ Window {
                                     DropArea {
                                         anchors.fill: parent
                                         onDropped: drop => {
-                                            if (drop.hasUrls && selectSettings.hasActiveVideo)
+                                            if (drop.hasUrls && selectSettings.hasActiveVideo) {
                                                 viewport.videosModel.setProperty(viewport.selectedVideos[0], "filePath", drop.urls[0].toString());
+                                                viewport.videosModel.setProperty(viewport.selectedVideos[0], "baseFilePath", drop.urls[0].toString());
+                                            }
                                         }
                                     }
                                 }
@@ -10166,6 +10198,7 @@ Window {
                                                 if (path.endsWith(".frag.qsb")) {
                                                     var idx = viewport.selectedShaders[0];
                                                     viewport.shadersModel.setProperty(idx, "fragPath", path);
+                                                    viewport.shadersModel.setProperty(idx, "baseFragPath", path);
                                                     viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(viewport.buildUniformsList(shaderInspector.inspectShader(path))));
                                                     selectSettings.refreshShaderUniforms();
                                                 } else if (path.endsWith(".frag"))
@@ -10224,9 +10257,10 @@ Window {
                                                 if (!drop.hasUrls || !selectSettings.hasActiveShader)
                                                     return;
                                                 var path = drop.urls[0].toString();
-                                                if (path.endsWith(".vert.qsb"))
+                                                if (path.endsWith(".vert.qsb")) {
                                                     viewport.shadersModel.setProperty(viewport.selectedShaders[0], "vertPath", path);
-                                                else if (path.endsWith(".vert"))
+                                                    viewport.shadersModel.setProperty(viewport.selectedShaders[0], "baseVertPath", path);
+                                                } else if (path.endsWith(".vert"))
                                                     newshaderSettings.warnUncompiled();
                                             }
                                         }
@@ -15476,11 +15510,15 @@ Window {
                 // then load story once the close-scene transition finishes
                 // (see sceneEditor2storyHub handler for the final load step)
                 pendingStoryPath = path;
+                // See the "close scene" handler's comment above for why elements
+                // must be collected synchronously here rather than inside the
+                // async grabToImage callback below.
                 var savedSceneId = mainWindow.currentSceneId;
+                var savedElems = viewport.collectSceneElements();
                 viewport.captureAndSaveThumbnail(savedSceneId, function () {
                     if (savedSceneId !== -1) {
                         storyManager.updateSceneName(savedSceneId, sceneNameInput.text);
-                        storyManager.saveSceneElements(savedSceneId, viewport.collectSceneElements());
+                        storyManager.saveSceneElements(savedSceneId, savedElems);
                     }
                     sceneScript.saveVariablesToDb();
                     nodeWorkspace.saveToDb();
