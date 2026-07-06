@@ -55,6 +55,11 @@ try:
 except Exception:
     _SDL3_AVAILABLE = False
 
+try:
+    from hdr_viewport import HDRVideoBridge
+except Exception:
+    HDRVideoBridge = None
+
 versionnumber = "0.4"
 
 
@@ -1815,5 +1820,16 @@ engine.load(qml_file)
 # Quit if loading fails
 if not engine.rootObjects():
     sys.exit(-1)
+
+# Native HDR preview pipeline (Phase 4) -- opt-in via appSettings.hdrPreviewEnabled,
+# no-op unless enabled/supported/on macOS. Falls back to the existing Qt video
+# pipeline entirely on its own if construction fails for any reason.
+if HDRVideoBridge is not None:
+    try:
+        hdrBridge = HDRVideoBridge(engine.rootObjects()[0])
+        if hdrBridge.active:
+            app.aboutToQuit.connect(hdrBridge.cleanup)
+    except Exception as exc:
+        print(f"[hdr_viewport] bridge construction failed, using Qt pipeline: {exc}")
 
 sys.exit(app.exec())

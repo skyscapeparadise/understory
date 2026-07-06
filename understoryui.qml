@@ -17,7 +17,9 @@ Window {
 
     Settings {
         id: appSettings
+        objectName: "appSettings"
         property bool muted: false
+        property bool hdrPreviewEnabled: false
     }
 
     visible: true
@@ -540,6 +542,55 @@ Window {
                             text: muteRect.isOn ? "on" : "off"
                             font.pixelSize: 11
                             color: muteRect.isOn ? "#477B78" : "#888"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
+                    }
+                }
+
+                Text {
+                    text: "video"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: "white"
+                    topPadding: 8
+                }
+
+                Rectangle {
+                    id: hdrPreviewRect
+                    Layout.fillWidth: true
+                    height: 44
+                    radius: 10
+                    property bool isOn: appSettings.hdrPreviewEnabled
+                    color: isOn ? "white" : "transparent"
+                    border.width: 2
+                    border.color: "white"
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: appSettings.hdrPreviewEnabled = !appSettings.hdrPreviewEnabled
+                    }
+                    Item {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        height: 20
+                        Text {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "native HDR preview (restart required)"
+                            font.pixelSize: 14
+                            font.bold: true
+                            color: hdrPreviewRect.isOn ? "#477B78" : "white"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
+                        Text {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: hdrPreviewRect.isOn ? "on" : "off"
+                            font.pixelSize: 11
+                            color: hdrPreviewRect.isOn ? "#477B78" : "#888"
                             Behavior on color { ColorAnimation { duration: 120 } }
                         }
                     }
@@ -3758,6 +3809,23 @@ Window {
             property int foregroundLayer: 0
             readonly property var activeContent: foregroundLayer === 0 ? sceneLayerA : sceneLayerB
             readonly property var stagingContent: foregroundLayer === 0 ? sceneLayerB : sceneLayerA
+            // Polled by the native HDR bridge (hdr_viewport.py) to decide whether the
+            // active/staging scene qualifies for the native pipeline instead of Qt's.
+            readonly property bool activeNativeEligible:  activeContent  ? activeContent.nativeEligible  : false
+            readonly property bool stagingNativeEligible: stagingContent ? stagingContent.nativeEligible : false
+            readonly property string activeNativeVideoPath: activeContent ? activeContent.nativeVideoPath : ""
+            readonly property var activeNativeVideoPlayer: activeContent ? activeContent.nativeVideoPlayer : null
+            readonly property string stagingNativeVideoPath: stagingContent ? stagingContent.nativeVideoPath : ""
+            readonly property var stagingNativeVideoPlayer: stagingContent ? stagingContent.nativeVideoPlayer : null
+            // Strict single-fullscreen-video-only rule, preserved from Phase 4 --
+            // native transition compositing (wipe/slide/look) only ever learned to
+            // blend two video sources, so it stays gated on this even though
+            // steady-state nativeEligible was relaxed in Phase 5 to allow images/text.
+            readonly property bool activeNativeTransitionEligible:  activeContent  ? activeContent.nativeTransitionEligible  : false
+            readonly property bool stagingNativeTransitionEligible: stagingContent ? stagingContent.nativeTransitionEligible : false
+            // z-sorted element snapshot (video/image/text) for the native pipeline.
+            readonly property string activeNativeElementsJson:  activeContent  ? activeContent.nativeElementsJson  : "[]"
+            readonly property string stagingNativeElementsJson: stagingContent ? stagingContent.nativeElementsJson : "[]"
 
             // Pre-warm: staging is loaded with the next likely scene before the user clicks
             property int  preWarmSceneId:      -1     // which scene is staged
@@ -5223,6 +5291,7 @@ Window {
             // is scaled to fill the screen.
             Item {
                 id: contentScaler
+                objectName: "contentScaler"
                 // z:10 keeps scene layers above viewport-space MouseAreas (box-select at z:2,
                 // creation MouseAreas at z:998 are only enabled for their specific tools).
                 z: 10
@@ -5407,6 +5476,74 @@ Window {
                 y: Math.min(viewport.shaderY1, viewport.shaderY2)
                 width: Math.abs(viewport.shaderX2 - viewport.shaderX1)
                 height: Math.abs(viewport.shaderY2 - viewport.shaderY1)
+                color: "transparent"
+                border.color: "white"
+                border.width: 1
+                z: 998
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    color: "transparent"
+                    border.color: "black"
+                    border.width: 1
+                }
+            }
+
+            // In-progress text box rubber-band. Moved here from SceneContent.qml (a
+            // scaled/offset child of contentScaler) -- raw viewport-pixel coordinates
+            // like tbX1/tbX2 are only meaningful in this un-scaled viewport space, same
+            // as the area/shader rubber-bands directly above; inside contentScaler they
+            // were being reinterpreted as story-space coordinates, collapsing the whole
+            // preview into a small box pinned near the story canvas's origin.
+            Rectangle {
+                visible: viewport.textBoxDragging
+                x: Math.min(viewport.tbX1, viewport.tbX2)
+                y: Math.min(viewport.tbY1, viewport.tbY2)
+                width: Math.abs(viewport.tbX2 - viewport.tbX1)
+                height: Math.abs(viewport.tbY2 - viewport.tbY1)
+                color: "transparent"
+                border.color: "white"
+                border.width: 1
+                z: 998
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    color: "transparent"
+                    border.color: "black"
+                    border.width: 1
+                }
+            }
+
+            // In-progress image rubber-band (see note above the text rubber-band)
+            Rectangle {
+                visible: viewport.imageDragging
+                x: Math.min(viewport.imgX1, viewport.imgX2)
+                y: Math.min(viewport.imgY1, viewport.imgY2)
+                width: Math.abs(viewport.imgX2 - viewport.imgX1)
+                height: Math.abs(viewport.imgY2 - viewport.imgY1)
+                color: "transparent"
+                border.color: "white"
+                border.width: 1
+                z: 998
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    color: "transparent"
+                    border.color: "black"
+                    border.width: 1
+                }
+            }
+
+            // In-progress video rubber-band (see note above the text rubber-band)
+            Rectangle {
+                visible: viewport.videoDragging
+                x: Math.min(viewport.vidX1, viewport.vidX2)
+                y: Math.min(viewport.vidY1, viewport.vidY2)
+                width: Math.abs(viewport.vidX2 - viewport.vidX1)
+                height: Math.abs(viewport.vidY2 - viewport.vidY1)
                 color: "transparent"
                 border.color: "white"
                 border.width: 1
@@ -7569,7 +7706,7 @@ Window {
                     readonly property var weightValues: [Font.Thin, Font.ExtraLight, Font.Light, Font.Normal, Font.Medium, Font.DemiBold, Font.Bold, Font.ExtraBold, Font.Black]
                     property int txtWeightIndex: 3
                     property int txtWeight: weightValues[txtWeightIndex]
-                    property int txtSize: 16
+                    property int txtSize: 64
                     property bool txtBold: false
                     property bool txtItalic: false
                     property bool txtUnderline: false
@@ -8644,7 +8781,14 @@ Window {
                     Connections {
                         target: viewport
                         function onSelectionRevisionChanged() {
-                            if (!selectSettings.hasActiveTb)
+                            // Read the live selection directly rather than through the
+                            // separate hasActiveTb binding -- that binding has its own
+                            // dependencies (selectionRevision AND selectedTbs AND
+                            // selectionCount) and isn't guaranteed to have already
+                            // re-evaluated by the time this signal handler runs, which
+                            // could skip this sync and leave tbSize (etc.) stale from
+                            // whatever text box was selected previously.
+                            if (viewport.selectedTbs.length !== 1 || viewport.selectionCount !== 1)
                                 return;
                             var tb = viewport.textBoxesModel.get(viewport.selectedTbs[0]);
                             var fi = selectSettings.fontFamilies.indexOf(tb.family);

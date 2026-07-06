@@ -180,7 +180,9 @@ Item {
                     cursor: el.cursor || "select", cursorPath: el.cursorPath || "",
                     interactivityJson: el.interactivityJson || "[]",
                     template: el.template || "none",
-                    locked: el.locked || false
+                    locked: el.locked || false,
+                    nativeTexturePath: "",
+                    nativeTextureRev: 0
                 })
             } else if (el.type === "image") {
                 imagesModelInst.append({
@@ -236,6 +238,114 @@ Item {
             }
             if (z >= nextStackOrder) nextStackOrder = z + 1
         }
+        nativeEligible = _computeNativeEligible()
+        nativeTransitionEligible = _computeNativeTransitionEligible()
+        // nativeEligible no longer implies exactly one video (Phase 5 allows
+        // image/text-only scenes) -- guard the count before indexing.
+        nativeVideoPath = (nativeEligible && videosModelInst.count === 1) ? videosModelInst.get(0).filePath : ""
+        nativeVideoPlayer = null
+        // videosRepeater's delegate (vidDelegate) may not exist yet at this exact
+        // point in some model-update orderings -- Qt.callLater defers this one
+        // event-loop tick, by which point Repeater delegate creation is done.
+        if (nativeEligible && videosModelInst.count === 1) Qt.callLater(_bindNativeVideoPlayer)
+        _buildNativeElements()
+    }
+
+    // Re-resolves nativeVideoPlayer from the live Repeater state. Safe to call
+    // redundantly (e.g. if a second loadScene() fires before this one's
+    // callLater runs) since it always reads current state, not a snapshot.
+    function _bindNativeVideoPlayer() {
+        if (!nativeEligible) return
+        var item = videosRepeater.itemAt(0)
+        nativeVideoPlayer = item ? item.player : null
+    }
+
+    // ── Native HDR preview pipeline (Phase 4/5) ─────────────────────────────
+    // Two distinct eligibility rules. Steady-state (nativeEligible) is
+    // relaxed as of Phase 5: 0 or 1 video (image/text-only scenes now
+    // qualify) plus any number of images/text, nothing else on canvas
+    // besides areas (which render nothing). A video, if present, still must
+    // be fullscreen and non-crossfade -- the renderer no longer strictly
+    // needs that, but relaxing it further is separate future work, not this
+    // phase's risk to take on. Transition eligibility (nativeTransitionEligible)
+    // preserves Phase 4's original strict rule verbatim (exactly one
+    // fullscreen video, nothing else at all) since native wipe/slide/look
+    // compositing only ever learned to blend two video sources -- a
+    // transition into/out of anything else falls back to Qt for that
+    // transition's duration (see hdr_viewport.py's qt_fallback path).
+    // Both recomputed once per loadScene() call, not live bindings -- editing
+    // only happens outside preview mode, and re-evaluating on every model
+    // mutation during editing would be wasted work.
+    property bool nativeEligible: false
+    property bool nativeTransitionEligible: false
+    property string nativeVideoPath: ""
+    // The real MediaPlayer driving the qualifying video, so the native
+    // pipeline can sync its own frame selection to MediaPlayer.position
+    // instead of reimplementing audio-independent playback pacing.
+    property var nativeVideoPlayer: null
+    // z-sorted [{type,x1,y1,x2,y2,z,path,rev}, ...] snapshot for the native
+    // pipeline to render -- see _buildNativeElements().
+    property string nativeElementsJson: "[]"
+
+    function _videoSpansFullCanvas(v) {
+        if (!viewportRef) return false
+        var storyW = viewportRef.contentWidth
+        var storyH = viewportRef.contentHeight
+        var eps = 0.5
+        return Math.min(v.x1, v.x2) <= eps && Math.min(v.y1, v.y2) <= eps &&
+               Math.max(v.x1, v.x2) >= storyW - eps && Math.max(v.y1, v.y2) >= storyH - eps
+    }
+
+    function _computeNativeEligible() {
+        if (shadersModelInst.count !== 0) return false
+        if (videosModelInst.count > 1) return false
+        if (videosModelInst.count === 1) {
+            var v = videosModelInst.get(0)
+            if (v.vidCrossfade) return false
+            if (!_videoSpansFullCanvas(v)) return false
+        }
+        var renderable = videosModelInst.count + imagesModelInst.count + textBoxesModelInst.count
+        return renderable > 0
+    }
+
+    function _computeNativeTransitionEligible() {
+        if (videosModelInst.count !== 1) return false
+        if (imagesModelInst.count !== 0 || textBoxesModelInst.count !== 0 || shadersModelInst.count !== 0) return false
+        var v = videosModelInst.get(0)
+        if (v.vidCrossfade) return false
+        return _videoSpansFullCanvas(v)
+    }
+
+    // Builds the z-sorted element snapshot the native pipeline polls. Called
+    // from loadScene() and whenever a resolved path changes outside a full
+    // reload (image sourcesJson swaps -- see the image delegate).
+    function _buildNativeElements() {
+        if (!nativeEligible) { nativeElementsJson = "[]"; return }
+        var elems = []
+        var i, m
+        for (i = 0; i < videosModelInst.count; i++) {
+            m = videosModelInst.get(i)
+            elems.push({ type: "video", x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2, z: m.stackOrder, path: m.filePath, rev: 0 })
+        }
+        for (i = 0; i < imagesModelInst.count; i++) {
+            m = imagesModelInst.get(i)
+            elems.push({ type: "image", x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2, z: m.stackOrder, path: m.filePath, rev: 0 })
+        }
+        // Matches tbDelegate._tbPad / tbCaptureText's own inset in the video/image
+        // Repeater above -- the rasterized PNG's content only covers the inset
+        // interior (matching where Qt's real tbTextEdit actually sits, not the
+        // full model box), so its on-screen position must be inset the same way.
+        var tbPad = 6 / editorScaleFactor
+        for (i = 0; i < textBoxesModelInst.count; i++) {
+            m = textBoxesModelInst.get(i)
+            if (!m.nativeTexturePath) continue  // not rasterized yet -- skip until it is
+            elems.push({
+                type: "text", z: m.stackOrder, path: m.nativeTexturePath, rev: m.nativeTextureRev,
+                x1: m.x1 + tbPad, y1: m.y1 + tbPad, x2: m.x2 - tbPad, y2: m.y2 - tbPad
+            })
+        }
+        elems.sort(function(a, b) { return a.z - b.z })
+        nativeElementsJson = JSON.stringify(elems)
     }
 
     // Serialize this layer's scene to a JSON string for DB persistence.
@@ -1082,6 +1192,78 @@ Item {
                     property real origAspect: 1
                     property bool isBeingDeleted: isInteractive && (buttonGridRef.selectedTool === "destroy" || viewportRef.tempDestroyMode) && viewportRef.deleteTargetType === "tb" && viewportRef.deleteTargetIndex === index
 
+                    // tbTextEdit sits inset from the model box (x: 34/editorScaleFactor
+                    // vs the border's x: 28/editorScaleFactor -- a fixed 6-editor-pixel
+                    // gap on each side), not flush with model.x1/y1/x2/y2. The native
+                    // capture/positioning below must match this exactly or the
+                    // rasterized text lands at a visibly different spot than Qt's.
+                    readonly property real _tbPad: 6 / sceneContent.editorScaleFactor
+
+                    // ── Native HDR preview pipeline (Phase 5 Stage C) ───────────────
+                    // Text isn't rendered natively via real font shaping -- instead Qt
+                    // rasterizes this box to a PNG (the same grabToImage/saveToFile
+                    // pattern already used for scene thumbnails), and the native
+                    // pipeline treats the result exactly like any other image element.
+                    // Rasterization only ever needs to happen while editing (never
+                    // during preview, since text is immutable then), so re-rasterizing
+                    // on every keystroke is debounced; the very first rasterization on
+                    // scene load fires immediately (not debounced) to minimize the
+                    // window where preview would show stale/missing text.
+                    property string _textStyleKey: model.content + "" + model.family + "" +
+                        model.tbWeight + "" + model.size + "" + model.italic + "" +
+                        model.underline + "" + model.textColor
+                    on_TextStyleKeyChanged: {
+                        if (tbDelegate._rasterizedOnce) tbRasterizeTimer.restart()
+                    }
+                    property bool _rasterizedOnce: false
+
+                    function rasterizeText() {
+                        tbDelegate._rasterizedOnce = true
+                        var rev = (model.nativeTextureRev || 0) + 1
+                        // SceneContent.qml has no id-scope access to mainWindow (a
+                        // separate component file) for a scene-id-based name --
+                        // Date.now() + index + rev is unique enough on its own.
+                        var path = "/tmp/understory_text_" + Date.now() + "_" + index + "_" + rev + ".png"
+                        tbCaptureText.grabToImage(function (result) {
+                            result.saveToFile(path)
+                            textBoxesModel.setProperty(index, "nativeTexturePath", path)
+                            textBoxesModel.setProperty(index, "nativeTextureRev", rev)
+                            sceneContent._buildNativeElements()
+                        }, Qt.size(tbCaptureText.width, tbCaptureText.height))
+                    }
+
+                    Timer {
+                        id: tbRasterizeTimer
+                        interval: 250
+                        repeat: false
+                        onTriggered: tbDelegate.rasterizeText()
+                    }
+
+
+                    // Off-screen (not visible:false -- an invisible item isn't rendered
+                    // at all, so grabToImage would just capture blank; layer.enabled
+                    // forces Qt to render it to a texture despite being off-screen, the
+                    // same technique already used for thumbnailCaptureSurface). Sized in
+                    // story-space (matching model.size's units) so word-wrap breaks land
+                    // exactly where the real box's story-space width would wrap them,
+                    // independent of the editor's current zoom/scale.
+                    Text {
+                        id: tbCaptureText
+                        x: -100000
+                        y: -100000
+                        width: Math.max(1, model.x2 - model.x1 - 2 * tbDelegate._tbPad)
+                        height: Math.max(1, model.y2 - model.y1 - 2 * tbDelegate._tbPad)
+                        layer.enabled: true
+                        text: model.content
+                        color: model.textColor
+                        font.family: model.family
+                        font.weight: model.tbWeight
+                        font.pixelSize: model.size
+                        font.italic: model.italic
+                        font.underline: model.underline
+                        wrapMode: Text.Wrap
+                    }
+
                     // Visual border (inset by 28px to match model coordinates)
                     Rectangle {
                         x: 28 / sceneContent.editorScaleFactor
@@ -1102,10 +1284,11 @@ Item {
 
                     TextEdit {
                         id: tbTextEdit
-                        x: 34
-                        y: 34
-                        width: parent.width - 68
-                        height: parent.height - 68
+                        x: 34 / sceneContent.editorScaleFactor
+                        y: 34 / sceneContent.editorScaleFactor
+                        width: parent.width - 68 / sceneContent.editorScaleFactor
+                        height: parent.height - 68 / sceneContent.editorScaleFactor
+                        text: model.content
                         color: model.textColor
                         font.family: model.family
                         font.weight: model.tbWeight
@@ -1628,6 +1811,7 @@ Item {
                     }
 
                     Component.onCompleted: {
+                        rasterizeText();
                         if (index === viewportRef.pendingFocusTextBox) {
                             tbDelegate.editing = true;
                             tbTextEdit.forceActiveFocus();
@@ -1661,6 +1845,20 @@ Item {
                     property real origY2: 0
                     property real origAspect: 1
                     property bool isBeingDeleted: isInteractive && (buttonGridRef.selectedTool === "destroy" || viewportRef.tempDestroyMode) && viewportRef.deleteTargetType === "image" && viewportRef.deleteTargetIndex === index
+
+                    // Native HDR preview pipeline (Phase 5 Stage D): a "how condition"
+                    // sourcesJson swap (evaluateAllSourcesForContent/completeVideoTransition
+                    // in understoryui.qml) mutates model.filePath directly, with no
+                    // loadScene() call involved at all -- nativeElementsJson was only ever
+                    // built once at load time, so without this push it would silently keep
+                    // referencing the old (now-wrong) image forever after a swap, exactly
+                    // the same gap Phase 4 Stage 5 found and fixed for video. model.filePath
+                    // bindings are reliably reactive in a delegate context (unlike
+                    // ListModel.get(i).x snapshot reads used elsewhere in this codebase),
+                    // so this catches every swap _buildNativeElements()'s own one-time
+                    // build at loadScene() would otherwise miss.
+                    readonly property string trackedFilePath: model.filePath
+                    onTrackedFilePathChanged: sceneContent._buildNativeElements()
 
                     // Image fill
                     Image {
@@ -2210,6 +2408,7 @@ Item {
 
             // Completed videos
             Repeater {
+                id: videosRepeater
                 model: videosModel
                 delegate: Item {
                     id: vidDelegate
@@ -2219,6 +2418,10 @@ Item {
                     height: model.y2 - model.y1 + 56 / sceneContent.editorScaleFactor
                     z: 100 + model.stackOrder
                     layer.enabled: !sceneContent.previewActive
+
+                    // Exposed so sceneContent._bindNativeVideoPlayer() can hand this
+                    // MediaPlayer's `position` to the native HDR pipeline for sync.
+                    readonly property var player: vidPlayer
 
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedVideos.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
@@ -2296,6 +2499,16 @@ Item {
                     }
 
                     onTrackedFilePathChanged: {
+                        // nativeVideoPath is only set once inside loadScene() -- without this,
+                        // a mid-clip source swap (evaluateAllSourcesForContent/
+                        // completeVideoTransition mutating model.filePath directly, no
+                        // loadScene() call involved) would leave the native pipeline
+                        // silently stuck on the old file forever, not just flash once.
+                        // model.filePath bindings are reliably reactive in a delegate
+                        // context (unlike ListModel.get(i).x snapshot reads elsewhere in
+                        // this file), so pushing from here catches every case loadScene()
+                        // itself would otherwise miss.
+                        if (sceneContent.nativeEligible) sceneContent.nativeVideoPath = trackedFilePath
                         if (!vidDelegate.videoReadySignaled) {
                             // Still in initial load — follow model directly, no freeze needed
                             vidDelegate.liveFilePath = trackedFilePath
@@ -3221,67 +3434,6 @@ Item {
                                 vidSimulateMouseArea.fireInteractivity("hover")
                         }
                     }
-                }
-            }
-
-            // In-progress text box rubber-band
-            Rectangle {
-                visible: viewportRef.textBoxDragging
-                x: Math.min(viewportRef.tbX1, viewportRef.tbX2)
-                y: Math.min(viewportRef.tbY1, viewportRef.tbY2)
-                width: Math.abs(viewportRef.tbX2 - viewportRef.tbX1)
-                height: Math.abs(viewportRef.tbY2 - viewportRef.tbY1)
-                color: "transparent"
-                border.color: "white"
-                border.width: 1
-                z: 998
-
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 1
-                    color: "transparent"
-                    border.color: "black"
-                    border.width: 1
-                }
-            }
-
-            // In-progress image rubber-band
-            Rectangle {
-                visible: viewportRef.imageDragging
-                x: Math.min(viewportRef.imgX1, viewportRef.imgX2)
-                y: Math.min(viewportRef.imgY1, viewportRef.imgY2)
-                width: Math.abs(viewportRef.imgX2 - viewportRef.imgX1)
-                height: Math.abs(viewportRef.imgY2 - viewportRef.imgY1)
-                color: "transparent"
-                border.color: "white"
-                border.width: 1
-                z: 998
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 1
-                    color: "transparent"
-                    border.color: "black"
-                    border.width: 1
-                }
-            }
-
-            // In-progress video rubber-band
-            Rectangle {
-                visible: viewportRef.videoDragging
-                x: Math.min(viewportRef.vidX1, viewportRef.vidX2)
-                y: Math.min(viewportRef.vidY1, viewportRef.vidY2)
-                width: Math.abs(viewportRef.vidX2 - viewportRef.vidX1)
-                height: Math.abs(viewportRef.vidY2 - viewportRef.vidY1)
-                color: "transparent"
-                border.color: "white"
-                border.width: 1
-                z: 998
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 1
-                    color: "transparent"
-                    border.color: "black"
-                    border.width: 1
                 }
             }
 
