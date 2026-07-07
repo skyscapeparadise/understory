@@ -3809,6 +3809,21 @@ Window {
             property int foregroundLayer: 0
             readonly property var activeContent: foregroundLayer === 0 ? sceneLayerA : sceneLayerB
             readonly property var stagingContent: foregroundLayer === 0 ? sceneLayerB : sceneLayerA
+            // Mirrors SceneContent.qml's qtPresentationSuspended (see there
+            // for the full rationale) for the transition-compositing items
+            // below, which live in understoryui.qml rather than
+            // SceneContent.qml. Phase 7 Part 4 simplified this to
+            // hdrPreviewEnabled alone -- the plain editor canvas is native
+            // now too, not just preview.
+            readonly property bool qtPresentationSuspended: appSettings.hdrPreviewEnabled
+
+            // Phase 7 Part 4: true whenever the scene editor screen itself
+            // is showing (covers both plain editing and previewing) --
+            // read by hdr_viewport.py's _should_be_visible() so the opaque
+            // native window doesn't cover the story hub/launch screen too
+            // (hdrPreviewEnabled alone is true from app startup regardless
+            // of which screen is showing).
+            readonly property bool sceneEditorVisible: sceneEditor.visible
             // Polled by the native HDR bridge (hdr_viewport.py) to decide whether the
             // active/staging scene qualifies for the native pipeline instead of Qt's.
             readonly property bool activeNativeEligible:  activeContent  ? activeContent.nativeEligible  : false
@@ -3826,6 +3841,45 @@ Window {
             // z-sorted element snapshot (video/image/text) for the native pipeline.
             readonly property string activeNativeElementsJson:  activeContent  ? activeContent.nativeElementsJson  : "[]"
             readonly property string stagingNativeElementsJson: stagingContent ? stagingContent.nativeElementsJson : "[]"
+            // Phase 7 Part 4: selected-element border+handle chrome for the
+            // active layer only -- chrome is an editing concern, never shown
+            // mid-transition (see hdr_viewport.py's _composite_chrome_pass).
+            readonly property string activeNativeChromeJson: activeContent ? activeContent.nativeChromeJson : "[]"
+
+            // Phase 7 Part 4: viewport-level chrome that isn't per-element --
+            // creation rubber-bands/box-select marquee (raw viewport-pixel
+            // space, converted via toStoryX/toStoryY, same as their Qt-side
+            // x/y bindings above) and the multi-select groupBBox (already
+            // story-space via viewport.groupBounds(), no conversion needed).
+            // A plain JS-block binding here reactively recomputes whenever
+            // any read dependency changes, same as any other QML property
+            // binding -- no explicit rebuild-scheduling needed, unlike the
+            // ListModel-role-driven nativeChromeJson above.
+            readonly property string nativeChromeExtraJson: {
+                var items = []
+                var bw = 2 / editorScale
+                function pushRB(active, x1, x2, y1, y2) {
+                    if (!active) return
+                    items.push({
+                        kind: "rubberband", borderWidth: bw,
+                        x1: toStoryX(Math.min(x1, x2)), y1: toStoryY(Math.min(y1, y2)),
+                        x2: toStoryX(Math.max(x1, x2)), y2: toStoryY(Math.max(y1, y2))
+                    })
+                }
+                pushRB(areaDragging, areaX1, areaX2, areaY1, areaY2)
+                pushRB(shaderDragging, shaderX1, shaderX2, shaderY1, shaderY2)
+                pushRB(textBoxDragging, tbX1, tbX2, tbY1, tbY2)
+                pushRB(imageDragging, imgX1, imgX2, imgY1, imgY2)
+                pushRB(videoDragging, vidX1, vidX2, vidY1, vidY2)
+                pushRB(boxSelecting && !capturingThumbnail, boxSelectX1, boxSelectX2, boxSelectY1, boxSelectY2)
+                if (buttonGrid.selectedTool === "select" && selectionCount > 1) {
+                    items.push({
+                        kind: "group", borderWidth: bw, handleSize: 8 / editorScale,
+                        x1: groupBBox.gbX1, y1: groupBBox.gbY1, x2: groupBBox.gbX2, y2: groupBBox.gbY2
+                    })
+                }
+                return JSON.stringify(items)
+            }
 
             // Pre-warm: staging is loaded with the next likely scene before the user clicks
             property int  preWarmSceneId:      -1     // which scene is staged
@@ -4455,6 +4509,37 @@ Window {
             function isVideoPath(path) {
                 var p = path.toLowerCase();
                 return p.endsWith(".mp4") || p.endsWith(".mov") || p.endsWith(".mkv") || p.endsWith(".avi") || p.endsWith(".webm");
+            }
+
+            // Phase 7 Part 2: two fully separate shader systems selected by
+            // hdrPreviewEnabled -- old .qsb-based shader authoring stays
+            // completely unchanged when the setting is off (so old stories
+            // keep working), while raw .frag/.vert GLSL source is used
+            // instead when it's on (native pipeline, no qsb involved at
+            // all -- see ShaderInspector.inspectShader in understory.py for
+            // the matching reflection-source split). These helpers are the
+            // single place every shader file dialog/drag-drop handler reads
+            // from, rather than duplicating the mode check at each site.
+            function shaderFragNameFilters() {
+                return appSettings.hdrPreviewEnabled
+                    ? ["Fragment shaders (*.frag)"]
+                    : ["Compiled fragment shaders (*.frag.qsb)"];
+            }
+            function shaderVertNameFilters() {
+                return appSettings.hdrPreviewEnabled
+                    ? ["Vertex shaders (*.vert)"]
+                    : ["Compiled vertex shaders (*.vert.qsb)"];
+            }
+            function shaderNameFilters() {
+                return appSettings.hdrPreviewEnabled
+                    ? ["Shaders (*.frag *.vert)"]
+                    : ["Compiled shaders (*.frag.qsb *.vert.qsb)"];
+            }
+            function isFragShaderPath(path) {
+                return appSettings.hdrPreviewEnabled ? path.endsWith(".frag") : path.endsWith(".frag.qsb");
+            }
+            function isVertShaderPath(path) {
+                return appSettings.hdrPreviewEnabled ? path.endsWith(".vert") : path.endsWith(".vert.qsb");
             }
 
             // ------------------------------------------------------------------ scene persistence
@@ -5256,11 +5341,19 @@ Window {
                     var w = Math.abs(viewport.shaderX2 - viewport.shaderX1);
                     var h = Math.abs(viewport.shaderY2 - viewport.shaderY1);
                     if (w > 2 && h > 2) {
+                        // Every other element type's creation flow converts
+                        // viewport-pixel drag bounds to story-space via
+                        // toStoryX/toStoryY before storing (area/text/image/
+                        // video all do this) -- this one never did, which
+                        // was invisible at the legacy fixed 960x540
+                        // resolution (a 1:1 mapping) but places the shader
+                        // in a tiny wrong corner at any other story
+                        // resolution.
                         var bounds = {
-                            x1: Math.min(viewport.shaderX1, viewport.shaderX2),
-                            y1: Math.min(viewport.shaderY1, viewport.shaderY2),
-                            x2: Math.max(viewport.shaderX1, viewport.shaderX2),
-                            y2: Math.max(viewport.shaderY1, viewport.shaderY2)
+                            x1: viewport.toStoryX(Math.min(viewport.shaderX1, viewport.shaderX2)),
+                            y1: viewport.toStoryY(Math.min(viewport.shaderY1, viewport.shaderY2)),
+                            x2: viewport.toStoryX(Math.max(viewport.shaderX1, viewport.shaderX2)),
+                            y2: viewport.toStoryY(Math.max(viewport.shaderY1, viewport.shaderY2))
                         };
                         if (newshaderSettings.fragFilePath === "") {
                             viewport.pendingShaderBounds = bounds;
@@ -5329,6 +5422,7 @@ Window {
                 isInteractive: viewport.foregroundLayer === 0
                 previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
+                hdrPreviewEnabled: appSettings.hdrPreviewEnabled
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
                 // Foreground: fully opaque.  Staging during dissolve: fades 0→1.
@@ -5363,6 +5457,7 @@ Window {
                 isInteractive: viewport.foregroundLayer === 1
                 previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
+                hdrPreviewEnabled: appSettings.hdrPreviewEnabled
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
                 opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 1 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
@@ -5388,16 +5483,20 @@ Window {
             ShaderEffectSource {
                 id: texA
                 sourceItem: sceneLayerA
-                live: viewport.wiping || viewport.sliding || viewport.looking
-                hideSource: viewport.wiping || viewport.sliding || viewport.looking
+                // Also gated on !qtPresentationSuspended -- otherwise these
+                // would still capture/hide the source layers (real GPU cost)
+                // for a transition whose Qt-composited output is never shown
+                // once the native overlay is the sole renderer.
+                live: (viewport.wiping || viewport.sliding || viewport.looking) && !viewport.qtPresentationSuspended
+                hideSource: (viewport.wiping || viewport.sliding || viewport.looking) && !viewport.qtPresentationSuspended
                 visible: false
             }
 
             ShaderEffectSource {
                 id: texB
                 sourceItem: sceneLayerB
-                live: viewport.wiping || viewport.sliding || viewport.looking
-                hideSource: viewport.wiping || viewport.sliding || viewport.looking
+                live: (viewport.wiping || viewport.sliding || viewport.looking) && !viewport.qtPresentationSuspended
+                hideSource: (viewport.wiping || viewport.sliding || viewport.looking) && !viewport.qtPresentationSuspended
                 visible: false
             }
 
@@ -5406,7 +5505,7 @@ Window {
                 id: wipeEffect
                 anchors.fill: parent
                 z: 15
-                visible: viewport.wiping
+                visible: viewport.wiping && !viewport.qtPresentationSuspended
                 fragmentShader: "wipe.frag.qsb"
 
                 // sourceIn (binding 1, alphabetically first)  = incoming/new scene (staging)
@@ -5424,7 +5523,7 @@ Window {
                 id: slideEffect
                 anchors.fill: parent
                 z: 15
-                visible: viewport.sliding
+                visible: viewport.sliding && !viewport.qtPresentationSuspended
                 fragmentShader: "slide.frag.qsb"
 
                 property var sourceIn: viewport.foregroundLayer === 0 ? texB : texA
@@ -5439,7 +5538,7 @@ Window {
                 id: lookEffect
                 anchors.fill: parent
                 z: 15
-                visible: viewport.looking
+                visible: viewport.looking && !viewport.qtPresentationSuspended
                 fragmentShader: "look.frag.qsb"
 
                 property var sourceIn: viewport.foregroundLayer === 0 ? texB : texA
@@ -5458,6 +5557,7 @@ Window {
             // In-progress rubber-band (only visible while dragging)
             Rectangle {
                 visible: viewport.areaDragging
+                opacity: viewport.qtPresentationSuspended ? 0 : 1
                 x: Math.min(viewport.areaX1, viewport.areaX2)
                 y: Math.min(viewport.areaY1, viewport.areaY2)
                 width: Math.abs(viewport.areaX2 - viewport.areaX1)
@@ -5479,6 +5579,7 @@ Window {
             // In-progress shader rubber-band
             Rectangle {
                 visible: viewport.shaderDragging
+                opacity: viewport.qtPresentationSuspended ? 0 : 1
                 x: Math.min(viewport.shaderX1, viewport.shaderX2)
                 y: Math.min(viewport.shaderY1, viewport.shaderY2)
                 width: Math.abs(viewport.shaderX2 - viewport.shaderX1)
@@ -5505,6 +5606,7 @@ Window {
             // preview into a small box pinned near the story canvas's origin.
             Rectangle {
                 visible: viewport.textBoxDragging
+                opacity: viewport.qtPresentationSuspended ? 0 : 1
                 x: Math.min(viewport.tbX1, viewport.tbX2)
                 y: Math.min(viewport.tbY1, viewport.tbY2)
                 width: Math.abs(viewport.tbX2 - viewport.tbX1)
@@ -5526,6 +5628,7 @@ Window {
             // In-progress image rubber-band (see note above the text rubber-band)
             Rectangle {
                 visible: viewport.imageDragging
+                opacity: viewport.qtPresentationSuspended ? 0 : 1
                 x: Math.min(viewport.imgX1, viewport.imgX2)
                 y: Math.min(viewport.imgY1, viewport.imgY2)
                 width: Math.abs(viewport.imgX2 - viewport.imgX1)
@@ -5547,6 +5650,7 @@ Window {
             // In-progress video rubber-band (see note above the text rubber-band)
             Rectangle {
                 visible: viewport.videoDragging
+                opacity: viewport.qtPresentationSuspended ? 0 : 1
                 x: Math.min(viewport.vidX1, viewport.vidX2)
                 y: Math.min(viewport.vidY1, viewport.vidY2)
                 width: Math.abs(viewport.vidX2 - viewport.vidX1)
@@ -5568,6 +5672,7 @@ Window {
             // Box-select rubber band
             Rectangle {
                 visible: viewport.boxSelecting && !viewport.capturingThumbnail
+                opacity: viewport.qtPresentationSuspended ? 0 : 1
                 x: Math.max(0, Math.min(viewport.boxSelectX1, viewport.boxSelectX2))
                 y: Math.max(0, Math.min(viewport.boxSelectY1, viewport.boxSelectY2))
                 width: Math.max(0, Math.min(viewport.width, Math.max(viewport.boxSelectX1, viewport.boxSelectX2)) - Math.max(0, Math.min(viewport.boxSelectX1, viewport.boxSelectX2)))
@@ -5582,6 +5687,12 @@ Window {
             Item {
                 id: groupBBox
                 visible: buttonGrid.selectedTool === "select" && viewport.selectionCount > 1
+                // Phase 7 Part 4: opacity here cascades to every child's render
+                // opacity (border, move MouseArea's Rectangle, all 8 handles)
+                // without touching their own hit-testing at all -- same
+                // opacity:0-doesn't-disable-input principle as the per-element
+                // chrome above, just applied once at this shared parent.
+                opacity: viewport.qtPresentationSuspended ? 0 : 1
                 z: 998
 
                 // Own-position properties, updated imperatively
@@ -6191,15 +6302,15 @@ Window {
 
             FileDialog {
                 id: fragFileDialog
-                title: "Select compiled fragment shader"
-                nameFilters: ["Compiled fragment shaders (*.frag.qsb)"]
+                title: appSettings.hdrPreviewEnabled ? "Select fragment shader" : "Select compiled fragment shader"
+                nameFilters: viewport.shaderFragNameFilters()
                 onAccepted: newshaderSettings.fragFilePath = selectedFile.toString()
             }
 
             FileDialog {
                 id: vertFileDialog
-                title: "Select compiled vertex shader"
-                nameFilters: ["Compiled vertex shaders (*.vert.qsb)"]
+                title: appSettings.hdrPreviewEnabled ? "Select vertex shader" : "Select compiled vertex shader"
+                nameFilters: viewport.shaderVertNameFilters()
                 onAccepted: newshaderSettings.vertFilePath = selectedFile.toString()
             }
 
@@ -6251,13 +6362,13 @@ Window {
                 id: shaderPickerDialog
                 title: "Select shader file(s)"
                 fileMode: FileDialog.OpenFiles
-                nameFilters: ["Compiled shaders (*.frag.qsb *.vert.qsb)"]
+                nameFilters: viewport.shaderNameFilters()
                 onAccepted: {
                     for (var i = 0; i < selectedFiles.length; i++) {
                         var path = selectedFiles[i].toString();
-                        if (path.endsWith(".frag.qsb"))
+                        if (viewport.isFragShaderPath(path))
                             newshaderSettings.fragFilePath = path;
-                        else if (path.endsWith(".vert.qsb"))
+                        else if (viewport.isVertShaderPath(path))
                             newshaderSettings.vertFilePath = path;
                     }
                     if (viewport.pendingShaderBounds && newshaderSettings.fragFilePath !== "") {
@@ -6327,8 +6438,8 @@ Window {
 
             FileDialog {
                 id: selectFragSwapDialog
-                title: "Select compiled fragment shader"
-                nameFilters: ["Compiled fragment shaders (*.frag.qsb)"]
+                title: appSettings.hdrPreviewEnabled ? "Select fragment shader" : "Select compiled fragment shader"
+                nameFilters: viewport.shaderFragNameFilters()
                 property int targetSourceIdx: -1
                 onAccepted: {
                     var path = selectedFile.toString();
@@ -6349,8 +6460,8 @@ Window {
 
             FileDialog {
                 id: selectVertSwapDialog
-                title: "Select compiled vertex shader"
-                nameFilters: ["Compiled vertex shaders (*.vert.qsb)"]
+                title: appSettings.hdrPreviewEnabled ? "Select vertex shader" : "Select compiled vertex shader"
+                nameFilters: viewport.shaderVertNameFilters()
                 onAccepted: {
                     if (selectSettings.hasActiveShader) {
                         viewport.shadersModel.setProperty(viewport.selectedShaders[0], "vertPath", selectedFile.toString());
@@ -10195,13 +10306,13 @@ Window {
                                                 if (!drop.hasUrls || !selectSettings.hasActiveShader)
                                                     return;
                                                 var path = drop.urls[0].toString();
-                                                if (path.endsWith(".frag.qsb")) {
+                                                if (viewport.isFragShaderPath(path)) {
                                                     var idx = viewport.selectedShaders[0];
                                                     viewport.shadersModel.setProperty(idx, "fragPath", path);
                                                     viewport.shadersModel.setProperty(idx, "baseFragPath", path);
                                                     viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(viewport.buildUniformsList(shaderInspector.inspectShader(path))));
                                                     selectSettings.refreshShaderUniforms();
-                                                } else if (path.endsWith(".frag"))
+                                                } else if (!appSettings.hdrPreviewEnabled && path.endsWith(".frag"))
                                                     newshaderSettings.warnUncompiled();
                                             }
                                         }
@@ -10257,10 +10368,10 @@ Window {
                                                 if (!drop.hasUrls || !selectSettings.hasActiveShader)
                                                     return;
                                                 var path = drop.urls[0].toString();
-                                                if (path.endsWith(".vert.qsb")) {
+                                                if (viewport.isVertShaderPath(path)) {
                                                     viewport.shadersModel.setProperty(viewport.selectedShaders[0], "vertPath", path);
                                                     viewport.shadersModel.setProperty(viewport.selectedShaders[0], "baseVertPath", path);
-                                                } else if (path.endsWith(".vert"))
+                                                } else if (!appSettings.hdrPreviewEnabled && path.endsWith(".vert"))
                                                     newshaderSettings.warnUncompiled();
                                             }
                                         }
@@ -10598,7 +10709,7 @@ Window {
                                                     }
                                                     DropArea {
                                                         anchors.fill: parent
-                                                        onDropped: drop => { if (drop.hasUrls && drop.urls[0].toString().endsWith(".frag.qsb")) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcFragPath", drop.urls[0].toString()); selectSettings.saveCurrentSources() } }
+                                                        onDropped: drop => { if (drop.hasUrls && viewport.isFragShaderPath(drop.urls[0].toString())) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcFragPath", drop.urls[0].toString()); selectSettings.saveCurrentSources() } }
                                                     }
                                                 }
 
@@ -10625,7 +10736,7 @@ Window {
                                                     }
                                                     DropArea {
                                                         anchors.fill: parent
-                                                        onDropped: drop => { if (drop.hasUrls && drop.urls[0].toString().endsWith(".vert.qsb")) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcVertPath", drop.urls[0].toString()); selectSettings.saveCurrentSources() } }
+                                                        onDropped: drop => { if (drop.hasUrls && viewport.isVertShaderPath(drop.urls[0].toString())) { selectSourcesModel.setProperty(shaderSrcRow.rowIdx, "srcVertPath", drop.urls[0].toString()); selectSettings.saveCurrentSources() } }
                                                     }
                                                 }
 
@@ -11744,9 +11855,9 @@ Window {
                                     if (!drop.hasUrls)
                                         return;
                                     var path = drop.urls[0].toString();
-                                    if (path.endsWith(".frag.qsb")) {
+                                    if (viewport.isFragShaderPath(path)) {
                                         newshaderSettings.fragFilePath = path;
-                                    } else if (path.endsWith(".frag")) {
+                                    } else if (!appSettings.hdrPreviewEnabled && path.endsWith(".frag")) {
                                         newshaderSettings.warnUncompiled();
                                     }
                                 }
@@ -11793,9 +11904,9 @@ Window {
                                     if (!drop.hasUrls)
                                         return;
                                     var path = drop.urls[0].toString();
-                                    if (path.endsWith(".vert.qsb")) {
+                                    if (viewport.isVertShaderPath(path)) {
                                         newshaderSettings.vertFilePath = path;
-                                    } else if (path.endsWith(".vert")) {
+                                    } else if (!appSettings.hdrPreviewEnabled && path.endsWith(".vert")) {
                                         newshaderSettings.warnUncompiled();
                                     }
                                 }

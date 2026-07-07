@@ -60,6 +60,11 @@ try:
 except Exception:
     HDRVideoBridge = None
 
+try:
+    from hdr_viewport import compile_and_reflect_glsl
+except Exception:
+    compile_and_reflect_glsl = None
+
 versionnumber = "0.4"
 
 
@@ -97,12 +102,46 @@ class ThumbnailProvider(QQuickImageProvider):
 
 
 class ShaderInspector(QObject):
-    """Parses QSB shader reflection data to expose custom uniforms to QML."""
+    """Parses shader reflection data to expose custom uniforms to QML.
+
+    Two entirely separate reflection sources depending on shader format --
+    matching Phase 7 Part 2's decision to run two fully parallel shader
+    systems rather than unify them: legacy .qsb (Qt Shader Tools' own
+    `qsb -d` dump, still used when hdrPreviewEnabled is off, so old stories
+    keep working unchanged) or native .frag/.vert GLSL (glslc + spirv-cross
+    via hdr_viewport.compile_and_reflect_glsl, used when hdrPreviewEnabled
+    is on -- this is what actually drops the qsb requirement/licensing
+    concern for shader elements going forward, not just moving where qsb
+    gets invoked from)."""
 
     @Slot(str, result="QVariant")
     def inspectShader(self, path):
         if path.startswith("file://"):
             path = path[7:]
+        lower = path.lower()
+        if lower.endswith(".frag") or lower.endswith(".vert"):
+            return self._inspectGlslShader(path)
+        return self._inspectQsbShader(path)
+
+    def _inspectGlslShader(self, path):
+        if compile_and_reflect_glsl is None:
+            return []
+        stage_name = "vert" if path.lower().endswith(".vert") else "frag"
+        entry = "vs_main" if stage_name == "vert" else "fs_main"
+        try:
+            _msl, reflection = compile_and_reflect_glsl(path, stage_name, entry)
+        except Exception:
+            return []
+        uniforms = []
+        for ubo in reflection.get("ubos", []):
+            members = reflection.get("types", {}).get(ubo["type"], {}).get("members", [])
+            for member in members:
+                uniforms.append({"name": member["name"], "type": member["type"]})
+        for texture in reflection.get("textures", []):
+            uniforms.append({"name": texture["name"], "type": "sampler2D"})
+        return uniforms
+
+    def _inspectQsbShader(self, path):
         try:
             result = subprocess.run(
                 ["/Users/kady/Qt/6.9.0/macos/bin/qsb", "-d", path],

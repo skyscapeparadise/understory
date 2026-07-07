@@ -46,6 +46,39 @@ Item {
     property bool previewActive: false
     property bool globalMuted: false
 
+    // Phase 7 Part 3: raw hdrPreviewEnabled setting, threaded in from
+    // appSettings (see qtPresentationSuspended below for the actual gate).
+    property bool hdrPreviewEnabled: false
+
+    // True whenever the native SDL3 pipeline is the sole renderer for the
+    // viewport right now. Phase 7 Part 3 scoped this to preview/simulate
+    // mode only (hdrPreviewEnabled && previewActive), since the plain
+    // editor canvas had real interactive chrome (selection/resize handles
+    // etc.) drawn by Qt on top of content, and the native overlay was a
+    // fully opaque top-most window with no awareness of that chrome.
+    // Part 4 solves that (see hdr_viewport.py's _attach(), the
+    // ignoresMouseEvents wiring): chrome stays fully live but invisible
+    // (opacity 0, not visible: false, so hit-testing/drag/cursor-shape
+    // changes keep working) underneath the opaque native window, which is
+    // click-through. That means the plain editor canvas is native too now,
+    // not just preview -- so this simplifies to hdrPreviewEnabled alone.
+    //
+    // Gates Qt's own on-screen visual presentation (VideoOutput/Image/
+    // interactive-TextEdit painting) so its real content never becomes
+    // visible as a "fallback" underneath the native overlay, without
+    // touching MediaPlayer decode/position/audio (those must keep running
+    // regardless -- native syncs to their position and Qt's own
+    // QAudioSink mixer is still the only real audio path) or the offscreen
+    // text-capture Text twin (native "text" is literally a grab of that
+    // item, so its own rendering must continue). Named/scoped as a single,
+    // explicit switch on purpose -- this is a concrete seam toward an
+    // eventual Qt-free .canopy runtime: every place that reads this
+    // property today is a place where "ask Qt to present something" would
+    // instead need to become "ask a non-Qt backend," so keeping the check
+    // itself narrow and centrally-named (rather than scattered ad hoc
+    // hdrPreviewEnabled checks) is what makes that future swap tractable.
+    readonly property bool qtPresentationSuspended: hdrPreviewEnabled
+
     // ── Load readiness ──────────────────────────────────────────────────────
     property int pendingLoads: 0
     signal readyForDisplay()
@@ -259,6 +292,7 @@ Item {
         // event-loop tick, by which point Repeater delegate creation is done.
         if (nativeEligible && videosModelInst.count === 1) Qt.callLater(_bindNativeVideoPlayer)
         _buildNativeElements()
+        _buildNativeChrome()
     }
 
     // Re-resolves nativeVideoPlayer from the live Repeater state. Safe to call
@@ -297,33 +331,48 @@ Item {
     // pipeline to render -- see _buildNativeElements().
     property string nativeElementsJson: "[]"
 
-    function _videoSpansFullCanvas(v) {
-        if (!viewportRef) return false
-        var storyW = viewportRef.contentWidth
-        var storyH = viewportRef.contentHeight
-        var eps = 0.5
-        return Math.min(v.x1, v.x2) <= eps && Math.min(v.y1, v.y2) <= eps &&
-               Math.max(v.x1, v.x2) >= storyW - eps && Math.max(v.y1, v.y2) >= storyH - eps
+    // Phase 7 Part 2: a shader element only disqualifies the scene if it's
+    // still a legacy .qsb shader (Qt-only, per the explicit compatibility
+    // model -- old .qsb stories are viewed with hdrPreviewEnabled off). A
+    // .frag/.vert shader (the new native format) no longer disqualifies.
+    function _shaderIsLegacyQsb(s) {
+        var p = (s.fragPath || "").toLowerCase()
+        return p.length > 0 && p.endsWith(".qsb")
     }
 
     function _computeNativeEligible() {
-        if (shadersModelInst.count !== 0) return false
+        for (var i = 0; i < shadersModelInst.count; i++) {
+            if (_shaderIsLegacyQsb(shadersModelInst.get(i))) return false
+        }
         if (videosModelInst.count > 1) return false
+        // Phase 7 Part 4: previously also required the sole video to span
+        // the full canvas -- a Phase 5-era scoping decision, not a real
+        // renderer requirement (video composites through the exact same
+        // per-element rect mechanism as image/text/shader, see
+        // _composite_elements_pass). That restriction became a real problem
+        // once the editor canvas went native too: resizing the video away
+        // from full-canvas mid-drag would disqualify the whole scene,
+        // blanking it -- previously unreachable since native rendering never
+        // ran during plain editing before this phase. Dropped entirely; a
+        // video can now be any rect.
         if (videosModelInst.count === 1) {
             var v = videosModelInst.get(0)
             if (v.vidCrossfade) return false
-            if (!_videoSpansFullCanvas(v)) return false
         }
-        var renderable = videosModelInst.count + imagesModelInst.count + textBoxesModelInst.count
+        var renderable = videosModelInst.count + imagesModelInst.count + textBoxesModelInst.count + shadersModelInst.count
         return renderable > 0
     }
 
+    // Phase 6 Part 2: identical to _computeNativeEligible() -- now that
+    // native transitions composite each side through the same per-element
+    // linear-buffer pass steady-state rendering already uses (see
+    // hdr_viewport.py's _render_transition), a transition no longer needs
+    // to be stricter than steady-state eligibility. Kept as a separate
+    // function/property (rather than aliasing nativeEligible directly) so
+    // the two concepts stay independently named at the QML/Python boundary,
+    // even though their rules now match.
     function _computeNativeTransitionEligible() {
-        if (videosModelInst.count !== 1) return false
-        if (imagesModelInst.count !== 0 || textBoxesModelInst.count !== 0 || shadersModelInst.count !== 0) return false
-        var v = videosModelInst.get(0)
-        if (v.vidCrossfade) return false
-        return _videoSpansFullCanvas(v)
+        return _computeNativeEligible()
     }
 
     // Builds the z-sorted element snapshot the native pipeline polls. Called
@@ -354,6 +403,18 @@ Item {
                 x1: m.x1 + tbPad, y1: m.y1 + tbPad, x2: m.x2 - tbPad, y2: m.y2 - tbPad
             })
         }
+        // Phase 7 Part 2: only .frag/.vert shaders ever reach here --
+        // _computeNativeEligible() already disqualified the whole scene if
+        // any shader is still a legacy .qsb path.
+        for (i = 0; i < shadersModelInst.count; i++) {
+            m = shadersModelInst.get(i)
+            var uniforms = []
+            try { uniforms = JSON.parse(m.uniformsJson || "[]") } catch (e) { uniforms = [] }
+            elems.push({
+                type: "shader", x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2, z: m.stackOrder,
+                fragPath: m.fragPath, vertPath: m.vertPath, uniforms: uniforms
+            })
+        }
         elems.sort(function(a, b) { return a.z - b.z })
         nativeElementsJson = JSON.stringify(elems)
     }
@@ -372,8 +433,85 @@ Item {
         sceneContent._nativeElementsRebuildScheduled = true
         Qt.callLater(function() {
             sceneContent._nativeElementsRebuildScheduled = false
+            // Phase 7 Part 4: re-derive eligibility too, not just the element
+            // list -- previously only loadScene() ever recomputed this, which
+            // was fine when native rendering only ran during preview (nothing
+            // could resize mid-preview). Now the editor canvas is native too,
+            // so a live drag can break a geometry-dependent rule (e.g. the
+            // sole video no longer spanning the full canvas) that was only
+            // true at load time. Without this, nativeElementsJson would keep
+            // compositing the video at its new, smaller rect while the rest
+            // of the canvas -- no longer covered by anything -- rendered
+            // black, since there's no Qt fallback left to show through.
+            // Recomputing here instead correctly disqualifies the whole
+            // scene the instant the invariant breaks, same "no fallback
+            // possible" contract already accepted for legacy .qsb scenes.
+            sceneContent.nativeEligible = sceneContent._computeNativeEligible()
+            sceneContent.nativeTransitionEligible = sceneContent._computeNativeTransitionEligible()
             sceneContent._buildNativeElements()
         })
+    }
+
+    // Phase 7 Part 4: [{x1,y1,x2,y2}] for the single selected element (border
+    // + 8 handles), or "[]" when nothing/more-than-one is selected, the
+    // active tool isn't "select", or the element is locked -- matching the
+    // exact same conditions each delegate's own handle Items already gate on
+    // (isActive && selectionCount===1 && !model.locked). Native draws this
+    // instead of Qt once qtPresentationSuspended (see the opacity gates added
+    // to each border/handle above). Deliberately only the selected element's
+    // chrome -- an unselected area's always-on boundary outline doesn't get a
+    // native equivalent yet (see the border opacity-gate comment).
+    property string nativeChromeJson: "[]"
+
+    function _buildNativeChrome() {
+        var m = null
+        if (viewportRef && buttonGridRef && buttonGridRef.selectedTool === "select" && viewportRef.selectionCount === 1) {
+            if (viewportRef.selectedAreas.length === 1) m = areasModelInst.get(viewportRef.selectedAreas[0])
+            else if (viewportRef.selectedTbs.length === 1) m = textBoxesModelInst.get(viewportRef.selectedTbs[0])
+            else if (viewportRef.selectedImages.length === 1) m = imagesModelInst.get(viewportRef.selectedImages[0])
+            else if (viewportRef.selectedVideos.length === 1) m = videosModelInst.get(viewportRef.selectedVideos[0])
+            else if (viewportRef.selectedShaders.length === 1) m = shadersModelInst.get(viewportRef.selectedShaders[0])
+        }
+        if (!m || m.locked) {
+            nativeChromeJson = "[]"
+            return
+        }
+        // handleSize/borderWidth are story-space values already divided by
+        // editorScaleFactor, exactly like every handle/border Item's own
+        // geometry above -- this is what makes them render as a fixed
+        // on-screen size regardless of the story's resolution or the
+        // editor's current zoom. Sending them pre-computed means the Python
+        // side never needs to know about editorScaleFactor at all.
+        nativeChromeJson = JSON.stringify([{
+            x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2,
+            handleSize: 8 / editorScaleFactor,
+            borderWidth: 2 / editorScaleFactor
+        }])
+    }
+
+    property bool _nativeChromeRebuildScheduled: false
+    function _scheduleNativeChromeRebuild() {
+        if (sceneContent._nativeChromeRebuildScheduled) return
+        sceneContent._nativeChromeRebuildScheduled = true
+        Qt.callLater(function() {
+            sceneContent._nativeChromeRebuildScheduled = false
+            sceneContent._buildNativeChrome()
+        })
+    }
+
+    // Selection changes (selectArea/selectImage/.../clearSelection, all on
+    // viewportRef) always bump selectionRevision, and tool switches change
+    // which chrome (if any) should show -- both need a rebuild independent
+    // of any one delegate's own model-role changes below.
+    Connections {
+        target: viewportRef
+        enabled: viewportRef !== null
+        function onSelectionRevisionChanged() { sceneContent._scheduleNativeChromeRebuild() }
+    }
+    Connections {
+        target: buttonGridRef
+        enabled: buttonGridRef !== null
+        function onSelectedToolChanged() { sceneContent._scheduleNativeChromeRebuild() }
     }
 
     // Serialize this layer's scene to a JSON string for DB persistence.
@@ -636,6 +774,21 @@ Item {
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedAreas.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
                     property bool isRelayerHovered: isInteractive && buttonGridRef.selectedTool === "relayer" && viewportRef.relayerHoveredType === "area" && viewportRef.relayerHoveredIndex === index
                     property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
+                    // Phase 7 Part 4: model.x1/y1/x2/y2/locked are live role
+                    // bindings in this delegate scope (unlike a .get() snapshot),
+                    // so this reacts correctly to both the move-MouseArea and any
+                    // resize-handle drag mutating the same roles via setProperty.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    on_TrackedChromeKeyChanged: {
+                        sceneContent._scheduleNativeChromeRebuild()
+                        // Phase 7 Part 4: nativeElementsJson's per-element rect was
+                        // previously only ever set at loadScene() time -- never
+                        // rebuilt live during a move/resize drag, since native
+                        // rendering never ran during plain editing before this
+                        // phase. Same x1/y1/x2/y2/locked key as the chrome rebuild
+                        // above, just also driving the content (not just chrome).
+                        sceneContent._scheduleNativeElementsRebuild()
+                    }
                     property real pressVpX: 0
                     property real pressVpY: 0
                     property real origX1: 0
@@ -662,6 +815,10 @@ Item {
                         color: areaDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, viewportRef.deleteProgress * 0.6) : (areaDelegate.isActive && index === viewportRef.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent")
                         border.color: areaDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((areaDelegate.isActive || areaDelegate.isRelayerHovered) ? "white" : "#666666")
                         border.width: (areaDelegate.isActive && index === viewportRef.hoveredAreaIndex) || areaDelegate.isRelayerHovered ? 2 : 1
+                        // Phase 7 Part 4: only the selected element's border+handles get a
+                        // native equivalent (see _buildNativeChrome()) -- an unselected area's
+                        // plain boundary outline is a deliberately deferred gap for now.
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         Behavior on color {
                             ColorAnimation {
                                 duration: 80
@@ -842,6 +999,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -895,6 +1053,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -931,6 +1090,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -984,6 +1144,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1020,6 +1181,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1073,6 +1235,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1109,6 +1272,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1162,6 +1326,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: areaDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1210,6 +1375,21 @@ Item {
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedTbs.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
                     property bool isRelayerHovered: isInteractive && buttonGridRef.selectedTool === "relayer" && viewportRef.relayerHoveredType === "tb" && viewportRef.relayerHoveredIndex === index
                     property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
+                    // Phase 7 Part 4: model.x1/y1/x2/y2/locked are live role
+                    // bindings in this delegate scope (unlike a .get() snapshot),
+                    // so this reacts correctly to both the move-MouseArea and any
+                    // resize-handle drag mutating the same roles via setProperty.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    on_TrackedChromeKeyChanged: {
+                        sceneContent._scheduleNativeChromeRebuild()
+                        // Phase 7 Part 4: nativeElementsJson's per-element rect was
+                        // previously only ever set at loadScene() time -- never
+                        // rebuilt live during a move/resize drag, since native
+                        // rendering never ran during plain editing before this
+                        // phase. Same x1/y1/x2/y2/locked key as the chrome rebuild
+                        // above, just also driving the content (not just chrome).
+                        sceneContent._scheduleNativeElementsRebuild()
+                    }
                     property bool editing: false
                     onEditingChanged: viewportRef.textEditing = editing
                     onIsActiveChanged: if (!isActive && editing) {
@@ -1306,6 +1486,7 @@ Item {
                         color: tbDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, viewportRef.deleteProgress * 0.6) : "transparent"
                         border.color: tbDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((tbDelegate.isActive || tbDelegate.isRelayerHovered) ? "white" : "#666666")
                         border.width: tbDelegate.isRelayerHovered ? 2 : 1
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         Rectangle {
                             anchors.fill: parent
                             anchors.margins: 1
@@ -1321,6 +1502,12 @@ Item {
                         y: 34 / sceneContent.editorScaleFactor
                         width: parent.width - 68 / sceneContent.editorScaleFactor
                         height: parent.height - 68 / sceneContent.editorScaleFactor
+                        // Not interactive during preview anyway (typing/focus
+                        // are editor-only); native text is a grab of the
+                        // separate offscreen tbCaptureText twin above, so
+                        // this on-screen editable widget is purely redundant
+                        // to hide once the native overlay covers preview.
+                        visible: !sceneContent.qtPresentationSuspended
                         text: model.content
                         color: model.textColor
                         font.family: model.family
@@ -1466,6 +1653,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1519,6 +1707,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1555,6 +1744,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1608,6 +1798,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1644,6 +1835,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1697,6 +1889,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1733,6 +1926,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1786,6 +1980,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: tbDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -1870,6 +2065,21 @@ Item {
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedImages.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
                     property bool isRelayerHovered: isInteractive && buttonGridRef.selectedTool === "relayer" && viewportRef.relayerHoveredType === "image" && viewportRef.relayerHoveredIndex === index
                     property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
+                    // Phase 7 Part 4: model.x1/y1/x2/y2/locked are live role
+                    // bindings in this delegate scope (unlike a .get() snapshot),
+                    // so this reacts correctly to both the move-MouseArea and any
+                    // resize-handle drag mutating the same roles via setProperty.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    on_TrackedChromeKeyChanged: {
+                        sceneContent._scheduleNativeChromeRebuild()
+                        // Phase 7 Part 4: nativeElementsJson's per-element rect was
+                        // previously only ever set at loadScene() time -- never
+                        // rebuilt live during a move/resize drag, since native
+                        // rendering never ran during plain editing before this
+                        // phase. Same x1/y1/x2/y2/locked key as the chrome rebuild
+                        // above, just also driving the content (not just chrome).
+                        sceneContent._scheduleNativeElementsRebuild()
+                    }
                     property real pressVpX: 0
                     property real pressVpY: 0
                     property real origX1: 0
@@ -1902,6 +2112,10 @@ Item {
                         source: model.filePath
                         fillMode: Image.Stretch
                         clip: true
+                        // Image loading/status is independent of visibility --
+                        // already an established, relied-upon pattern in this
+                        // codebase (the hidden dimension-probe Image items).
+                        visible: !sceneContent.qtPresentationSuspended
                         onStatusChanged: {
                             if (status === Image.Ready || status === Image.Error)
                                 imageLoadComplete()
@@ -1918,6 +2132,7 @@ Item {
                         color: "transparent"
                         border.color: imgDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((imgDelegate.isActive || imgDelegate.isRelayerHovered) ? "white" : "transparent")
                         border.width: imgDelegate.isRelayerHovered ? 2 : 1
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         Rectangle {
                             anchors.fill: parent
                             anchors.margins: 1
@@ -2060,6 +2275,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2113,6 +2329,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2149,6 +2366,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2202,6 +2420,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2238,6 +2457,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2291,6 +2511,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2327,6 +2548,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2380,6 +2602,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: imgDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -2469,6 +2692,21 @@ Item {
                     property bool isBeingDeleted: isInteractive && (buttonGridRef.selectedTool === "destroy" || viewportRef.tempDestroyMode) && viewportRef.deleteTargetType === "video" && viewportRef.deleteTargetIndex === index
 
                     property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
+                    // Phase 7 Part 4: model.x1/y1/x2/y2/locked are live role
+                    // bindings in this delegate scope (unlike a .get() snapshot),
+                    // so this reacts correctly to both the move-MouseArea and any
+                    // resize-handle drag mutating the same roles via setProperty.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    on_TrackedChromeKeyChanged: {
+                        sceneContent._scheduleNativeChromeRebuild()
+                        // Phase 7 Part 4: nativeElementsJson's per-element rect was
+                        // previously only ever set at loadScene() time -- never
+                        // rebuilt live during a move/resize drag, since native
+                        // rendering never ran during plain editing before this
+                        // phase. Same x1/y1/x2/y2/locked key as the chrome rebuild
+                        // above, just also driving the content (not just chrome).
+                        sceneContent._scheduleNativeElementsRebuild()
+                    }
 
                     // Tracks whether imageLoadComplete() has been called for this delegate.
                     // Guards against duplicate calls if both the frame path and fallback path fire.
@@ -2790,6 +3028,13 @@ Item {
                         y: 28 / sceneContent.editorScaleFactor
                         width: parent.width - 56 / sceneContent.editorScaleFactor
                         height: parent.height - 56 / sceneContent.editorScaleFactor
+                        // Confirmed via direct testing: MediaPlayer keeps decoding and
+                        // videoSink.videoFrameChanged keeps firing at the same rate
+                        // regardless of this item's visible property -- decode/frame-
+                        // delivery is independent of on-screen presentation in Qt
+                        // Multimedia, so hiding this costs no functional behavior below,
+                        // only the actual screen paint/composite (which is the point).
+                        visible: !sceneContent.qtPresentationSuspended
 
                         // Wait for 2 real decoded frames before signaling readyForDisplay.
                         // videoSink.videoFrameChanged fires each time a frame arrives in the
@@ -2848,6 +3093,7 @@ Item {
                         height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 0.1
                         opacity: 0
+                        visible: !sceneContent.qtPresentationSuspended
                     }
 
                     // Freeze-frame overlay: holds the last rendered frame while a new source loads,
@@ -2861,6 +3107,7 @@ Item {
                         height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 0.5
                         opacity: 0
+                        visible: !sceneContent.qtPresentationSuspended
                         fillMode: Image.Stretch
                         cache: false
                         NumberAnimation {
@@ -2921,6 +3168,7 @@ Item {
                         color: "transparent"
                         border.color: vidDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((vidDelegate.isActive || vidDelegate.isRelayerHovered) ? "white" : "transparent")
                         border.width: vidDelegate.isRelayerHovered ? 2 : 1
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         Rectangle {
                             anchors.fill: parent
                             anchors.margins: 1
@@ -3063,6 +3311,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -3114,6 +3363,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -3159,6 +3409,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -3210,6 +3461,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -3255,6 +3507,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -3306,6 +3559,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -3351,6 +3605,7 @@ Item {
                         width: 56 / sceneContent.editorScaleFactor
                         height: 56 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -3402,6 +3657,7 @@ Item {
                         width: 28 / sceneContent.editorScaleFactor
                         height: 28 / sceneContent.editorScaleFactor
                         visible: vidDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle {
                             anchors.centerIn: parent
@@ -3486,6 +3742,21 @@ Item {
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedShaders.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
                     property bool isRelayerHovered: isInteractive && buttonGridRef.selectedTool === "relayer" && viewportRef.relayerHoveredType === "shader" && viewportRef.relayerHoveredIndex === index
                     property var _cachedInteractivity: sceneContent.parseInteractivityJson(model.interactivityJson)
+                    // Phase 7 Part 4: model.x1/y1/x2/y2/locked are live role
+                    // bindings in this delegate scope (unlike a .get() snapshot),
+                    // so this reacts correctly to both the move-MouseArea and any
+                    // resize-handle drag mutating the same roles via setProperty.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    on_TrackedChromeKeyChanged: {
+                        sceneContent._scheduleNativeChromeRebuild()
+                        // Phase 7 Part 4: nativeElementsJson's per-element rect was
+                        // previously only ever set at loadScene() time -- never
+                        // rebuilt live during a move/resize drag, since native
+                        // rendering never ran during plain editing before this
+                        // phase. Same x1/y1/x2/y2/locked key as the chrome rebuild
+                        // above, just also driving the content (not just chrome).
+                        sceneContent._scheduleNativeElementsRebuild()
+                    }
                     property real pressVpX: 0
                     property real pressVpY: 0
                     property real origX1: 0
@@ -3498,6 +3769,18 @@ Item {
                     // Expose the dynamic ShaderEffect and texture helpers so select-settings can update uniforms.
                     property var dynamicShaderEffect: shaderEffectContainer.dynamicEffect
                     function applyTextureSource(name, path) { shaderEffectContainer.applyTextureSource(name, path); }
+
+                    // Phase 7 Part 2: pushes nativeElementsJson rebuilds for
+                    // any shader mutation reached from outside loadScene()
+                    // (a "how condition" swap, or a live uniform/frag/vert
+                    // edit from the property panel) -- same reactive-
+                    // tracking pattern the image/video delegates already
+                    // use, since model.* bindings are reliably reactive in
+                    // a delegate context regardless of which code path did
+                    // the mutation.
+                    readonly property string _trackedShaderKey:
+                        model.fragPath + "\x01" + model.vertPath + "\x01" + model.uniformsJson
+                    on_TrackedShaderKeyChanged: sceneContent._scheduleNativeElementsRebuild()
 
 
                     // Shader fill — recreated via Qt.createQmlObject() whenever the frag path
@@ -3646,6 +3929,7 @@ Item {
                         color: "transparent"
                         border.color: shaderDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((shaderDelegate.isActive || shaderDelegate.isRelayerHovered) ? "white" : "transparent")
                         border.width: shaderDelegate.isRelayerHovered ? 2 : 1
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         Rectangle {
                             anchors.fill: parent
                             anchors.margins: 1
@@ -3783,8 +4067,9 @@ Item {
                     // Resize handles
                     // Top-left
                     Item {
-                        x: 0; y: 0; width: 56; height: 56
+                        x: 0; y: 0; width: 56 / sceneContent.editorScaleFactor; height: 56 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3817,6 +4102,7 @@ Item {
                     Item {
                         x: parent.width / 2 - 14 / sceneContent.editorScaleFactor; y: 14 / sceneContent.editorScaleFactor; width: 28 / sceneContent.editorScaleFactor; height: 28 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3837,8 +4123,9 @@ Item {
                     }
                     // Top-right
                     Item {
-                        x: parent.width - 56; y: 0; width: 56; height: 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor; y: 0; width: 56 / sceneContent.editorScaleFactor; height: 56 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3871,6 +4158,7 @@ Item {
                     Item {
                         x: parent.width - 42 / sceneContent.editorScaleFactor; y: parent.height / 2 - 14 / sceneContent.editorScaleFactor; width: 28 / sceneContent.editorScaleFactor; height: 28 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3891,8 +4179,9 @@ Item {
                     }
                     // Bottom-right
                     Item {
-                        x: parent.width - 56; y: parent.height - 56; width: 56; height: 56
+                        x: parent.width - 56 / sceneContent.editorScaleFactor; y: parent.height - 56 / sceneContent.editorScaleFactor; width: 56 / sceneContent.editorScaleFactor; height: 56 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3925,6 +4214,7 @@ Item {
                     Item {
                         x: parent.width / 2 - 14 / sceneContent.editorScaleFactor; y: parent.height - 42 / sceneContent.editorScaleFactor; width: 28 / sceneContent.editorScaleFactor; height: 28 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3945,8 +4235,9 @@ Item {
                     }
                     // Bottom-left
                     Item {
-                        x: 0; y: parent.height - 56; width: 56; height: 56
+                        x: 0; y: parent.height - 56 / sceneContent.editorScaleFactor; width: 56 / sceneContent.editorScaleFactor; height: 56 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
@@ -3979,6 +4270,7 @@ Item {
                     Item {
                         x: 14 / sceneContent.editorScaleFactor; y: parent.height / 2 - 14 / sceneContent.editorScaleFactor; width: 28 / sceneContent.editorScaleFactor; height: 28 / sceneContent.editorScaleFactor
                         visible: shaderDelegate.isActive && viewportRef.selectionCount === 1 && !model.locked
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         z: 3
                         Rectangle { anchors.centerIn: parent; width: 8 / sceneContent.editorScaleFactor; height: 8 / sceneContent.editorScaleFactor; radius: 4 / sceneContent.editorScaleFactor; color: "white"; border.color: "black"; border.width: 1 }
                         MouseArea {
