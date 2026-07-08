@@ -19,7 +19,10 @@ Window {
         id: appSettings
         objectName: "appSettings"
         property bool muted: false
-        property bool hdrPreviewEnabled: false
+        // Phase 8: was a bool ("hdrPreviewEnabled"); now a three-way mode
+        // so the same native SDL3 pipeline can target either a standard
+        // (sdr) or HDR10 (hdr) swapchain, not just HDR.
+        property string nativeRenderMode: "off"
     }
 
     visible: true
@@ -555,43 +558,54 @@ Window {
                     topPadding: 8
                 }
 
-                Rectangle {
-                    id: hdrPreviewRect
-                    Layout.fillWidth: true
-                    height: 44
-                    radius: 10
-                    property bool isOn: appSettings.hdrPreviewEnabled
-                    color: isOn ? "white" : "transparent"
-                    border.width: 2
-                    border.color: "white"
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: appSettings.hdrPreviewEnabled = !appSettings.hdrPreviewEnabled
-                    }
-                    Item {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        height: 20
-                        Text {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "native HDR preview (restart required)"
-                            font.pixelSize: 14
-                            font.bold: true
-                            color: hdrPreviewRect.isOn ? "#477B78" : "white"
-                            Behavior on color { ColorAnimation { duration: 120 } }
+                // Phase 8: three mutually-exclusive rows replacing the old
+                // single HDR on/off toggle -- same native SDL3 pipeline now
+                // targets either a standard (sdr) or HDR10 (hdr) swapchain.
+                Repeater {
+                    model: [
+                        { value: "off", label: "qt preview (restart required)" },
+                        { value: "sdr", label: "native SDR preview (restart required)" },
+                        { value: "hdr", label: "native HDR preview (restart required)" }
+                    ]
+                    delegate: Rectangle {
+                        id: renderModeRect
+                        required property var modelData
+                        Layout.fillWidth: true
+                        height: 44
+                        radius: 10
+                        property bool isOn: appSettings.nativeRenderMode === modelData.value
+                        color: isOn ? "white" : "transparent"
+                        border.width: 2
+                        border.color: "white"
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: appSettings.nativeRenderMode = renderModeRect.modelData.value
                         }
-                        Text {
+                        Item {
+                            anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
-                            text: hdrPreviewRect.isOn ? "on" : "off"
-                            font.pixelSize: 11
-                            color: hdrPreviewRect.isOn ? "#477B78" : "#888"
-                            Behavior on color { ColorAnimation { duration: 120 } }
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            height: 20
+                            Text {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: renderModeRect.modelData.label
+                                font.pixelSize: 14
+                                font.bold: true
+                                color: renderModeRect.isOn ? "#477B78" : "white"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+                            Text {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: renderModeRect.isOn ? "on" : "off"
+                                font.pixelSize: 11
+                                color: renderModeRect.isOn ? "#477B78" : "#888"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
                         }
                     }
                 }
@@ -3812,16 +3826,16 @@ Window {
             // Mirrors SceneContent.qml's qtPresentationSuspended (see there
             // for the full rationale) for the transition-compositing items
             // below, which live in understoryui.qml rather than
-            // SceneContent.qml. Phase 7 Part 4 simplified this to
-            // hdrPreviewEnabled alone -- the plain editor canvas is native
-            // now too, not just preview.
-            readonly property bool qtPresentationSuspended: appSettings.hdrPreviewEnabled
+            // SceneContent.qml. True whenever native rendering is active at
+            // all (either color-space mode) -- the plain editor canvas is
+            // native too, not just preview, regardless of sdr vs hdr.
+            readonly property bool qtPresentationSuspended: appSettings.nativeRenderMode !== "off"
 
             // Phase 7 Part 4: true whenever the scene editor screen itself
             // is showing (covers both plain editing and previewing) --
             // read by hdr_viewport.py's _should_be_visible() so the opaque
             // native window doesn't cover the story hub/launch screen too
-            // (hdrPreviewEnabled alone is true from app startup regardless
+            // (nativeRenderMode alone is true from app startup regardless
             // of which screen is showing).
             readonly property bool sceneEditorVisible: sceneEditor.visible
             // Polled by the native HDR bridge (hdr_viewport.py) to decide whether the
@@ -3845,6 +3859,59 @@ Window {
             // active layer only -- chrome is an editing concern, never shown
             // mid-transition (see hdr_viewport.py's _composite_chrome_pass).
             readonly property string activeNativeChromeJson: activeContent ? activeContent.nativeChromeJson : "[]"
+
+            // Phase 7 Part 5: the tool-cursor icon's path/position resolution,
+            // extracted out of the Qt-side cursor Image's own source/x/y
+            // bindings below (kept, for non-HDR mode) so this exact logic is
+            // derived once, not reimplemented a second time for the native
+            // push in nativeChromeExtraJson.
+            function _resolveCursorIconPath() {
+                if (viewport.elementDragging)
+                    return "icons/pinch.svg";
+                if (sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen)
+                    return "icons/select.svg";
+                if (viewport.effectiveTool === "simulate") {
+                    var slot = "select", cpath = "";
+                    if (viewport.hoveredAreaIndex >= 0) {
+                        var hm = viewport.areasModel.get(viewport.hoveredAreaIndex);
+                        if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
+                    } else if (viewport.hoveredTbIndex >= 0) {
+                        var hm = viewport.textBoxesModel.get(viewport.hoveredTbIndex);
+                        if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
+                    } else if (viewport.hoveredImageIndex >= 0) {
+                        var hm = viewport.imagesModel.get(viewport.hoveredImageIndex);
+                        if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
+                    } else if (viewport.hoveredVideoIndex >= 0) {
+                        var hm = viewport.videosModel.get(viewport.hoveredVideoIndex);
+                        if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
+                    } else if (viewport.hoveredShaderIndex >= 0) {
+                        var hm = viewport.shadersModel.get(viewport.hoveredShaderIndex);
+                        if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
+                    }
+                    if (slot === "custom")
+                        return cpath || "";
+                    var labels = ["select", "highlight", "drag", "left", "up", "down", "right"];
+                    var slotIdx = labels.indexOf(slot);
+                    if (slotIdx < 0)
+                        return "";
+                    var mode = storyHubSettingsView.selectedCursor;
+                    if (mode === "custom")
+                        return storyHubSettingsView.cursorCustomPaths[slotIdx] || "";
+                    return "icons/" + storyHubSettingsView.cursorOptions[mode === "angel" ? 0 : 1].icons[slotIdx];
+                }
+                var tools = ["select", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"];
+                return tools.indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : "";
+            }
+            function _cursorIconVisible() {
+                return !viewport.textEditing && viewportCursorArea.containsMouse &&
+                    (viewport.elementDragging || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen ||
+                     ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1)
+            }
+            function _cursorIconPos() {
+                var x = (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.shaderDragging ? viewport.shaderX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -8 : 0)
+                var y = (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.shaderDragging ? viewport.shaderY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -1 : 0)
+                return { x: x, y: y }
+            }
 
             // Phase 7 Part 4: viewport-level chrome that isn't per-element --
             // creation rubber-bands/box-select marquee (raw viewport-pixel
@@ -3877,6 +3944,69 @@ Window {
                         kind: "group", borderWidth: bw, handleSize: 8 / editorScale,
                         x1: groupBBox.gbX1, y1: groupBBox.gbY1, x2: groupBBox.gbX2, y2: groupBBox.gbY2
                     })
+                }
+                // Phase 7 Part 5: delete-hover (destroy tool) and relayer-hover
+                // targets aren't necessarily the selected element -- you can
+                // destroy-hover or relayer-hover anything, selected or not --
+                // so they belong here (viewport-level) rather than in
+                // SceneContent's selection-only nativeChromeJson.
+                function modelForType(t) {
+                    if (t === "area") return areasModel
+                    if (t === "tb") return textBoxesModel
+                    if (t === "image") return imagesModel
+                    if (t === "video") return videosModel
+                    if (t === "shader") return shadersModel
+                    return null
+                }
+                // Double-guarded exactly like isBeingDeleted (SceneContent.qml)
+                // itself is -- tool/tempDestroyMode AND a live target, not just
+                // a non-empty deleteTargetType, so a stale target left over
+                // from a prior tool switch never leaks through.
+                if ((buttonGrid.selectedTool === "destroy" || tempDestroyMode) &&
+                        deleteTargetType !== "" && deleteTargetIndex !== -1) {
+                    var dm = modelForType(deleteTargetType)
+                    var drow = dm ? dm.get(deleteTargetIndex) : null
+                    if (drow) {
+                        items.push({
+                            kind: "delete", progress: deleteProgress, borderWidth: bw,
+                            x1: drow.x1, y1: drow.y1, x2: drow.x2, y2: drow.y2
+                        })
+                    }
+                }
+                // Double-guarded exactly like isRelayerHovered is (the relayer
+                // MouseArea's own enabled: ... selectedTool === "relayer" means
+                // switching tools mid-hover leaves relayerHoveredType/Index
+                // stale with no onExited ever firing).
+                if (buttonGrid.selectedTool === "relayer" &&
+                        relayerHoveredType !== "" && relayerHoveredIndex !== -1) {
+                    var rm = modelForType(relayerHoveredType)
+                    var rrow = rm ? rm.get(relayerHoveredIndex) : null
+                    if (rrow) {
+                        items.push({
+                            kind: "relayerHover", borderWidth: bw,
+                            x1: rrow.x1, y1: rrow.y1, x2: rrow.x2, y2: rrow.y2
+                        })
+                    }
+                }
+                // Tool-cursor icon: path/position/visibility all reuse the
+                // exact same resolution the Qt-side cursor Image itself uses
+                // (see _resolveCursorIconPath/_cursorIconPos/_cursorIconVisible
+                // above), so this can never silently drift from what non-HDR
+                // mode still shows. size is pre-divided by editorScale like
+                // handleSize/borderWidth -- mathematically this lands on the
+                // same story-space size in both editing and preview, since
+                // toStoryX/toStoryY's own /contentScaler.scale division
+                // exactly cancels the Qt Image's own previewActive branch.
+                if (viewport._cursorIconVisible()) {
+                    var iconPath = viewport._resolveCursorIconPath()
+                    if (iconPath) {
+                        var pos = viewport._cursorIconPos()
+                        items.push({
+                            kind: "cursor", path: iconPath,
+                            x: toStoryX(pos.x), y: toStoryY(pos.y),
+                            size: 36 / editorScale
+                        })
+                    }
                 }
                 return JSON.stringify(items)
             }
@@ -4063,7 +4193,7 @@ Window {
                 repeat: true
                 running: viewport.deleteTargetIndex !== -1
                 onTriggered: {
-                    viewport.deleteProgress += 16.0 / 600.0;
+                    viewport.deleteProgress += 16.0 / 1200.0;
                     if (viewport.deleteProgress >= 1.0) {
                         var t = viewport.deleteTargetType;
                         var i = viewport.deleteTargetIndex;
@@ -4079,6 +4209,14 @@ Window {
                             viewport.videosModel.remove(i);
                         else if (t === "shader")
                             viewport.shadersModel.remove(i);
+                        // Phase 7 Part 5: ListModel.remove() destroys that row's
+                        // delegate outright -- there's no onTrackedChromeKeyChanged
+                        // firing for a row that no longer exists to fire it, unlike
+                        // every other native-content-affecting mutation (drag/
+                        // resize/reselect), which all go through a still-alive
+                        // delegate. Without this, the deleted element kept
+                        // rendering natively until the next full loadScene().
+                        if (viewport.activeContent) viewport.activeContent._scheduleNativeElementsRebuild()
                         if (mainWindow.currentSceneId !== -1)
                             storyManager.saveSceneElements(mainWindow.currentSceneId, viewport.collectSceneElements())
                     }
@@ -4512,34 +4650,36 @@ Window {
             }
 
             // Phase 7 Part 2: two fully separate shader systems selected by
-            // hdrPreviewEnabled -- old .qsb-based shader authoring stays
-            // completely unchanged when the setting is off (so old stories
-            // keep working), while raw .frag/.vert GLSL source is used
-            // instead when it's on (native pipeline, no qsb involved at
-            // all -- see ShaderInspector.inspectShader in understory.py for
-            // the matching reflection-source split). These helpers are the
-            // single place every shader file dialog/drag-drop handler reads
-            // from, rather than duplicating the mode check at each site.
+            // whether native rendering is active at all (nativeRenderMode
+            // !== "off", either color-space mode) -- old .qsb-based shader
+            // authoring stays completely unchanged when native is off (so
+            // old stories keep working), while raw .frag/.vert GLSL source
+            // is used instead when it's on (native pipeline, no qsb
+            // involved at all -- see ShaderInspector.inspectShader in
+            // understory.py for the matching reflection-source split).
+            // These helpers are the single place every shader file dialog/
+            // drag-drop handler reads from, rather than duplicating the
+            // mode check at each site.
             function shaderFragNameFilters() {
-                return appSettings.hdrPreviewEnabled
+                return (appSettings.nativeRenderMode !== "off")
                     ? ["Fragment shaders (*.frag)"]
                     : ["Compiled fragment shaders (*.frag.qsb)"];
             }
             function shaderVertNameFilters() {
-                return appSettings.hdrPreviewEnabled
+                return (appSettings.nativeRenderMode !== "off")
                     ? ["Vertex shaders (*.vert)"]
                     : ["Compiled vertex shaders (*.vert.qsb)"];
             }
             function shaderNameFilters() {
-                return appSettings.hdrPreviewEnabled
+                return (appSettings.nativeRenderMode !== "off")
                     ? ["Shaders (*.frag *.vert)"]
                     : ["Compiled shaders (*.frag.qsb *.vert.qsb)"];
             }
             function isFragShaderPath(path) {
-                return appSettings.hdrPreviewEnabled ? path.endsWith(".frag") : path.endsWith(".frag.qsb");
+                return (appSettings.nativeRenderMode !== "off") ? path.endsWith(".frag") : path.endsWith(".frag.qsb");
             }
             function isVertShaderPath(path) {
-                return appSettings.hdrPreviewEnabled ? path.endsWith(".vert") : path.endsWith(".vert.qsb");
+                return (appSettings.nativeRenderMode !== "off") ? path.endsWith(".vert") : path.endsWith(".vert.qsb");
             }
 
             // ------------------------------------------------------------------ scene persistence
@@ -5422,7 +5562,7 @@ Window {
                 isInteractive: viewport.foregroundLayer === 0
                 previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
-                hdrPreviewEnabled: appSettings.hdrPreviewEnabled
+                nativeModeActive: (appSettings.nativeRenderMode !== "off")
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
                 // Foreground: fully opaque.  Staging during dissolve: fades 0→1.
@@ -5457,7 +5597,7 @@ Window {
                 isInteractive: viewport.foregroundLayer === 1
                 previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
-                hdrPreviewEnabled: appSettings.hdrPreviewEnabled
+                nativeModeActive: (appSettings.nativeRenderMode !== "off")
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
                 opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 1 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
@@ -6302,14 +6442,14 @@ Window {
 
             FileDialog {
                 id: fragFileDialog
-                title: appSettings.hdrPreviewEnabled ? "Select fragment shader" : "Select compiled fragment shader"
+                title: (appSettings.nativeRenderMode !== "off") ? "Select fragment shader" : "Select compiled fragment shader"
                 nameFilters: viewport.shaderFragNameFilters()
                 onAccepted: newshaderSettings.fragFilePath = selectedFile.toString()
             }
 
             FileDialog {
                 id: vertFileDialog
-                title: appSettings.hdrPreviewEnabled ? "Select vertex shader" : "Select compiled vertex shader"
+                title: (appSettings.nativeRenderMode !== "off") ? "Select vertex shader" : "Select compiled vertex shader"
                 nameFilters: viewport.shaderVertNameFilters()
                 onAccepted: newshaderSettings.vertFilePath = selectedFile.toString()
             }
@@ -6438,7 +6578,7 @@ Window {
 
             FileDialog {
                 id: selectFragSwapDialog
-                title: appSettings.hdrPreviewEnabled ? "Select fragment shader" : "Select compiled fragment shader"
+                title: (appSettings.nativeRenderMode !== "off") ? "Select fragment shader" : "Select compiled fragment shader"
                 nameFilters: viewport.shaderFragNameFilters()
                 property int targetSourceIdx: -1
                 onAccepted: {
@@ -6460,7 +6600,7 @@ Window {
 
             FileDialog {
                 id: selectVertSwapDialog
-                title: appSettings.hdrPreviewEnabled ? "Select vertex shader" : "Select compiled vertex shader"
+                title: (appSettings.nativeRenderMode !== "off") ? "Select vertex shader" : "Select compiled vertex shader"
                 nameFilters: viewport.shaderVertNameFilters()
                 onAccepted: {
                     if (selectSettings.hasActiveShader) {
@@ -6633,48 +6773,23 @@ Window {
             }
 
             Image {
-                x: (viewport.areaDragging ? viewport.areaX2 : (viewport.textBoxDragging ? viewport.tbX2 : (viewport.imageDragging ? viewport.imgX2 : (viewport.videoDragging ? viewport.vidX2 : (viewport.shaderDragging ? viewport.shaderX2 : (viewport.elementDragging ? viewport.elementDragX : (viewport.boxSelecting ? viewport.boxSelectX2 : viewportCursorArea.mouseX))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -8 : 0)
-                y: (viewport.areaDragging ? viewport.areaY2 : (viewport.textBoxDragging ? viewport.tbY2 : (viewport.imageDragging ? viewport.imgY2 : (viewport.videoDragging ? viewport.vidY2 : (viewport.shaderDragging ? viewport.shaderY2 : (viewport.elementDragging ? viewport.elementDragY : (viewport.boxSelecting ? viewport.boxSelectY2 : viewportCursorArea.mouseY))))))) + ((viewport.effectiveTool === "select" || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen) ? -1 : 0)
+                // Phase 7 Part 5: source/x/y/visible all delegate to the
+                // shared functions on viewport (_resolveCursorIconPath/
+                // _cursorIconPos/_cursorIconVisible) so this Qt-side item and
+                // the native "cursor" push in nativeChromeExtraJson can never
+                // silently drift apart. Both use the same 36-unit base size
+                // (see the "cursor" push below) -- rasterized at a much
+                // higher base resolution (_SVG_RASTER_SIZE) than either
+                // actually displays at, purely for on-screen sharpness.
+                x: viewport._cursorIconPos().x
+                y: viewport._cursorIconPos().y
                 width:  mainWindow.previewActive ? 36 / mainWindow.editorScale : 36
                 height: mainWindow.previewActive ? 36 / mainWindow.editorScale : 36
-                source: {
-                    if (viewport.elementDragging)
-                        return "icons/pinch.svg";
-                    if (sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen)
-                        return "icons/select.svg";
-                    if (viewport.effectiveTool === "simulate") {
-                        var slot = "select", cpath = "";
-                        if (viewport.hoveredAreaIndex >= 0) {
-                            var hm = viewport.areasModel.get(viewport.hoveredAreaIndex);
-                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
-                        } else if (viewport.hoveredTbIndex >= 0) {
-                            var hm = viewport.textBoxesModel.get(viewport.hoveredTbIndex);
-                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
-                        } else if (viewport.hoveredImageIndex >= 0) {
-                            var hm = viewport.imagesModel.get(viewport.hoveredImageIndex);
-                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
-                        } else if (viewport.hoveredVideoIndex >= 0) {
-                            var hm = viewport.videosModel.get(viewport.hoveredVideoIndex);
-                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
-                        } else if (viewport.hoveredShaderIndex >= 0) {
-                            var hm = viewport.shadersModel.get(viewport.hoveredShaderIndex);
-                            if (hm) { slot = hm.cursor || "select"; cpath = hm.cursorPath || ""; }
-                        }
-                        if (slot === "custom")
-                            return cpath || "";
-                        var labels = ["select", "highlight", "drag", "left", "up", "down", "right"];
-                        var slotIdx = labels.indexOf(slot);
-                        if (slotIdx < 0)
-                            return "";
-                        var mode = storyHubSettingsView.selectedCursor;
-                        if (mode === "custom")
-                            return storyHubSettingsView.cursorCustomPaths[slotIdx] || "";
-                        return "icons/" + storyHubSettingsView.cursorOptions[mode === "angel" ? 0 : 1].icons[slotIdx];
-                    }
-                    var tools = ["select", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"];
-                    return tools.indexOf(viewport.effectiveTool) !== -1 ? "icons/" + viewport.effectiveTool + ".svg" : "";
-                }
-                visible: !viewport.textEditing && viewportCursorArea.containsMouse && (viewport.elementDragging || sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen || ["select", "simulate", "relayer", "destroy", "newarea", "newtext", "newimage", "newvideo", "newshader"].indexOf(viewport.effectiveTool) !== -1)
+                source: viewport._resolveCursorIconPath()
+                visible: viewport._cursorIconVisible()
+                // Native draws its own cursor icon once qtPresentationSuspended
+                // -- without this, HDR mode would show both at once.
+                opacity: viewport.qtPresentationSuspended ? 0 : 1
                 fillMode: Image.PreserveAspectFit
                 z: 1000
             }
@@ -10312,7 +10427,7 @@ Window {
                                                     viewport.shadersModel.setProperty(idx, "baseFragPath", path);
                                                     viewport.shadersModel.setProperty(idx, "uniformsJson", JSON.stringify(viewport.buildUniformsList(shaderInspector.inspectShader(path))));
                                                     selectSettings.refreshShaderUniforms();
-                                                } else if (!appSettings.hdrPreviewEnabled && path.endsWith(".frag"))
+                                                } else if (appSettings.nativeRenderMode === "off" && path.endsWith(".frag"))
                                                     newshaderSettings.warnUncompiled();
                                             }
                                         }
@@ -10371,7 +10486,7 @@ Window {
                                                 if (viewport.isVertShaderPath(path)) {
                                                     viewport.shadersModel.setProperty(viewport.selectedShaders[0], "vertPath", path);
                                                     viewport.shadersModel.setProperty(viewport.selectedShaders[0], "baseVertPath", path);
-                                                } else if (!appSettings.hdrPreviewEnabled && path.endsWith(".vert"))
+                                                } else if (appSettings.nativeRenderMode === "off" && path.endsWith(".vert"))
                                                     newshaderSettings.warnUncompiled();
                                             }
                                         }
@@ -11857,7 +11972,7 @@ Window {
                                     var path = drop.urls[0].toString();
                                     if (viewport.isFragShaderPath(path)) {
                                         newshaderSettings.fragFilePath = path;
-                                    } else if (!appSettings.hdrPreviewEnabled && path.endsWith(".frag")) {
+                                    } else if (appSettings.nativeRenderMode === "off" && path.endsWith(".frag")) {
                                         newshaderSettings.warnUncompiled();
                                     }
                                 }
@@ -11906,7 +12021,7 @@ Window {
                                     var path = drop.urls[0].toString();
                                     if (viewport.isVertShaderPath(path)) {
                                         newshaderSettings.vertFilePath = path;
-                                    } else if (!appSettings.hdrPreviewEnabled && path.endsWith(".vert")) {
+                                    } else if (appSettings.nativeRenderMode === "off" && path.endsWith(".vert")) {
                                         newshaderSettings.warnUncompiled();
                                     }
                                 }
@@ -12234,7 +12349,7 @@ Window {
                         repeat: true
                         running: navigationSettings.deleteTarget !== ""
                         onTriggered: {
-                            navigationSettings.deleteProgress += 16.0 / 600.0;
+                            navigationSettings.deleteProgress += 16.0 / 1200.0;
                             if (navigationSettings.deleteProgress >= 1.0) {
                                 var t = navigationSettings.deleteTarget;
                                 navigationSettings.cancelNavDelete();

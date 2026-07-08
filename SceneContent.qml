@@ -46,22 +46,25 @@ Item {
     property bool previewActive: false
     property bool globalMuted: false
 
-    // Phase 7 Part 3: raw hdrPreviewEnabled setting, threaded in from
-    // appSettings (see qtPresentationSuspended below for the actual gate).
-    property bool hdrPreviewEnabled: false
+    // Phase 8: raw "is native rendering active at all" flag (either
+    // color-space mode, sdr or hdr), threaded in from appSettings.
+    // nativeRenderMode !== "off" (see qtPresentationSuspended below for the
+    // actual gate). Was a plain hdrPreviewEnabled bool before Phase 8 added
+    // an SDR mode alongside HDR.
+    property bool nativeModeActive: false
 
     // True whenever the native SDL3 pipeline is the sole renderer for the
     // viewport right now. Phase 7 Part 3 scoped this to preview/simulate
-    // mode only (hdrPreviewEnabled && previewActive), since the plain
-    // editor canvas had real interactive chrome (selection/resize handles
-    // etc.) drawn by Qt on top of content, and the native overlay was a
-    // fully opaque top-most window with no awareness of that chrome.
-    // Part 4 solves that (see hdr_viewport.py's _attach(), the
-    // ignoresMouseEvents wiring): chrome stays fully live but invisible
-    // (opacity 0, not visible: false, so hit-testing/drag/cursor-shape
-    // changes keep working) underneath the opaque native window, which is
-    // click-through. That means the plain editor canvas is native too now,
-    // not just preview -- so this simplifies to hdrPreviewEnabled alone.
+    // mode only, since the plain editor canvas had real interactive chrome
+    // (selection/resize handles etc.) drawn by Qt on top of content, and
+    // the native overlay was a fully opaque top-most window with no
+    // awareness of that chrome. Part 4 solves that (see hdr_viewport.py's
+    // _attach(), the ignoresMouseEvents wiring): chrome stays fully live
+    // but invisible (opacity 0, not visible: false, so hit-testing/drag/
+    // cursor-shape changes keep working) underneath the opaque native
+    // window, which is click-through. That means the plain editor canvas
+    // is native too now, not just preview -- so this simplifies to
+    // nativeModeActive alone.
     //
     // Gates Qt's own on-screen visual presentation (VideoOutput/Image/
     // interactive-TextEdit painting) so its real content never becomes
@@ -76,8 +79,20 @@ Item {
     // property today is a place where "ask Qt to present something" would
     // instead need to become "ask a non-Qt backend," so keeping the check
     // itself narrow and centrally-named (rather than scattered ad hoc
-    // hdrPreviewEnabled checks) is what makes that future swap tractable.
-    readonly property bool qtPresentationSuspended: hdrPreviewEnabled
+    // mode checks) is what makes that future swap tractable.
+    //
+    // Phase 9: briefly tried scoping this to `nativeModeActive &&
+    // nativeEligible`, to give non-eligible scenes (e.g. 2+ videos) a real
+    // Qt fallback instead of a black screen. Reverted -- confirmed by the
+    // user this is architecturally wrong: the native pipeline is meant to
+    // put zero Qt rendering in the viewport once active, full stop, not
+    // fall back to Qt piecemeal per scene. The resulting black screen for
+    // non-eligible scenes is the correct, deliberate "no fallback
+    // possible" behavior (same contract already accepted for legacy .qsb
+    // shader scenes) -- native multi-video support, if wanted, needs to be
+    // a real feature (the native pipeline actually rendering N videos),
+    // not a Qt escape hatch.
+    readonly property bool qtPresentationSuspended: nativeModeActive
 
     // ── Load readiness ──────────────────────────────────────────────────────
     property int pendingLoads: 0
@@ -109,6 +124,52 @@ Item {
 
     ListModel { id: shadersModelInst }
     readonly property alias shadersModel: shadersModelInst
+
+    // Phase 9: a brand-new element (drag-dropped in, `<model>.append(...)`
+    // in understoryui.qml) previously never triggered a native rebuild at
+    // all -- none of the ~12 append call sites called
+    // _scheduleNativeElementsRebuild() themselves (unlike the deletion path,
+    // which Phase 7 Part 5 already fixed explicitly per removal call site).
+    // Rather than patch every append site individually (easy to miss a
+    // future one), watch each model's own countChanged signal directly --
+    // it fires on append/insert/remove/clear alike, so this is a single,
+    // robust catch-all. Additive alongside the existing explicit post-
+    // remove() calls, not a replacement for them.
+    Connections {
+        target: areasModelInst
+        function onCountChanged() {
+            sceneContent._scheduleNativeElementsRebuild()
+            sceneContent._scheduleNativeChromeRebuild()
+        }
+    }
+    Connections {
+        target: textBoxesModelInst
+        function onCountChanged() {
+            sceneContent._scheduleNativeElementsRebuild()
+            sceneContent._scheduleNativeChromeRebuild()
+        }
+    }
+    Connections {
+        target: imagesModelInst
+        function onCountChanged() {
+            sceneContent._scheduleNativeElementsRebuild()
+            sceneContent._scheduleNativeChromeRebuild()
+        }
+    }
+    Connections {
+        target: videosModelInst
+        function onCountChanged() {
+            sceneContent._scheduleNativeElementsRebuild()
+            sceneContent._scheduleNativeChromeRebuild()
+        }
+    }
+    Connections {
+        target: shadersModelInst
+        function onCountChanged() {
+            sceneContent._scheduleNativeElementsRebuild()
+            sceneContent._scheduleNativeChromeRebuild()
+        }
+    }
 
     // audioTracksModelInst rows: manually-added mixer tracks (via the "+" button or a
     // file dropped straight onto the mixer) that aren't tied to any other on-canvas
@@ -333,7 +394,7 @@ Item {
 
     // Phase 7 Part 2: a shader element only disqualifies the scene if it's
     // still a legacy .qsb shader (Qt-only, per the explicit compatibility
-    // model -- old .qsb stories are viewed with hdrPreviewEnabled off). A
+    // model -- old .qsb stories are viewed with native rendering off). A
     // .frag/.vert shader (the new native format) no longer disqualifies.
     function _shaderIsLegacyQsb(s) {
         var p = (s.fragPath || "").toLowerCase()
@@ -448,6 +509,19 @@ Item {
             // possible" contract already accepted for legacy .qsb scenes.
             sceneContent.nativeEligible = sceneContent._computeNativeEligible()
             sceneContent.nativeTransitionEligible = sceneContent._computeNativeTransitionEligible()
+            // Phase 9: re-derive nativeVideoPath too (same formula as
+            // loadScene()'s one-time computation), not just nativeEligible --
+            // previously nothing recomputed this when eligibility toggled
+            // false then true again (e.g. add a 2nd video, then delete it).
+            // The only other writer is each video delegate's own
+            // onTrackedFilePathChanged, guarded by nativeEligible at the
+            // instant it fires -- with 2+ video delegates briefly alive at
+            // once, whichever one last wrote before eligibility went false
+            // stuck around unchanged, so re-eligibility could silently
+            // resume playing a since-deleted video's file instead of the
+            // remaining one's.
+            sceneContent.nativeVideoPath = (sceneContent.nativeEligible && videosModelInst.count === 1)
+                ? videosModelInst.get(0).filePath : ""
             sceneContent._buildNativeElements()
         })
     }
@@ -778,7 +852,11 @@ Item {
                     // bindings in this delegate scope (unlike a .get() snapshot),
                     // so this reacts correctly to both the move-MouseArea and any
                     // resize-handle drag mutating the same roles via setProperty.
-                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    // Phase 9: stackOrder added too -- the relayer tool mutates it
+                    // the same way (setProperty), and was previously untracked,
+                    // leaving native content/chrome stacking stale until the
+                    // scene was left and re-entered.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked + "," + model.stackOrder
                     on_TrackedChromeKeyChanged: {
                         sceneContent._scheduleNativeChromeRebuild()
                         // Phase 7 Part 4: nativeElementsJson's per-element rect was
@@ -1379,7 +1457,11 @@ Item {
                     // bindings in this delegate scope (unlike a .get() snapshot),
                     // so this reacts correctly to both the move-MouseArea and any
                     // resize-handle drag mutating the same roles via setProperty.
-                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    // Phase 9: stackOrder added too -- the relayer tool mutates it
+                    // the same way (setProperty), and was previously untracked,
+                    // leaving native content/chrome stacking stale until the
+                    // scene was left and re-entered.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked + "," + model.stackOrder
                     on_TrackedChromeKeyChanged: {
                         sceneContent._scheduleNativeChromeRebuild()
                         // Phase 7 Part 4: nativeElementsJson's per-element rect was
@@ -2069,7 +2151,11 @@ Item {
                     // bindings in this delegate scope (unlike a .get() snapshot),
                     // so this reacts correctly to both the move-MouseArea and any
                     // resize-handle drag mutating the same roles via setProperty.
-                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    // Phase 9: stackOrder added too -- the relayer tool mutates it
+                    // the same way (setProperty), and was previously untracked,
+                    // leaving native content/chrome stacking stale until the
+                    // scene was left and re-entered.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked + "," + model.stackOrder
                     on_TrackedChromeKeyChanged: {
                         sceneContent._scheduleNativeChromeRebuild()
                         // Phase 7 Part 4: nativeElementsJson's per-element rect was
@@ -2150,6 +2236,7 @@ Item {
                         height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 2
                         color: Qt.rgba(1, 0, 0, imgDelegate.isBeingDeleted ? viewportRef.deleteProgress * 0.6 : 0)
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                     }
 
                     // Move
@@ -2696,7 +2783,11 @@ Item {
                     // bindings in this delegate scope (unlike a .get() snapshot),
                     // so this reacts correctly to both the move-MouseArea and any
                     // resize-handle drag mutating the same roles via setProperty.
-                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    // Phase 9: stackOrder added too -- the relayer tool mutates it
+                    // the same way (setProperty), and was previously untracked,
+                    // leaving native content/chrome stacking stale until the
+                    // scene was left and re-entered.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked + "," + model.stackOrder
                     on_TrackedChromeKeyChanged: {
                         sceneContent._scheduleNativeChromeRebuild()
                         // Phase 7 Part 4: nativeElementsJson's per-element rect was
@@ -3186,6 +3277,7 @@ Item {
                         height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 2
                         color: Qt.rgba(1, 0, 0, vidDelegate.isBeingDeleted ? viewportRef.deleteProgress * 0.6 : 0)
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                     }
 
                     // Move
@@ -3746,7 +3838,11 @@ Item {
                     // bindings in this delegate scope (unlike a .get() snapshot),
                     // so this reacts correctly to both the move-MouseArea and any
                     // resize-handle drag mutating the same roles via setProperty.
-                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked
+                    // Phase 9: stackOrder added too -- the relayer tool mutates it
+                    // the same way (setProperty), and was previously untracked,
+                    // leaving native content/chrome stacking stale until the
+                    // scene was left and re-entered.
+                    readonly property string _trackedChromeKey: model.x1 + "," + model.y1 + "," + model.x2 + "," + model.y2 + "," + model.locked + "," + model.stackOrder
                     on_TrackedChromeKeyChanged: {
                         sceneContent._scheduleNativeChromeRebuild()
                         // Phase 7 Part 4: nativeElementsJson's per-element rect was
@@ -3947,6 +4043,7 @@ Item {
                         height: parent.height - 56 / sceneContent.editorScaleFactor
                         z: 2
                         color: Qt.rgba(1, 0, 0, shaderDelegate.isBeingDeleted ? viewportRef.deleteProgress * 0.6 : 0)
+                        opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                     }
 
                     // Move

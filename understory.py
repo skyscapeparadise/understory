@@ -107,12 +107,12 @@ class ShaderInspector(QObject):
     Two entirely separate reflection sources depending on shader format --
     matching Phase 7 Part 2's decision to run two fully parallel shader
     systems rather than unify them: legacy .qsb (Qt Shader Tools' own
-    `qsb -d` dump, still used when hdrPreviewEnabled is off, so old stories
+    `qsb -d` dump, still used when native rendering is off, so old stories
     keep working unchanged) or native .frag/.vert GLSL (glslc + spirv-cross
-    via hdr_viewport.compile_and_reflect_glsl, used when hdrPreviewEnabled
-    is on -- this is what actually drops the qsb requirement/licensing
-    concern for shader elements going forward, not just moving where qsb
-    gets invoked from)."""
+    via hdr_viewport.compile_and_reflect_glsl, used when native rendering
+    is on, in either color-space mode -- this is what actually drops the
+    qsb requirement/licensing concern for shader elements going forward,
+    not just moving where qsb gets invoked from)."""
 
     @Slot(str, result="QVariant")
     def inspectShader(self, path):
@@ -1860,9 +1860,10 @@ engine.load(qml_file)
 if not engine.rootObjects():
     sys.exit(-1)
 
-# Native HDR preview pipeline (Phase 4) -- opt-in via appSettings.hdrPreviewEnabled,
-# no-op unless enabled/supported/on macOS. Falls back to the existing Qt video
-# pipeline entirely on its own if construction fails for any reason.
+# Native preview pipeline (Phase 4; Phase 8 added the "sdr" mode) -- opt-in
+# via appSettings.nativeRenderMode ("off"/"sdr"/"hdr"), no-op unless
+# enabled/supported/on macOS. Falls back to the existing Qt video pipeline
+# entirely on its own if construction fails for any reason.
 if HDRVideoBridge is not None:
     try:
         hdrBridge = HDRVideoBridge(engine.rootObjects()[0])
