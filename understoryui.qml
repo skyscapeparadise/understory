@@ -3842,10 +3842,13 @@ Window {
             // active/staging scene qualifies for the native pipeline instead of Qt's.
             readonly property bool activeNativeEligible:  activeContent  ? activeContent.nativeEligible  : false
             readonly property bool stagingNativeEligible: stagingContent ? stagingContent.nativeEligible : false
-            readonly property string activeNativeVideoPath: activeContent ? activeContent.nativeVideoPath : ""
-            readonly property var activeNativeVideoPlayer: activeContent ? activeContent.nativeVideoPlayer : null
-            readonly property string stagingNativeVideoPath: stagingContent ? stagingContent.nativeVideoPath : ""
-            readonly property var stagingNativeVideoPlayer: stagingContent ? stagingContent.nativeVideoPlayer : null
+            // Phase 10 Stage 1: one {path, player} entry per native-eligible
+            // video element, replacing the old singular
+            // activeNativeVideoPath/activeNativeVideoPlayer pair (and its
+            // staging-side twin) now that any number of videos can be
+            // native at once -- see SceneContent.qml's nativeVideoPlayers.
+            readonly property var activeNativeVideoPlayers: activeContent ? activeContent.nativeVideoPlayers : []
+            readonly property var stagingNativeVideoPlayers: stagingContent ? stagingContent.nativeVideoPlayers : []
             // Strict single-fullscreen-video-only rule, preserved from Phase 4 --
             // native transition compositing (wipe/slide/look) only ever learned to
             // blend two video sources, so it stays gated on this even though

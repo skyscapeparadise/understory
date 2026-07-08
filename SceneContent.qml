@@ -344,50 +344,53 @@ Item {
         }
         nativeEligible = _computeNativeEligible()
         nativeTransitionEligible = _computeNativeTransitionEligible()
-        // nativeEligible no longer implies exactly one video (Phase 5 allows
-        // image/text-only scenes) -- guard the count before indexing.
-        nativeVideoPath = (nativeEligible && videosModelInst.count === 1) ? videosModelInst.get(0).filePath : ""
-        nativeVideoPlayer = null
-        // videosRepeater's delegate (vidDelegate) may not exist yet at this exact
-        // point in some model-update orderings -- Qt.callLater defers this one
-        // event-loop tick, by which point Repeater delegate creation is done.
-        if (nativeEligible && videosModelInst.count === 1) Qt.callLater(_bindNativeVideoPlayer)
+        nativeVideoPlayers = []
+        // videosRepeater's delegates (vidDelegate) may not exist yet at this
+        // exact point in some model-update orderings -- Qt.callLater defers
+        // this one event-loop tick, by which point Repeater delegate
+        // creation is done.
+        if (nativeEligible && videosModelInst.count > 0) Qt.callLater(_bindNativeVideoPlayers)
         _buildNativeElements()
         _buildNativeChrome()
     }
 
-    // Re-resolves nativeVideoPlayer from the live Repeater state. Safe to call
-    // redundantly (e.g. if a second loadScene() fires before this one's
-    // callLater runs) since it always reads current state, not a snapshot.
-    function _bindNativeVideoPlayer() {
-        if (!nativeEligible) return
-        var item = videosRepeater.itemAt(0)
-        nativeVideoPlayer = item ? item.player : null
+    // Re-resolves nativeVideoPlayers from the live Repeater state -- one
+    // {path, player} entry per video element, Phase 10 Stage 1's
+    // replacement for the old single nativeVideoPath/nativeVideoPlayer pair
+    // now that any number of videos can be native-eligible at once. Safe to
+    // call redundantly (e.g. if a second loadScene() fires before this
+    // one's callLater runs, or from a single video's own reactive path
+    // push below) since it always rebuilds from current state, not a
+    // snapshot.
+    function _bindNativeVideoPlayers() {
+        if (!nativeEligible) { nativeVideoPlayers = []; return }
+        var players = []
+        for (var i = 0; i < videosRepeater.count; i++) {
+            var item = videosRepeater.itemAt(i)
+            if (item && item.player) players.push({ path: item.trackedFilePath, player: item.player, item: item })
+        }
+        nativeVideoPlayers = players
     }
 
     // ── Native HDR preview pipeline (Phase 4/5) ─────────────────────────────
-    // Two distinct eligibility rules. Steady-state (nativeEligible) is
-    // relaxed as of Phase 5: 0 or 1 video (image/text-only scenes now
-    // qualify) plus any number of images/text, nothing else on canvas
-    // besides areas (which render nothing). A video, if present, still must
-    // be fullscreen and non-crossfade -- the renderer no longer strictly
-    // needs that, but relaxing it further is separate future work, not this
-    // phase's risk to take on. Transition eligibility (nativeTransitionEligible)
-    // preserves Phase 4's original strict rule verbatim (exactly one
-    // fullscreen video, nothing else at all) since native wipe/slide/look
-    // compositing only ever learned to blend two video sources -- a
-    // transition into/out of anything else falls back to Qt for that
-    // transition's duration (see hdr_viewport.py's qt_fallback path).
-    // Both recomputed once per loadScene() call, not live bindings -- editing
-    // only happens outside preview mode, and re-evaluating on every model
-    // mutation during editing would be wasted work.
+    // Steady-state (nativeEligible) and transition (nativeTransitionEligible)
+    // eligibility now share the exact same rule (see
+    // _computeNativeTransitionEligible() below) -- any number of images/
+    // text plus any number of non-crossfading videos (Phase 10 Stage 1
+    // dropped the old "at most one video" cap), nothing else on canvas
+    // besides areas (which render nothing). Both recomputed once per
+    // loadScene() call, not live bindings -- editing only happens outside
+    // preview mode, and re-evaluating on every model mutation during
+    // editing would be wasted work.
     property bool nativeEligible: false
     property bool nativeTransitionEligible: false
-    property string nativeVideoPath: ""
-    // The real MediaPlayer driving the qualifying video, so the native
+    // Phase 10 Stage 1: one {path, player} entry per native-eligible video
+    // element, replacing the old singular nativeVideoPath/nativeVideoPlayer
+    // pair now that any number of videos can be native at once. Each
+    // player is the real MediaPlayer driving that video, so the native
     // pipeline can sync its own frame selection to MediaPlayer.position
     // instead of reimplementing audio-independent playback pacing.
-    property var nativeVideoPlayer: null
+    property var nativeVideoPlayers: []
     // z-sorted [{type,x1,y1,x2,y2,z,path,rev}, ...] snapshot for the native
     // pipeline to render -- see _buildNativeElements().
     property string nativeElementsJson: "[]"
@@ -405,7 +408,6 @@ Item {
         for (var i = 0; i < shadersModelInst.count; i++) {
             if (_shaderIsLegacyQsb(shadersModelInst.get(i))) return false
         }
-        if (videosModelInst.count > 1) return false
         // Phase 7 Part 4: previously also required the sole video to span
         // the full canvas -- a Phase 5-era scoping decision, not a real
         // renderer requirement (video composites through the exact same
@@ -416,10 +418,22 @@ Item {
         // blanking it -- previously unreachable since native rendering never
         // ran during plain editing before this phase. Dropped entirely; a
         // video can now be any rect.
-        if (videosModelInst.count === 1) {
-            var v = videosModelInst.get(0)
-            if (v.vidCrossfade) return false
-        }
+        //
+        // Phase 10 Stage 1: the old "at most one video" limit is gone too --
+        // _composite_elements_pass now looks up each video element's own
+        // source by path (see hdr_viewport.py's _reconcile_video_sources)
+        // instead of being handed a single shared source, so any number of
+        // videos can render natively.
+        //
+        // Phase 10 Stage 2: vidCrossfade no longer disqualifies a scene
+        // either -- the native pipeline now mirrors Qt's own crossfade
+        // ping-pong state (vidCfActive/vidCfPrerolling/secondaryOpacity,
+        // polled live each tick, see hdr_viewport.py) instead of
+        // re-implementing it. Safe to allow through transition eligibility
+        // too (this function backs both): crossfade already hard-resets to
+        // a clean single-video state the instant a transition begins (see
+        // on_InTransitionWatcherChanged below), so a transition never
+        // actually has to render a mid-crossfade video.
         var renderable = videosModelInst.count + imagesModelInst.count + textBoxesModelInst.count + shadersModelInst.count
         return renderable > 0
     }
@@ -509,19 +523,17 @@ Item {
             // possible" contract already accepted for legacy .qsb scenes.
             sceneContent.nativeEligible = sceneContent._computeNativeEligible()
             sceneContent.nativeTransitionEligible = sceneContent._computeNativeTransitionEligible()
-            // Phase 9: re-derive nativeVideoPath too (same formula as
-            // loadScene()'s one-time computation), not just nativeEligible --
-            // previously nothing recomputed this when eligibility toggled
-            // false then true again (e.g. add a 2nd video, then delete it).
-            // The only other writer is each video delegate's own
-            // onTrackedFilePathChanged, guarded by nativeEligible at the
-            // instant it fires -- with 2+ video delegates briefly alive at
-            // once, whichever one last wrote before eligibility went false
-            // stuck around unchanged, so re-eligibility could silently
-            // resume playing a since-deleted video's file instead of the
-            // remaining one's.
-            sceneContent.nativeVideoPath = (sceneContent.nativeEligible && videosModelInst.count === 1)
-                ? videosModelInst.get(0).filePath : ""
+            // Phase 9: re-derive the native video player list too, not just
+            // nativeEligible -- previously nothing recomputed this when
+            // eligibility toggled false then true again (e.g. add a 2nd
+            // video, then delete it), so re-eligibility could silently keep
+            // pointing at a since-deleted video. Phase 10 Stage 1:
+            // _bindNativeVideoPlayers() already rebuilds the full
+            // {path, player} array fresh from the live Repeater every time
+            // it's called (see its own docstring), so calling it here
+            // handles any number of videos correctly, not just the single-
+            // video case B4 originally fixed.
+            sceneContent._bindNativeVideoPlayers()
             sceneContent._buildNativeElements()
         })
     }
@@ -2762,9 +2774,19 @@ Item {
                     z: 100 + model.stackOrder
                     layer.enabled: !sceneContent.previewActive
 
-                    // Exposed so sceneContent._bindNativeVideoPlayer() can hand this
+                    // Exposed so sceneContent._bindNativeVideoPlayers() can hand this
                     // MediaPlayer's `position` to the native HDR pipeline for sync.
                     readonly property var player: vidPlayer
+                    // Phase 10 Stage 2: same idea, for crossfade ping-pong looping --
+                    // playerB is the secondary MediaPlayer's position, secondaryOpacity
+                    // is vidOutputB's own live-animated opacity (0 when no crossfade is
+                    // active, ramping during the fade in/out at loop boundaries). Both
+                    // read live off this item every render tick (see
+                    // hdr_viewport.py's per-tick crossfade-state poll), not baked into
+                    // the nativeVideoPlayers array at bind time -- they change far too
+                    // often (every tick) for that.
+                    readonly property var playerB: vidPlayerB
+                    readonly property real secondaryOpacity: vidOutputB.opacity
 
                     property bool isSelect: isInteractive && buttonGridRef.selectedTool === "select"
                     property bool isActive: isSelect && (viewportRef.selectionRevision >= 0) && viewportRef.selectedVideos.indexOf(index) !== -1 && !viewportRef.capturingThumbnail
@@ -2861,16 +2883,18 @@ Item {
                     }
 
                     onTrackedFilePathChanged: {
-                        // nativeVideoPath is only set once inside loadScene() -- without this,
-                        // a mid-clip source swap (evaluateAllSourcesForContent/
+                        // nativeVideoPlayers is only built once inside loadScene() -- without
+                        // this, a mid-clip source swap (evaluateAllSourcesForContent/
                         // completeVideoTransition mutating model.filePath directly, no
                         // loadScene() call involved) would leave the native pipeline
                         // silently stuck on the old file forever, not just flash once.
                         // model.filePath bindings are reliably reactive in a delegate
                         // context (unlike ListModel.get(i).x snapshot reads elsewhere in
                         // this file), so pushing from here catches every case loadScene()
-                        // itself would otherwise miss.
-                        if (sceneContent.nativeEligible) sceneContent.nativeVideoPath = trackedFilePath
+                        // itself would otherwise miss. _bindNativeVideoPlayers() rebuilds
+                        // the whole array fresh (safe to call redundantly), so this one
+                        // delegate's path change correctly updates just its own entry.
+                        if (sceneContent.nativeEligible) sceneContent._bindNativeVideoPlayers()
                         if (!vidDelegate.videoReadySignaled) {
                             // Still in initial load — follow model directly, no freeze needed
                             vidDelegate.liveFilePath = trackedFilePath

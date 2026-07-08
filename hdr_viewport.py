@@ -115,7 +115,7 @@ import sys
 import tempfile
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from PySide6.QtCore import QObject
 
@@ -164,6 +164,18 @@ _GAMMA = 1.2 + 0.42 * math.log10(max(_PEAK_NITS, 1.0) / 1000.0)
 # video in prototypes/hdr_phase5_mixed_compositing_test.py (Stage 0);
 # user confirmed the default looked right with no adjustment needed.
 _SDR_REF_NITS = 203.0
+
+# Phase 10: how long a _VideoSource stays cached after it's no longer
+# referenced by anything on screen, before actually being torn down and
+# released -- see _reconcile_video_sources. Revisiting a scene within this
+# window (a very common navigation pattern -- bouncing between two scenes,
+# browsing a small set) reuses the still-decoding source instead of paying
+# a fresh av.open()+decode-thread-startup cost and the brief black flash
+# that comes with it (a freshly-created source has no real frames yet).
+# Cheap to keep around: _VideoSource's decode thread blocks once its ring
+# buffer fills (see _buffer_put), so an idle cached-but-unused source isn't
+# burning CPU, just holding a little memory and a blocked thread.
+_VIDEO_SOURCE_GRACE_SECONDS = 30.0
 
 # Phase 8 Stage 2: HLG's own graceful-SDR-fallback behavior -- re-running
 # the SAME hlg_inverse_oetf/hlg_ootf decode chain used for genuine HDR
@@ -401,6 +413,7 @@ struct Uniforms {
     float exposure;
     float contrast;
     float gamut_convert;
+    float opacity;
 };
 
 fragment float4 fs_main(VertexOut in [[stage_in]],
@@ -414,7 +427,7 @@ fragment float4 fs_main(VertexOut in [[stage_in]],
     if (u.gamut_convert > 0.5) {
         nits = bt2020_to_bt709(nits);
     }
-    return float4(nits, 1.0);
+    return float4(nits, u.opacity);
 }
 """
 )
@@ -519,6 +532,7 @@ SDR_VIDEO_LINEAR_FRAGMENT_MSL = (
     + """
 struct SDRVideoUniforms {
     float sdr_ref_nits;
+    float opacity;
 };
 
 fragment float4 fs_main(VertexOut in [[stage_in]],
@@ -531,7 +545,7 @@ fragment float4 fs_main(VertexOut in [[stage_in]],
     float2 cbcr = uvTex.sample(uvSmp, in.uv).rg;
     float3 signal = clamp(ycbcr_to_rgb_bt709(y, cbcr.x, cbcr.y), 0.0, 1.0);
     float3 lin = srgb_eotf(signal) * u.sdr_ref_nits;
-    return float4(lin, 1.0);
+    return float4(lin, u.opacity);
 }
 """
 )
@@ -1876,6 +1890,10 @@ class VideoLinearUniforms(ctypes.Structure):
         ("exposure", ctypes.c_float),
         ("contrast", ctypes.c_float),
         ("gamut_convert", ctypes.c_float),
+        # Phase 10 Stage 2: always 1.0 for a normal single draw -- only the
+        # crossfade secondary ("B") draw ever passes something else, see
+        # _composite_elements_pass's video branch.
+        ("opacity", ctypes.c_float),
     ]
 
 
@@ -1885,6 +1903,14 @@ class RectUniform(ctypes.Structure):
 
 class SDRUniforms(ctypes.Structure):
     _fields_ = [("sdr_ref_nits", ctypes.c_float)]
+
+
+class SDRVideoUniforms(ctypes.Structure):
+    """Phase 10 Stage 2: was reusing SDRUniforms above (coincidentally the
+    same 1-field shape) -- needs its own dedicated ctypes class now that it
+    has a second field, matching its already-dedicated MSL struct name."""
+
+    _fields_ = [("sdr_ref_nits", ctypes.c_float), ("opacity", ctypes.c_float)]
 
 
 class ChromeUniforms(ctypes.Structure):
@@ -1944,15 +1970,29 @@ class _VideoSource:
         # shows a flash of whatever garbage bytes happened to be in that
         # memory (seen as e.g. a solid cyan rectangle) until the decode
         # thread's first real frame lands, which is most noticeable right at
-        # a transition's start (the incoming source is brand new). All-zero
-        # Y/UV bytes decode to true black through the HLG math (the signal
-        # RGB is clamped to [0,1] before the OOTF), so this gives a clean
-        # black flash instead -- one-time synchronous upload, negligible cost.
+        # a transition's start (the incoming source is brand new).
+        #
+        # Phase 10: an all-zero UV plane does NOT decode to true black,
+        # despite this comment's own prior claim -- confirmed both by hand
+        # and empirically (the actual bug the user saw): Y=0 is correctly
+        # "black luma" in limited-range terms, but Cb=Cr=0 is nowhere near
+        # neutral chroma (which sits at ycbcr_to_rgb_bt2020's own centering
+        # constant, 512/1023, not 0) -- it decodes to a strongly negative-
+        # red/negative-blue signal that clamps to a saturated GREEN
+        # (confirmed: clamp(ycbcr_to_rgb_bt2020(0,0,0), 0, 1) == (0, 0.347,
+        # 0)), not black. Root cause of a real, previously-unnoticed green
+        # flash at every transition boundary that creates a fresh source
+        # (dissolve/wipe/slide/look/cut alike -- any of them can hit this,
+        # not just "cut" as originally suspected). Fixed by uploading
+        # neutral chroma (512/1023, ~32800 as a 16-bit UNORM value) instead
+        # of zero for Cb/Cr -- verified this combination genuinely clamps
+        # to (0,0,0) before shipping.
         zero_y = bytes(self.y_size)
-        zero_uv = bytes(self.uv_size)
+        neutral_chroma_word = round((512 / 1023) * 65535).to_bytes(2, "little")
+        neutral_uv = (neutral_chroma_word * 2) * (self.uv_size // 4)
         init_cmdbuf = sdl3.SDL_AcquireGPUCommandBuffer(device)
         init_copy_pass = sdl3.SDL_BeginGPUCopyPass(init_cmdbuf)
-        self._upload_bytes(init_copy_pass, zero_y, zero_uv)
+        self._upload_bytes(init_copy_pass, zero_y, neutral_uv)
         sdl3.SDL_EndGPUCopyPass(init_copy_pass)
         sdl3.SDL_SubmitGPUCommandBuffer(init_cmdbuf)
 
@@ -2077,8 +2117,9 @@ class _VideoSource:
         # _buffer deque; the actual texture upload happens exclusively on
         # the render thread via try_upload_latest), so it's safe to release
         # these immediately rather than block. release() runs on the same
-        # thread as the NSTimer render callback (called from _ensure_source
-        # during a scene jump) -- a synchronous join here could stall the
+        # thread as the NSTimer render callback (called from
+        # _reconcile_video_sources during a scene jump) -- a synchronous
+        # join here could stall the
         # whole UI for up to its timeout if the decode thread's current
         # blocking call (e.g. an I/O hiccup) takes a moment to notice
         # _stop, a real and avoidable source of jank on rapid scene jumps.
@@ -2432,6 +2473,20 @@ class _ShaderSource:
             sdl3.SDL_ReleaseGPUShader(self.device, self.fragment_shader)
 
 
+def _qjsvalue_to_list(value):
+    """QQuickItem.property() on a QML `var`/`list<var>` holding a JS array
+    (e.g. nativeVideoPlayers' [{path, player}, ...]) returns a raw QJSValue,
+    not an already-converted Python list -- unlike plain bool/str/number
+    properties, which PySide6 does convert automatically. .toVariant()
+    is the real conversion step (QJSValue -> QVariantList -> Python list of
+    dicts, with each QObject value inside preserved as a live PyObject
+    wrapper via QVariant's native QObject* support)."""
+    if value is None:
+        return []
+    variant = value.toVariant() if hasattr(value, "toVariant") else value
+    return list(variant) if variant else []
+
+
 @dataclass(frozen=True)
 class QmlSnapshot:
     """One atomic, self-consistent read of every piece of "structural" QML
@@ -2481,8 +2536,6 @@ class QmlSnapshot:
     staging_native_eligible: bool = False
     active_native_transition_eligible: bool = False
     staging_native_transition_eligible: bool = False
-    active_native_video_path: str = ""
-    staging_native_video_path: str = ""
     active_native_elements_json: str = "[]"
     staging_native_elements_json: str = "[]"
     # Phase 7 Part 4: [{x1,y1,x2,y2}] for the single selected element's
@@ -2492,8 +2545,13 @@ class QmlSnapshot:
     # select marquee, multi-select groupBBox) -- see understoryui.qml's
     # viewport.nativeChromeExtraJson.
     native_chrome_extra_json: str = "[]"
-    active_native_video_player: object = None
-    staging_native_video_player: object = None
+    # Phase 10 Stage 1: one {"path": str, "player": QObject} dict per
+    # native-eligible video element, replacing the old singular
+    # active_native_video_path/active_native_video_player pair (and its
+    # staging-side twin) now that any number of videos can be native at
+    # once -- see SceneContent.qml's nativeVideoPlayers.
+    active_native_video_players: list = field(default_factory=list)
+    staging_native_video_players: list = field(default_factory=list)
     # Story resolution -- read from the same snapshot rather than a direct
     # self._viewport poll inside _ensure_linear_buffer(), so that function
     # (part of the render core) takes its input as plain data too.
@@ -2523,12 +2581,35 @@ class HDRVideoBridge(QObject):
         self._sdl_window = None
         self._timer = None
         self._snapshot = QmlSnapshot()
-        self._source = None
+        # Phase 10 Stage 1: one _VideoSource per video path currently
+        # referenced by any element list this tick (steady-state, or the
+        # active+staging union during a transition) -- replaces the old
+        # single self._source/_current_path slot (and the separate
+        # _transition_out_source/_transition_in_source pair) now that any
+        # number of videos can be native at once. Reconciled the same way
+        # _image_sources already is, see _reconcile_video_sources. A
+        # crossfading video's secondary ("B") decode instance is cached
+        # here too, under a synthetic f"{path}#B" key -- same file, a
+        # second fully independent decode at a different playback
+        # position, not a different asset.
+        self._video_sources = {}
+        # Phase 10: dict[path -> monotonic timestamp last referenced],
+        # driving the grace period above -- only touched for plain-path
+        # keys (crossfade "#B" secondary sources are always released
+        # immediately, no grace period, see _reconcile_crossfade_sources).
+        self._video_source_last_used = {}
+        # Phase 10 Stage 2: dict[path -> {"opacity": float, "needed": bool,
+        # "player_b": QObject}], rebuilt fresh every steady-state render
+        # tick from Qt's own already-computed crossfade state (see
+        # _poll_crossfade_state) -- native never re-derives preroll/fade
+        # timing itself, just mirrors whatever Qt's state machine (which
+        # keeps running regardless of native mode, since it also drives
+        # audio) has already decided.
+        self._crossfade_state = {}
         self._sampler = None
         self._vertex_shader = None
         self._vs_code = None
         self._last_rect = None
-        self._current_path = None
 
         # Phase 5: linear-light offscreen compositing. Stage A added video;
         # Stage B adds images (rendered via the SDR pipeline, cached by
@@ -2585,10 +2666,6 @@ class HDRVideoBridge(QObject):
         # duration).
         self._active_flag = None
         self._active_transition = None
-        self._transition_out_source = None
-        self._transition_in_source = None
-        self._transition_out_player = None
-        self._transition_in_player = None
         self._wipe_pipeline = None
         self._slide_pipeline = None
         self._look_pipeline = None
@@ -2965,14 +3042,12 @@ class HDRVideoBridge(QObject):
             staging_native_eligible=bool(v.property("stagingNativeEligible")),
             active_native_transition_eligible=bool(v.property("activeNativeTransitionEligible")),
             staging_native_transition_eligible=bool(v.property("stagingNativeTransitionEligible")),
-            active_native_video_path=str(v.property("activeNativeVideoPath") or ""),
-            staging_native_video_path=str(v.property("stagingNativeVideoPath") or ""),
             active_native_elements_json=str(v.property("activeNativeElementsJson") or "[]"),
             staging_native_elements_json=str(v.property("stagingNativeElementsJson") or "[]"),
             active_native_chrome_json=str(v.property("activeNativeChromeJson") or "[]"),
             native_chrome_extra_json=str(v.property("nativeChromeExtraJson") or "[]"),
-            active_native_video_player=v.property("activeNativeVideoPlayer"),
-            staging_native_video_player=v.property("stagingNativeVideoPlayer"),
+            active_native_video_players=_qjsvalue_to_list(v.property("activeNativeVideoPlayers")),
+            staging_native_video_players=_qjsvalue_to_list(v.property("stagingNativeVideoPlayers")),
             content_width=int(v.property("contentWidth") or 1920),
             content_height=int(v.property("contentHeight") or 1080),
             scene_editor_visible=bool(v.property("sceneEditorVisible")),
@@ -3046,48 +3121,139 @@ class HDRVideoBridge(QObject):
         # deliberate contract, not a bug.
         return snap.scene_editor_visible
 
-    def _ensure_source(self, path):
-        """Swap the loaded video source to match the active scene's
-        qualifying video, if it changed. Releases the old source (if any)
-        before creating the new one -- steady-state only has one source
-        live; during a transition, both _source and the transition sources
-        are handled separately (see _begin_transition/_end_transition)."""
-        if path == self._current_path:
-            return
-        if self._source is not None:
-            self._source.release()
-            self._source = None
-        # Mark this path as "handled" up front, success or failure -- if
-        # av.open() fails below, we still don't want to retry every single
-        # render tick (60x/sec) until the active path actually changes again.
-        self._current_path = path
-        if not path:
-            return
-        try:
-            probe = av.open(path)
-            src_width = probe.streams.video[0].codec_context.width
-            src_height = probe.streams.video[0].codec_context.height
-            probe.close()
-            self._source = _VideoSource(self._device, path, src_width, src_height)
-        except Exception as exc:
-            print(f"[hdr_viewport] failed to open qualifying video {path!r}, falling back to Qt for this scene: {exc}")
+    def _reconcile_video_sources(self, elements):
+        """Adds/keeps a _VideoSource per distinct video path referenced by
+        a "video" element this tick, releasing any no longer referenced --
+        mirrors _reconcile_image_sources exactly, except keyed by path
+        alone (not (path, rev): a video's identity is its file, there's no
+        rev-bump-on-edit concept the way rasterized text/replaced images
+        have). One shared cache serves both steady-state rendering (called
+        with just the active scene's elements) and transitions (called with
+        the active+staging union, so the incoming side's video is already
+        decoding/caching by the time the transition actually starts
+        compositing it -- the same "pre-load the incoming source" effect
+        the old single-slot design got from a dedicated _open_source() call,
+        now just a natural consequence of one shared reconciled cache.
 
-    def _open_source(self, path):
-        """Like _ensure_source but returns a fresh source rather than
-        touching self._source -- used for the incoming side of a native
-        transition, which lives independently until _end_transition()
-        promotes it to be the new steady-state self._source."""
-        if not path:
-            return None
-        try:
-            probe = av.open(path)
-            src_width = probe.streams.video[0].codec_context.width
-            src_height = probe.streams.video[0].codec_context.height
-            probe.close()
-            return _VideoSource(self._device, path, src_width, src_height)
-        except Exception as exc:
-            print(f"[hdr_viewport] failed to open incoming transition video {path!r}: {exc}")
-            return None
+        Only ever touches plain-path keys -- Phase 10 Stage 2's crossfade
+        secondary sources live in this same dict under a synthetic
+        f"{path}#B" key, reconciled separately by
+        _reconcile_crossfade_sources() (never referenced by `elements`
+        itself, so this function's own cleanup pass must skip them or it
+        would release a just-created secondary source the very next tick).
+
+        Phase 10: a path no longer referenced isn't released immediately --
+        it stays cached (still decoding, ready to go) for
+        _VIDEO_SOURCE_GRACE_SECONDS after it was last wanted, so quickly
+        revisiting a scene doesn't pay a fresh decode + black-flash cost.
+        Only actually torn down once the grace period elapses with the
+        path still unwanted."""
+        now = time.monotonic()
+        wanted = {e["path"] for e in elements if e.get("type") == "video" and e.get("path")}
+        for path in wanted:
+            self._video_source_last_used[path] = now
+        for path in list(self._video_sources.keys()):
+            if path.endswith("#B") or path in wanted:
+                continue
+            last_used = self._video_source_last_used.get(path, 0.0)
+            if now - last_used >= _VIDEO_SOURCE_GRACE_SECONDS:
+                self._video_sources.pop(path).release()
+                self._video_source_last_used.pop(path, None)
+        for path in wanted:
+            if path in self._video_sources:
+                continue
+            try:
+                probe = av.open(path)
+                src_width = probe.streams.video[0].codec_context.width
+                src_height = probe.streams.video[0].codec_context.height
+                probe.close()
+                self._video_sources[path] = _VideoSource(self._device, path, src_width, src_height)
+            except Exception as exc:
+                print(f"[hdr_viewport] failed to open video {path!r}, skipping this element: {exc}")
+
+    def _upload_video_positions(self, copy_pass, video_players):
+        """Feeds each live video's current MediaPlayer.position into its
+        matching _VideoSource, given the {"path", "player"} list the
+        QmlSnapshot carries (active_native_video_players, optionally
+        concatenated with staging_native_video_players during a
+        transition). Position is deliberately still a live poll each tick
+        (see QmlSnapshot's docstring) -- only the player *references* come
+        from the snapshot."""
+        for entry in video_players:
+            path = entry.get("path") if isinstance(entry, dict) else None
+            player = entry.get("player") if isinstance(entry, dict) else None
+            if not path or player is None:
+                continue
+            source = self._video_sources.get(path)
+            if source is None:
+                continue
+            position_seconds = player.property("position") / 1000.0
+            source.try_upload_latest(copy_pass, position_seconds)
+
+    def _poll_crossfade_state(self, video_players):
+        """Phase 10 Stage 2: rebuilds self._crossfade_state fresh every
+        steady-state tick by polling each video delegate's own live QML
+        properties -- vidCfActive/vidCfPrerolling (SceneContent.qml's
+        already-running preroll/fade state machine, which keeps going
+        regardless of native mode since it also drives audio) and
+        secondaryOpacity (vidOutputB's own live-animated opacity, the exact
+        blend amount Qt itself is currently showing). Native never
+        re-derives crossfade timing itself, only mirrors what Qt already
+        decided -- cannot drift out of sync with it this way. Steady-state
+        only (transitions never call this): crossfade already hard-resets
+        to a clean single-video state the instant a transition begins (see
+        SceneContent.qml's on_InTransitionWatcherChanged)."""
+        state = {}
+        for entry in video_players:
+            path = entry.get("path") if isinstance(entry, dict) else None
+            item = entry.get("item") if isinstance(entry, dict) else None
+            if not path or item is None:
+                continue
+            active = bool(item.property("vidCfActive"))
+            prerolling = bool(item.property("vidCfPrerolling"))
+            opacity = float(item.property("secondaryOpacity") or 0.0)
+            player_b = item.property("playerB")
+            if not (active or prerolling or opacity > 0.0):
+                continue
+            state[path] = {"opacity": opacity, "player_b": player_b}
+        return state
+
+    def _reconcile_crossfade_sources(self, crossfade_state):
+        """Adds/keeps a secondary _VideoSource (keyed f"{path}#B") for each
+        path currently crossfading, releasing any no longer needed --
+        matches _reconcile_video_sources' shape but driven by
+        self._crossfade_state instead of the elements list, and created/
+        destroyed on demand rather than for a video's whole lifetime
+        (mirrors Qt's own vidPlayerB, which only ever plays during preroll/
+        fade, not continuously)."""
+        wanted = {f"{path}#B" for path in crossfade_state}
+        for key in list(self._video_sources.keys()):
+            if key.endswith("#B") and key not in wanted:
+                self._video_sources.pop(key).release()
+        for path in crossfade_state:
+            key = f"{path}#B"
+            if key in self._video_sources:
+                continue
+            try:
+                probe = av.open(path)
+                src_width = probe.streams.video[0].codec_context.width
+                src_height = probe.streams.video[0].codec_context.height
+                probe.close()
+                self._video_sources[key] = _VideoSource(self._device, path, src_width, src_height)
+            except Exception as exc:
+                print(f"[hdr_viewport] failed to open crossfade secondary {path!r}, skipping: {exc}")
+
+    def _upload_crossfade_positions(self, copy_pass, crossfade_state):
+        """Sibling of _upload_video_positions for crossfade secondary
+        sources -- same live-poll-position pattern, off each entry's own
+        player_b reference."""
+        for path, info in crossfade_state.items():
+            player_b = info.get("player_b")
+            source = self._video_sources.get(f"{path}#B")
+            if player_b is None or source is None:
+                continue
+            position_seconds = player_b.property("position") / 1000.0
+            source.try_upload_latest(copy_pass, position_seconds)
 
     def _ensure_linear_buffer(self, snap):
         """Reallocates the offscreen linear buffer if the story's real
@@ -3203,23 +3369,6 @@ class HDRVideoBridge(QObject):
                 print(f"[hdr_viewport] failed to compile shader {frag_path!r}, skipping this element: {exc}")
 
     def _begin_transition(self, flag, snap):
-        # Phase 6 Part 2: relaxed to match steady-state nativeEligible on
-        # both sides -- each side is now composited through the same per-
-        # element pass steady-state rendering uses (see
-        # _composite_elements_pass), into its own linear buffer, so a
-        # transition no longer needs to be video-only. A side's video is
-        # optional; active_source_ok covers "no video expected" (empty path)
-        # as trivially fine, and "video expected" as requiring self._source
-        # to already be the right one (it always is by the time a transition
-        # flag flips, since steady-state _ensure_source keeps it current).
-        # Reading eligibility/paths/players/elements from `snap` (one
-        # beforeSynchronizing generation) rather than polling each
-        # individually is what prevents begin from ever seeing e.g. a new-
-        # generation eligibility flag paired with a stale-generation path.
-        active_path = snap.active_native_video_path
-        active_source_ok = (not active_path) or (
-            self._source is not None and self._current_path == active_path
-        )
         can_native = (
             flag in ("dissolve", "wipe", "slide", "look")
             # Phase 9: the mode gate that used to force qt_fallback in sdr
@@ -3232,53 +3381,42 @@ class HDRVideoBridge(QObject):
             # time exactly like the steady-state final pass already was.
             and snap.active_native_transition_eligible
             and snap.staging_native_transition_eligible
-            and active_source_ok
         )
         if not can_native:
             self._active_transition = "qt_fallback"
             return
 
-        in_source = None
-        if snap.staging_native_video_path:
-            in_source = self._open_source(snap.staging_native_video_path)
-            if in_source is None:
-                self._active_transition = "qt_fallback"
-                return
-
         self._ensure_transition_buffers()
         active_elements = self._parse_elements(snap.active_native_elements_json)
         staging_elements = self._parse_elements(snap.staging_native_elements_json)
+        # Phase 10 Stage 1: reconciling video sources against the
+        # active+staging union is what pre-loads the incoming side's
+        # video(s) -- the outgoing side's are already cached from ordinary
+        # steady-state rendering (a no-op re-add here), any new video(s) on
+        # the staging side get created fresh, same "pre-load the incoming
+        # source" effect the old single-slot design needed a dedicated
+        # _open_source() call for.
+        self._reconcile_video_sources(active_elements + staging_elements)
         self._reconcile_image_sources(active_elements + staging_elements)
         self._reconcile_shader_sources(active_elements + staging_elements)
-
-        self._transition_out_source = self._source  # may be None: image/text-only outgoing side
-        self._transition_out_player = snap.active_native_video_player
-        self._transition_in_source = in_source  # may be None: image/text-only incoming side
-        self._transition_in_player = snap.staging_native_video_player
-        # self._source stays pointing at the outgoing video throughout --
-        # semantically it's still "the active content's source" until
-        # performSwap() actually flips foregroundLayer.
+        # Phase 10 Stage 2: crossfade never composites during a transition
+        # (Qt already hard-resets it the instant one begins, see
+        # SceneContent.qml's on_InTransitionWatcherChanged) -- release any
+        # secondary sources now rather than leaving them decoding unused
+        # for the transition's whole duration. _render_transition never
+        # repopulates this, so it stays empty until steady-state resumes.
+        self._crossfade_state = {}
+        self._reconcile_crossfade_sources(self._crossfade_state)
         self._active_transition = flag
 
     def _end_transition(self, snap):
-        if self._active_transition in ("dissolve", "wipe", "slide", "look"):
-            # Promote the incoming source to be the new steady-state source
-            # rather than releasing and reopening it -- it's already loaded
-            # and playing in sync. foregroundLayer has now flipped (via
-            # performSwap()), so activeNativeVideoPath already reflects what
-            # was staging; update _current_path to match so the next
-            # steady-state _ensure_source() call sees no change and no-ops.
-            if self._transition_out_source is not None:
-                self._transition_out_source.release()
-            self._source = self._transition_in_source
-            self._current_path = snap.active_native_video_path
-        # For "qt_fallback": nothing to release -- next tick's normal
-        # steady-state _ensure_source() picks up whatever's now active,
-        # exactly like any other hard cut.
-        self._transition_out_source = None
-        self._transition_in_source = None
-        self._transition_out_player = None
-        self._transition_in_player = None
+        # Phase 10 Stage 1: no source promotion needed anymore -- the next
+        # steady-state tick's own _reconcile_video_sources(elements) call,
+        # given the now-active (former staging) scene's elements, keeps
+        # whatever's still referenced and releases whatever isn't (the old
+        # outgoing side's video, if the new active scene doesn't also
+        # reference it) -- exactly the same reconciliation that already
+        # runs every ordinary tick, no transition-specific cleanup required.
         self._active_transition = None
 
     def _render(self):
@@ -3304,24 +3442,22 @@ class HDRVideoBridge(QObject):
                 pass
             self._active_flag = None
             self._active_transition = None
-            if self._transition_out_source is not None:
-                self._transition_out_source.release()
-                self._transition_out_source = None
-            if self._transition_in_source is not None:
-                self._transition_in_source.release()
-                self._transition_in_source = None
-            self._transition_out_player = None
-            self._transition_in_player = None
+            # Phase 10 Stage 1: no separate transition source slots to release
+            # anymore -- self._video_sources is a single reconciled cache, and
+            # the next successful tick's own reconciliation naturally releases
+            # anything no longer referenced by whatever's active then.
 
-    def _composite_elements_pass(self, cmdbuf, elements, target_texture, video_source):
+    def _composite_elements_pass(self, cmdbuf, elements, target_texture):
         """Composites `elements` (z-sorted) into `target_texture`, an
         R16G16B16A16_FLOAT linear-nits offscreen buffer, back-to-front with
         alpha-over blending -- the one per-element pass shared by steady-
-        state rendering (target=self._linear_buffer, video_source=self._source)
-        and each side of a mixed-scene native transition (target=
-        _out_linear_buffer/_in_linear_buffer, video_source=
-        _transition_out_source/_transition_in_source, either of which may be
-        None for an image/text-only side -- see _render_transition)."""
+        state rendering (target=self._linear_buffer) and each side of a
+        mixed-scene native transition (target=_out_linear_buffer/
+        _in_linear_buffer -- see _render_transition). Phase 10 Stage 1: each
+        "video" element looks up its own source from self._video_sources by
+        path (reconciled by the caller before this runs), instead of being
+        handed a single shared source -- any number of video elements can
+        now render correctly in one pass, each with its own decode."""
         # Pre-pass: run every shader element's own arbitrary GLSL into its
         # own small output_texture *before* the shared render_pass below
         # opens -- SDL_GPU (like Vulkan/Metal) doesn't allow a nested/
@@ -3361,6 +3497,7 @@ class HDRVideoBridge(QObject):
             rect_u = RectUniform((ctypes.c_float * 4)(*rect_ndc))
 
             if etype == "video":
+                video_source = self._video_sources.get(elem.get("path"))
                 if video_source is None:
                     continue
                 sdl3.SDL_PushGPUVertexUniformData(cmdbuf, 0, ctypes.byref(rect_u), ctypes.sizeof(rect_u))
@@ -3383,6 +3520,7 @@ class HDRVideoBridge(QObject):
                             exposure=_SDR_HLG_EXPOSURE,
                             contrast=_SDR_HLG_CONTRAST,
                             gamut_convert=1.0,
+                            opacity=1.0,
                         )
                     else:
                         video_uniforms = VideoLinearUniforms(
@@ -3391,13 +3529,14 @@ class HDRVideoBridge(QObject):
                             exposure=_EXPOSURE,
                             contrast=_CONTRAST,
                             gamut_convert=0.0,
+                            opacity=1.0,
                         )
                     sdl3.SDL_PushGPUFragmentUniformData(
                         cmdbuf, 0, ctypes.byref(video_uniforms), ctypes.sizeof(video_uniforms)
                     )
                     sdl3.SDL_BindGPUGraphicsPipeline(render_pass, self._video_linear_pipeline)
                 else:
-                    sdr_video_uniforms = SDRUniforms(sdr_ref_nits=_SDR_REF_NITS)
+                    sdr_video_uniforms = SDRVideoUniforms(sdr_ref_nits=_SDR_REF_NITS, opacity=1.0)
                     sdl3.SDL_PushGPUFragmentUniformData(
                         cmdbuf, 0, ctypes.byref(sdr_video_uniforms), ctypes.sizeof(sdr_video_uniforms)
                     )
@@ -3408,6 +3547,52 @@ class HDRVideoBridge(QObject):
                 )
                 sdl3.SDL_BindGPUFragmentSamplers(render_pass, 0, video_bindings, 2)
                 sdl3.SDL_DrawGPUPrimitives(render_pass, 6, 1, 0, 0)
+
+                # Phase 10 Stage 2: crossfade ping-pong's secondary ("B")
+                # draw, on top of the primary just drawn above, blended at
+                # Qt's own live-animated opacity -- same rect, same pipeline
+                # selection logic, just a second source and a non-1.0
+                # opacity uniform. The existing blend-enabled pipelines do
+                # the alpha-over compositing automatically.
+                cf = self._crossfade_state.get(elem.get("path"))
+                cf_source = self._video_sources.get(f"{elem.get('path')}#B") if cf else None
+                if cf is not None and cf_source is not None:
+                    sdl3.SDL_PushGPUVertexUniformData(cmdbuf, 0, ctypes.byref(rect_u), ctypes.sizeof(rect_u))
+                    if cf_source.is_hdr:
+                        if self._mode == "sdr":
+                            cf_uniforms = VideoLinearUniforms(
+                                peak_nits=_SDR_HLG_PEAK_NITS,
+                                gamma=_SDR_HLG_GAMMA,
+                                exposure=_SDR_HLG_EXPOSURE,
+                                contrast=_SDR_HLG_CONTRAST,
+                                gamut_convert=1.0,
+                                opacity=cf["opacity"],
+                            )
+                        else:
+                            cf_uniforms = VideoLinearUniforms(
+                                peak_nits=_PEAK_NITS,
+                                gamma=_GAMMA,
+                                exposure=_EXPOSURE,
+                                contrast=_CONTRAST,
+                                gamut_convert=0.0,
+                                opacity=cf["opacity"],
+                            )
+                        sdl3.SDL_PushGPUFragmentUniformData(
+                            cmdbuf, 0, ctypes.byref(cf_uniforms), ctypes.sizeof(cf_uniforms)
+                        )
+                        sdl3.SDL_BindGPUGraphicsPipeline(render_pass, self._video_linear_pipeline)
+                    else:
+                        cf_uniforms = SDRVideoUniforms(sdr_ref_nits=_SDR_REF_NITS, opacity=cf["opacity"])
+                        sdl3.SDL_PushGPUFragmentUniformData(
+                            cmdbuf, 0, ctypes.byref(cf_uniforms), ctypes.sizeof(cf_uniforms)
+                        )
+                        sdl3.SDL_BindGPUGraphicsPipeline(render_pass, self._sdr_video_pipeline)
+                    cf_bindings = (sdl3.SDL_GPUTextureSamplerBinding * 2)(
+                        sdl3.SDL_GPUTextureSamplerBinding(texture=cf_source.y_texture, sampler=self._sampler),
+                        sdl3.SDL_GPUTextureSamplerBinding(texture=cf_source.uv_texture, sampler=self._sampler),
+                    )
+                    sdl3.SDL_BindGPUFragmentSamplers(render_pass, 0, cf_bindings, 2)
+                    sdl3.SDL_DrawGPUPrimitives(render_pass, 6, 1, 0, 0)
             elif etype in ("image", "text"):
                 source = self._image_sources.get((elem.get("path"), elem.get("rev", 0)))
                 if source is None:
@@ -3629,14 +3814,9 @@ class HDRVideoBridge(QObject):
 
         self._ensure_linear_buffer(snap)
 
-        # Video identity/decode is still keyed off the single nativeVideoPath
-        # channel (there's still at most one video per qualifying scene);
-        # nativeElementsJson below drives rendering iteration/positioning for
-        # every element type, not the video source's lifecycle.
-        self._ensure_source(snap.active_native_video_path)
-
         elements = self._parse_elements(snap.active_native_elements_json)
         if snap.active_native_elements_json != self._last_elements_json:
+            self._reconcile_video_sources(elements)
             self._reconcile_image_sources(elements)
             self._reconcile_shader_sources(elements)
             self._last_elements_json = snap.active_native_elements_json
@@ -3649,27 +3829,28 @@ class HDRVideoBridge(QObject):
         # possible" actually requires -- _composite_elements_pass already
         # handles an empty list correctly (clears to black, draws nothing).
 
+        # Phase 10 Stage 2: polled and reconciled every tick, unlike the
+        # video/image/shader reconciliation above -- crossfade opacity
+        # animates continuously (not just when the element list itself
+        # changes), so this can't be gated behind the elements_json guard.
+        self._crossfade_state = self._poll_crossfade_state(snap.active_native_video_players)
+        self._reconcile_crossfade_sources(self._crossfade_state)
+
         self._sync_geometry()
         sdl3.SDL_PumpEvents()
 
-        player = snap.active_native_video_player
-        # None right after a scene switch until the deferred
-        # _bindNativeVideoPlayer() QML call resolves -- repeat the last
-        # frame (or show nothing yet) rather than guessing a position.
-        # Position itself is deliberately still a live poll (see
-        # QmlSnapshot's docstring) -- only the player *reference* comes from
-        # the snapshot.
-        position_seconds = (player.property("position") / 1000.0) if player is not None else None
-
         cmdbuf = sdl3.SDL_AcquireGPUCommandBuffer(self._device)
         copy_pass = sdl3.SDL_BeginGPUCopyPass(cmdbuf)
-        if self._source is not None and position_seconds is not None:
-            self._source.try_upload_latest(copy_pass, position_seconds)
+        # None right after a scene switch until the deferred
+        # _bindNativeVideoPlayers() QML call resolves -- repeat the last
+        # frame (or show nothing yet) rather than guessing a position.
+        self._upload_video_positions(copy_pass, snap.active_native_video_players)
+        self._upload_crossfade_positions(copy_pass, self._crossfade_state)
         sdl3.SDL_EndGPUCopyPass(copy_pass)
 
         # --- Pass 1: composite every element into the linear-light buffer,
         # back-to-front in the z-order nativeElementsJson already sorted ---
-        self._composite_elements_pass(cmdbuf, elements, self._linear_buffer, self._source)
+        self._composite_elements_pass(cmdbuf, elements, self._linear_buffer)
 
         # --- Pass 1b: selection chrome, drawn on top ---
         all_chrome_items = self._parse_chrome(snap.active_native_chrome_json) + self._parse_chrome(
@@ -3725,40 +3906,26 @@ class HDRVideoBridge(QObject):
         self._sync_geometry()
         sdl3.SDL_PumpEvents()
 
-        # Positions stay a live poll each tick (see QmlSnapshot's docstring)
-        # off the player references _begin_transition captured from the
-        # snapshot at transition-start.
-        out_pos = (
-            self._transition_out_player.property("position") / 1000.0
-            if self._transition_out_player is not None
-            else None
-        )
-        in_pos = (
-            self._transition_in_player.property("position") / 1000.0
-            if self._transition_in_player is not None
-            else None
-        )
-
         # Re-parsed fresh every tick (cheap) rather than cached at
         # _begin_transition time, so a text rasterization or conditional-
         # source swap that completes mid-transition is picked up the same
         # way steady-state rendering already handles it.
         active_elements = self._parse_elements(snap.active_native_elements_json)
         staging_elements = self._parse_elements(snap.staging_native_elements_json)
+        self._reconcile_video_sources(active_elements + staging_elements)
         self._reconcile_image_sources(active_elements + staging_elements)
         self._reconcile_shader_sources(active_elements + staging_elements)
 
         cmdbuf = sdl3.SDL_AcquireGPUCommandBuffer(self._device)
         copy_pass = sdl3.SDL_BeginGPUCopyPass(cmdbuf)
-        if out_pos is not None:
-            self._transition_out_source.try_upload_latest(copy_pass, out_pos)
-        if in_pos is not None:
-            self._transition_in_source.try_upload_latest(copy_pass, in_pos)
+        # Positions stay a live poll each tick (see QmlSnapshot's docstring)
+        # off the player references the snapshot carries for both sides.
+        self._upload_video_positions(copy_pass, snap.active_native_video_players + snap.staging_native_video_players)
         sdl3.SDL_EndGPUCopyPass(copy_pass)
 
         # --- Pass 1/2: composite each side into its own linear buffer ---
-        self._composite_elements_pass(cmdbuf, active_elements, self._out_linear_buffer, self._transition_out_source)
-        self._composite_elements_pass(cmdbuf, staging_elements, self._in_linear_buffer, self._transition_in_source)
+        self._composite_elements_pass(cmdbuf, active_elements, self._out_linear_buffer)
+        self._composite_elements_pass(cmdbuf, staging_elements, self._in_linear_buffer)
 
         # --- Pass 3: blend the two linear buffers directly to the swapchain ---
         swapchain_texture = ctypes.POINTER(sdl3.SDL_GPUTexture)()
@@ -3864,15 +4031,10 @@ class HDRVideoBridge(QObject):
         if self._timer is not None:
             self._timer.invalidate()
             self._timer = None
-        if self._source is not None:
-            self._source.release()
-            self._source = None
-        if self._transition_out_source is not None:
-            self._transition_out_source.release()
-            self._transition_out_source = None
-        if self._transition_in_source is not None:
-            self._transition_in_source.release()
-            self._transition_in_source = None
+        for source in self._video_sources.values():
+            source.release()
+        self._video_sources = {}
+        self._video_source_last_used = {}
         for source in self._image_sources.values():
             source.release()
         self._image_sources = {}
