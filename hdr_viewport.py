@@ -550,464 +550,15 @@ fragment float4 fs_main(VertexOut in [[stage_in]],
 """
 )
 
-# --- look.frag port ---
-
-LOOK_FRAGMENT_MSL = (
-    COMMON_MSL
-    + """
-struct Uniforms {
-    float peak_nits;
-    float gamma;
-    float exposure;
-    float contrast;
-    float progress;
-    float yaw;
-    float pitch;
-    float fovMM;
-    float overshoot;
-    float shutter;
-    float num_samples;
-    float scene_yaw_rad;
-    float scene_pitch_rad;
-    float wipeDir_x, wipeDir_y;
-    float sample_yaw[24];
-    float sample_pitch[24];
-    float sample_threshold[24];
-};
-
-float3 rot_yaw(float3 v, float a) {
-    float c = cos(a), s = sin(a);
-    return float3(c * v.x + s * v.z, v.y, -s * v.x + c * v.z);
-}
-
-float3 rot_pitch(float3 v, float a) {
-    float c = cos(a), s = sin(a);
-    return float3(v.x, c * v.y + s * v.z, -s * v.y + c * v.z);
-}
-
-float2 clamp_to_edge(float2 uv) {
-    float2 dir = uv - float2(0.5);
-    float t = 1.0;
-    if (abs(dir.x) > 0.0001) t = min(t, 0.5 / abs(dir.x));
-    if (abs(dir.y) > 0.0001) t = min(t, 0.5 / abs(dir.y));
-    return clamp(float2(0.5) + dir * t, 0.0, 1.0);
-}
-
-float2 project_scene(float3 worldRay, float sYaw, float sPitch,
-                      float tanH, float tanV, thread bool &inFrustum) {
-    float3 local = rot_yaw(rot_pitch(worldRay, -sPitch), -sYaw);
-    float z = max(local.z, 0.001);
-    float ux = (local.x / (z * tanH)) * 0.5 + 0.5;
-    float uy = -(local.y / (z * tanV)) * 0.5 + 0.5;
-    inFrustum = local.z > 0.0 && ux >= 0.0 && ux <= 1.0 && uy >= 0.0 && uy <= 1.0;
-    return float2(ux, uy);
-}
-
-fragment float4 fs_main(VertexOut in [[stage_in]],
-                         texture2d<float> outYTex [[texture(0)]],
-                         texture2d<float> outUVTex [[texture(1)]],
-                         texture2d<float> inYTex [[texture(2)]],
-                         texture2d<float> inUVTex [[texture(3)]],
-                         sampler outYSmp [[sampler(0)]],
-                         sampler outUVSmp [[sampler(1)]],
-                         sampler inYSmp [[sampler(2)]],
-                         sampler inUVSmp [[sampler(3)]],
-                         constant Uniforms &u [[buffer(0)]]) {
-    float2 ndc = in.uv * 2.0 - 1.0;
-
-    float tanH = 18.0 / u.fovMM;
-    float tanV = tanH * (9.0 / 16.0);
-
-    float2 wipeDir = float2(u.wipeDir_x, u.wipeDir_y);
-    float3 camRay = normalize(float3(ndc.x * tanH, -ndc.y * tanV, 1.0));
-
-    float3 colorAcc = float3(0.0);
-    int n = int(u.num_samples);
-
-    for (int i = 0; i < n; i++) {
-        float sYaw = u.sample_yaw[i];
-        float sPitch = u.sample_pitch[i];
-        float threshold = u.sample_threshold[i];
-
-        float3 worldRay = rot_pitch(rot_yaw(camRay, sYaw), sPitch);
-
-        bool inA = false, inB = false;
-        float2 uvA = project_scene(worldRay, 0.0, 0.0, tanH, tanV, inA);
-        float2 uvB = project_scene(worldRay, u.scene_yaw_rad, u.scene_pitch_rad, tanH, tanV, inB);
-
-        float3 colA = sample_scene_nits(outYTex, outUVTex, outYSmp, outUVSmp,
-                                         inA ? uvA : clamp_to_edge(uvA), u.peak_nits, u.gamma);
-        float3 colB = sample_scene_nits(inYTex, inUVTex, inYSmp, inUVSmp,
-                                         inB ? uvB : clamp_to_edge(uvB), u.peak_nits, u.gamma);
-
-        float pixelPos = dot(ndc, wipeDir);
-        float wipe = smoothstep(threshold - 0.3, threshold + 0.3, pixelPos);
-        colorAcc += mix(colA, colB, wipe);
-    }
-
-    float3 nits = colorAcc / float(n);
-    nits = apply_trim(nits, u.peak_nits, u.exposure, u.contrast);
-    float3 pq = pq_oetf(nits);
-    return float4(pq, 1.0);
-}
-"""
-)
-
-# Phase 9: SDR sibling of LOOK_FRAGMENT_MSL above. Unlike the LINEAR_*
-# transition shaders, this one samples raw Y/UV video textures directly
-# (via sample_scene_nits/apply_trim, the same HLG decode chain steady-
-# state's VIDEO_LINEAR_FRAGMENT_MSL uses) rather than pre-composited
-# buffers -- so it needs the full Stage 2.5 treatment: bt2020_to_bt709()
-# before the final encode (new gamut_convert uniform, set true only in SDR
-# mode at the Python call site, matching VideoLinearUniforms's own field),
-# and srgb_oetf(clamp(nits/sdr_ref_nits, 0, 1)) instead of pq_oetf(nits).
-# peak_nits/gamma/exposure/contrast are still runtime uniforms (the Python
-# call site passes _SDR_HLG_* instead of the HDR path's constants) -- no
-# shader-level HLG logic changes, only the two new fields and the final
-# encode line.
-SDR_LOOK_FRAGMENT_MSL = (
-    COMMON_MSL
-    + """
-struct Uniforms {
-    float peak_nits;
-    float gamma;
-    float exposure;
-    float contrast;
-    float progress;
-    float yaw;
-    float pitch;
-    float fovMM;
-    float overshoot;
-    float shutter;
-    float num_samples;
-    float scene_yaw_rad;
-    float scene_pitch_rad;
-    float wipeDir_x, wipeDir_y;
-    float sample_yaw[24];
-    float sample_pitch[24];
-    float sample_threshold[24];
-    float gamut_convert;
-    float sdr_ref_nits;
-};
-
-float3 rot_yaw(float3 v, float a) {
-    float c = cos(a), s = sin(a);
-    return float3(c * v.x + s * v.z, v.y, -s * v.x + c * v.z);
-}
-
-float3 rot_pitch(float3 v, float a) {
-    float c = cos(a), s = sin(a);
-    return float3(v.x, c * v.y + s * v.z, -s * v.y + c * v.z);
-}
-
-float2 clamp_to_edge(float2 uv) {
-    float2 dir = uv - float2(0.5);
-    float t = 1.0;
-    if (abs(dir.x) > 0.0001) t = min(t, 0.5 / abs(dir.x));
-    if (abs(dir.y) > 0.0001) t = min(t, 0.5 / abs(dir.y));
-    return clamp(float2(0.5) + dir * t, 0.0, 1.0);
-}
-
-float2 project_scene(float3 worldRay, float sYaw, float sPitch,
-                      float tanH, float tanV, thread bool &inFrustum) {
-    float3 local = rot_yaw(rot_pitch(worldRay, -sPitch), -sYaw);
-    float z = max(local.z, 0.001);
-    float ux = (local.x / (z * tanH)) * 0.5 + 0.5;
-    float uy = -(local.y / (z * tanV)) * 0.5 + 0.5;
-    inFrustum = local.z > 0.0 && ux >= 0.0 && ux <= 1.0 && uy >= 0.0 && uy <= 1.0;
-    return float2(ux, uy);
-}
-
-fragment float4 fs_main(VertexOut in [[stage_in]],
-                         texture2d<float> outYTex [[texture(0)]],
-                         texture2d<float> outUVTex [[texture(1)]],
-                         texture2d<float> inYTex [[texture(2)]],
-                         texture2d<float> inUVTex [[texture(3)]],
-                         sampler outYSmp [[sampler(0)]],
-                         sampler outUVSmp [[sampler(1)]],
-                         sampler inYSmp [[sampler(2)]],
-                         sampler inUVSmp [[sampler(3)]],
-                         constant Uniforms &u [[buffer(0)]]) {
-    float2 ndc = in.uv * 2.0 - 1.0;
-
-    float tanH = 18.0 / u.fovMM;
-    float tanV = tanH * (9.0 / 16.0);
-
-    float2 wipeDir = float2(u.wipeDir_x, u.wipeDir_y);
-    float3 camRay = normalize(float3(ndc.x * tanH, -ndc.y * tanV, 1.0));
-
-    float3 colorAcc = float3(0.0);
-    int n = int(u.num_samples);
-
-    for (int i = 0; i < n; i++) {
-        float sYaw = u.sample_yaw[i];
-        float sPitch = u.sample_pitch[i];
-        float threshold = u.sample_threshold[i];
-
-        float3 worldRay = rot_pitch(rot_yaw(camRay, sYaw), sPitch);
-
-        bool inA = false, inB = false;
-        float2 uvA = project_scene(worldRay, 0.0, 0.0, tanH, tanV, inA);
-        float2 uvB = project_scene(worldRay, u.scene_yaw_rad, u.scene_pitch_rad, tanH, tanV, inB);
-
-        float3 colA = sample_scene_nits(outYTex, outUVTex, outYSmp, outUVSmp,
-                                         inA ? uvA : clamp_to_edge(uvA), u.peak_nits, u.gamma);
-        float3 colB = sample_scene_nits(inYTex, inUVTex, inYSmp, inUVSmp,
-                                         inB ? uvB : clamp_to_edge(uvB), u.peak_nits, u.gamma);
-
-        float pixelPos = dot(ndc, wipeDir);
-        float wipe = smoothstep(threshold - 0.3, threshold + 0.3, pixelPos);
-        colorAcc += mix(colA, colB, wipe);
-    }
-
-    float3 nits = colorAcc / float(n);
-    nits = apply_trim(nits, u.peak_nits, u.exposure, u.contrast);
-    if (u.gamut_convert > 0.5) {
-        nits = bt2020_to_bt709(nits);
-    }
-    float3 normalized = clamp(nits / u.sdr_ref_nits, 0.0, 1.0);
-    float3 srgb = srgb_oetf(normalized);
-    return float4(srgb, 1.0);
-}
-"""
-)
-
-# --- wipe.frag port ---
-
-WIPE_FRAGMENT_MSL = (
-    COMMON_MSL
-    + """
-struct Uniforms {
-    float peak_nits;
-    float gamma;
-    float exposure;
-    float contrast;
-    float progress;
-    float feather;
-    float direction;  // 0=right 1=left 2=down 3=up
-};
-
-fragment float4 fs_main(VertexOut in [[stage_in]],
-                         texture2d<float> outYTex [[texture(0)]],
-                         texture2d<float> outUVTex [[texture(1)]],
-                         texture2d<float> inYTex [[texture(2)]],
-                         texture2d<float> inUVTex [[texture(3)]],
-                         sampler outYSmp [[sampler(0)]],
-                         sampler outUVSmp [[sampler(1)]],
-                         sampler inYSmp [[sampler(2)]],
-                         sampler inUVSmp [[sampler(3)]],
-                         constant Uniforms &u [[buffer(0)]]) {
-    float2 uv = in.uv;
-    int dir = int(u.direction);
-
-    float edge;
-    if (dir == 0) edge = uv.x;
-    else if (dir == 1) edge = 1.0 - uv.x;
-    else if (dir == 2) edge = uv.y;
-    else edge = 1.0 - uv.y;
-
-    float hw = max(u.feather * 0.5, 0.001);
-    float blend = smoothstep(u.progress - hw, u.progress + hw, edge);
-
-    // blend=0 -> incoming (sourceIn), blend=1 -> outgoing (sourceOut) -- matches wipe.frag's mix(cIn, cOut, blend).
-    float3 colIn = sample_scene_nits(inYTex, inUVTex, inYSmp, inUVSmp, uv, u.peak_nits, u.gamma);
-    float3 colOut = sample_scene_nits(outYTex, outUVTex, outYSmp, outUVSmp, uv, u.peak_nits, u.gamma);
-    float3 nits = mix(colIn, colOut, blend);
-
-    nits = apply_trim(nits, u.peak_nits, u.exposure, u.contrast);
-    float3 pq = pq_oetf(nits);
-    return float4(pq, 1.0);
-}
-"""
-)
-
-# Phase 9: SDR sibling of WIPE_FRAGMENT_MSL above, same treatment as
-# SDR_LOOK_FRAGMENT_MSL (raw Y/UV sampling needs the full gamut_convert +
-# srgb_oetf final-encode swap, unlike the LINEAR_* pre-composited shaders).
-SDR_WIPE_FRAGMENT_MSL = (
-    COMMON_MSL
-    + """
-struct Uniforms {
-    float peak_nits;
-    float gamma;
-    float exposure;
-    float contrast;
-    float progress;
-    float feather;
-    float direction;  // 0=right 1=left 2=down 3=up
-    float gamut_convert;
-    float sdr_ref_nits;
-};
-
-fragment float4 fs_main(VertexOut in [[stage_in]],
-                         texture2d<float> outYTex [[texture(0)]],
-                         texture2d<float> outUVTex [[texture(1)]],
-                         texture2d<float> inYTex [[texture(2)]],
-                         texture2d<float> inUVTex [[texture(3)]],
-                         sampler outYSmp [[sampler(0)]],
-                         sampler outUVSmp [[sampler(1)]],
-                         sampler inYSmp [[sampler(2)]],
-                         sampler inUVSmp [[sampler(3)]],
-                         constant Uniforms &u [[buffer(0)]]) {
-    float2 uv = in.uv;
-    int dir = int(u.direction);
-
-    float edge;
-    if (dir == 0) edge = uv.x;
-    else if (dir == 1) edge = 1.0 - uv.x;
-    else if (dir == 2) edge = uv.y;
-    else edge = 1.0 - uv.y;
-
-    float hw = max(u.feather * 0.5, 0.001);
-    float blend = smoothstep(u.progress - hw, u.progress + hw, edge);
-
-    float3 colIn = sample_scene_nits(inYTex, inUVTex, inYSmp, inUVSmp, uv, u.peak_nits, u.gamma);
-    float3 colOut = sample_scene_nits(outYTex, outUVTex, outYSmp, outUVSmp, uv, u.peak_nits, u.gamma);
-    float3 nits = mix(colIn, colOut, blend);
-
-    nits = apply_trim(nits, u.peak_nits, u.exposure, u.contrast);
-    if (u.gamut_convert > 0.5) {
-        nits = bt2020_to_bt709(nits);
-    }
-    float3 normalized = clamp(nits / u.sdr_ref_nits, 0.0, 1.0);
-    float3 srgb = srgb_oetf(normalized);
-    return float4(srgb, 1.0);
-}
-"""
-)
-
-# --- slide.frag port ---
-
-SLIDE_FRAGMENT_MSL = (
-    COMMON_MSL
-    + """
-struct Uniforms {
-    float peak_nits;
-    float gamma;
-    float exposure;
-    float contrast;
-    float progress;
-    float direction;  // 0=right 1=left 2=down 3=up
-};
-
-fragment float4 fs_main(VertexOut in [[stage_in]],
-                         texture2d<float> outYTex [[texture(0)]],
-                         texture2d<float> outUVTex [[texture(1)]],
-                         texture2d<float> inYTex [[texture(2)]],
-                         texture2d<float> inUVTex [[texture(3)]],
-                         sampler outYSmp [[sampler(0)]],
-                         sampler outUVSmp [[sampler(1)]],
-                         sampler inYSmp [[sampler(2)]],
-                         sampler inUVSmp [[sampler(3)]],
-                         constant Uniforms &u [[buffer(0)]]) {
-    float2 uv = in.uv;
-    float p = u.progress;
-    int dir = int(u.direction);
-
-    float2 outUV, inUV;
-    float inOld;
-
-    if (dir == 0) {
-        outUV = float2(uv.x - p, uv.y);
-        inUV  = float2(uv.x - p + 1.0, uv.y);
-        inOld = step(p, uv.x);
-    } else if (dir == 1) {
-        outUV = float2(uv.x + p, uv.y);
-        inUV  = float2(uv.x + p - 1.0, uv.y);
-        inOld = step(uv.x, 1.0 - p);
-    } else if (dir == 2) {
-        outUV = float2(uv.x, uv.y - p);
-        inUV  = float2(uv.x, uv.y - p + 1.0);
-        inOld = step(p, uv.y);
-    } else {
-        outUV = float2(uv.x, uv.y + p);
-        inUV  = float2(uv.x, uv.y + p - 1.0);
-        inOld = step(uv.y, 1.0 - p);
-    }
-
-    float3 colOut = sample_scene_nits(outYTex, outUVTex, outYSmp, outUVSmp, outUV, u.peak_nits, u.gamma);
-    float3 colIn = sample_scene_nits(inYTex, inUVTex, inYSmp, inUVSmp, inUV, u.peak_nits, u.gamma);
-    // mix(cIn, cOut, inOld): shows cOut where inOld=1 (old region), cIn where inOld=0 (new region) -- matches slide.frag.
-    float3 nits = mix(colIn, colOut, inOld);
-
-    nits = apply_trim(nits, u.peak_nits, u.exposure, u.contrast);
-    float3 pq = pq_oetf(nits);
-    return float4(pq, 1.0);
-}
-"""
-)
-
-# Phase 9: SDR sibling of SLIDE_FRAGMENT_MSL above, same treatment as
-# SDR_LOOK_FRAGMENT_MSL/SDR_WIPE_FRAGMENT_MSL.
-SDR_SLIDE_FRAGMENT_MSL = (
-    COMMON_MSL
-    + """
-struct Uniforms {
-    float peak_nits;
-    float gamma;
-    float exposure;
-    float contrast;
-    float progress;
-    float direction;  // 0=right 1=left 2=down 3=up
-    float gamut_convert;
-    float sdr_ref_nits;
-};
-
-fragment float4 fs_main(VertexOut in [[stage_in]],
-                         texture2d<float> outYTex [[texture(0)]],
-                         texture2d<float> outUVTex [[texture(1)]],
-                         texture2d<float> inYTex [[texture(2)]],
-                         texture2d<float> inUVTex [[texture(3)]],
-                         sampler outYSmp [[sampler(0)]],
-                         sampler outUVSmp [[sampler(1)]],
-                         sampler inYSmp [[sampler(2)]],
-                         sampler inUVSmp [[sampler(3)]],
-                         constant Uniforms &u [[buffer(0)]]) {
-    float2 uv = in.uv;
-    float p = u.progress;
-    int dir = int(u.direction);
-
-    float2 outUV, inUV;
-    float inOld;
-
-    if (dir == 0) {
-        outUV = float2(uv.x - p, uv.y);
-        inUV  = float2(uv.x - p + 1.0, uv.y);
-        inOld = step(p, uv.x);
-    } else if (dir == 1) {
-        outUV = float2(uv.x + p, uv.y);
-        inUV  = float2(uv.x + p - 1.0, uv.y);
-        inOld = step(uv.x, 1.0 - p);
-    } else if (dir == 2) {
-        outUV = float2(uv.x, uv.y - p);
-        inUV  = float2(uv.x, uv.y - p + 1.0);
-        inOld = step(p, uv.y);
-    } else {
-        outUV = float2(uv.x, uv.y + p);
-        inUV  = float2(uv.x, uv.y + p - 1.0);
-        inOld = step(uv.y, 1.0 - p);
-    }
-
-    float3 colOut = sample_scene_nits(outYTex, outUVTex, outYSmp, outUVSmp, outUV, u.peak_nits, u.gamma);
-    float3 colIn = sample_scene_nits(inYTex, inUVTex, inYSmp, inUVSmp, inUV, u.peak_nits, u.gamma);
-    float3 nits = mix(colIn, colOut, inOld);
-
-    nits = apply_trim(nits, u.peak_nits, u.exposure, u.contrast);
-    if (u.gamut_convert > 0.5) {
-        nits = bt2020_to_bt709(nits);
-    }
-    float3 normalized = clamp(nits / u.sdr_ref_nits, 0.0, 1.0);
-    float3 srgb = srgb_oetf(normalized);
-    return float4(srgb, 1.0);
-}
-"""
-)
-
 # --- Phase 6 Part 2: two-input linear variants of wipe/slide/look ---
 #
-# The originals above sample two *video* sources directly (YCbCr planes,
-# full HLG decode + trim inline) because a native transition only ever
-# blended exactly two fullscreen videos. Now that nativeTransitionEligible
+# The original single-video wipe/slide/look shaders (which sampled two
+# *video* sources directly via YCbCr planes, full HLG decode + trim inline,
+# because a native transition only ever blended exactly two fullscreen
+# videos) were removed in Phase 11 -- dead code since this per-element-pass
+# rewrite superseded them in Phase 6, confirmed via grep that their
+# pipelines were built at attach and released at teardown but never bound
+# or drawn anywhere. Now that nativeTransitionEligible
 # matches steady-state nativeEligible (any mix of <=1 video plus images/
 # text per side), each side of a transition is first composited through the
 # existing steady-state per-element pass into its own offscreen linear-nits
@@ -1450,105 +1001,6 @@ fragment float4 fs_main(VertexOut in [[stage_in]],
 }
 """
 )
-
-
-class LookUniforms(ctypes.Structure):
-    _fields_ = [
-        ("peak_nits", ctypes.c_float),
-        ("gamma", ctypes.c_float),
-        ("exposure", ctypes.c_float),
-        ("contrast", ctypes.c_float),
-        ("progress", ctypes.c_float),
-        ("yaw", ctypes.c_float),
-        ("pitch", ctypes.c_float),
-        ("fovMM", ctypes.c_float),
-        ("overshoot", ctypes.c_float),
-        ("shutter", ctypes.c_float),
-        ("num_samples", ctypes.c_float),
-        ("scene_yaw_rad", ctypes.c_float),
-        ("scene_pitch_rad", ctypes.c_float),
-        ("wipeDir_x", ctypes.c_float),
-        ("wipeDir_y", ctypes.c_float),
-        ("sample_yaw", ctypes.c_float * 24),
-        ("sample_pitch", ctypes.c_float * 24),
-        ("sample_threshold", ctypes.c_float * 24),
-    ]
-
-
-class SdrLookUniforms(ctypes.Structure):
-    _fields_ = [
-        ("peak_nits", ctypes.c_float),
-        ("gamma", ctypes.c_float),
-        ("exposure", ctypes.c_float),
-        ("contrast", ctypes.c_float),
-        ("progress", ctypes.c_float),
-        ("yaw", ctypes.c_float),
-        ("pitch", ctypes.c_float),
-        ("fovMM", ctypes.c_float),
-        ("overshoot", ctypes.c_float),
-        ("shutter", ctypes.c_float),
-        ("num_samples", ctypes.c_float),
-        ("scene_yaw_rad", ctypes.c_float),
-        ("scene_pitch_rad", ctypes.c_float),
-        ("wipeDir_x", ctypes.c_float),
-        ("wipeDir_y", ctypes.c_float),
-        ("sample_yaw", ctypes.c_float * 24),
-        ("sample_pitch", ctypes.c_float * 24),
-        ("sample_threshold", ctypes.c_float * 24),
-        ("gamut_convert", ctypes.c_float),
-        ("sdr_ref_nits", ctypes.c_float),
-    ]
-
-
-class WipeUniforms(ctypes.Structure):
-    _fields_ = [
-        ("peak_nits", ctypes.c_float),
-        ("gamma", ctypes.c_float),
-        ("exposure", ctypes.c_float),
-        ("contrast", ctypes.c_float),
-        ("progress", ctypes.c_float),
-        ("feather", ctypes.c_float),
-        ("direction", ctypes.c_float),
-    ]
-
-
-class SdrWipeUniforms(ctypes.Structure):
-    _fields_ = [
-        ("peak_nits", ctypes.c_float),
-        ("gamma", ctypes.c_float),
-        ("exposure", ctypes.c_float),
-        ("contrast", ctypes.c_float),
-        ("progress", ctypes.c_float),
-        ("feather", ctypes.c_float),
-        ("direction", ctypes.c_float),
-        ("gamut_convert", ctypes.c_float),
-        ("sdr_ref_nits", ctypes.c_float),
-    ]
-
-
-class SlideUniforms(ctypes.Structure):
-    _fields_ = [
-        ("peak_nits", ctypes.c_float),
-        ("gamma", ctypes.c_float),
-        ("exposure", ctypes.c_float),
-        ("contrast", ctypes.c_float),
-        ("progress", ctypes.c_float),
-        ("direction", ctypes.c_float),
-    ]
-
-
-class SdrSlideUniforms(ctypes.Structure):
-    _fields_ = [
-        ("peak_nits", ctypes.c_float),
-        ("gamma", ctypes.c_float),
-        ("exposure", ctypes.c_float),
-        ("contrast", ctypes.c_float),
-        ("progress", ctypes.c_float),
-        ("direction", ctypes.c_float),
-        ("gamut_convert", ctypes.c_float),
-        ("sdr_ref_nits", ctypes.c_float),
-    ]
-
 
 # Phase 6 Part 2: uniforms for the two-input linear blend shaders above --
 # peak_nits/gamma/exposure/contrast drop out entirely (trim is already baked
@@ -2666,15 +2118,6 @@ class HDRVideoBridge(QObject):
         # duration).
         self._active_flag = None
         self._active_transition = None
-        self._wipe_pipeline = None
-        self._slide_pipeline = None
-        self._look_pipeline = None
-        self._wipe_fs = None
-        self._slide_fs = None
-        self._look_fs = None
-        self._wipe_fs_code = None
-        self._slide_fs_code = None
-        self._look_fs_code = None
 
         # Phase 6 Part 2: mixed-scene native transitions. Each side of a
         # transition is first composited through the same per-element pass
@@ -2888,41 +2331,12 @@ class HDRVideoBridge(QObject):
             sdl3.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | sdl3.SDL_GPU_TEXTUREUSAGE_SAMPLER,
         )
 
-        # Transition-compositing pipelines (Stage 4) -- one shared vertex
-        # shader, one fragment shader/pipeline per transition type, each
-        # taking 4 samplers (outgoing Y/UV + incoming Y/UV).
-        #
-        # Phase 9: mode-branched shader source, same pattern as the linear
-        # transition pipelines and the steady-state final pass -- kept
-        # under the same self._wipe_fs/_slide_fs/_look_fs (and pipeline)
-        # attribute names either way.
-        if mode == "sdr":
-            self._wipe_fs, self._wipe_fs_code = _create_shader(
-                device, SDR_WIPE_FRAGMENT_MSL, sdl3.SDL_GPU_SHADERSTAGE_FRAGMENT, num_samplers=4, num_uniform_buffers=1
-            )
-            self._slide_fs, self._slide_fs_code = _create_shader(
-                device, SDR_SLIDE_FRAGMENT_MSL, sdl3.SDL_GPU_SHADERSTAGE_FRAGMENT, num_samplers=4, num_uniform_buffers=1
-            )
-            self._look_fs, self._look_fs_code = _create_shader(
-                device, SDR_LOOK_FRAGMENT_MSL, sdl3.SDL_GPU_SHADERSTAGE_FRAGMENT, num_samplers=4, num_uniform_buffers=1
-            )
-        else:
-            self._wipe_fs, self._wipe_fs_code = _create_shader(
-                device, WIPE_FRAGMENT_MSL, sdl3.SDL_GPU_SHADERSTAGE_FRAGMENT, num_samplers=4, num_uniform_buffers=1
-            )
-            self._slide_fs, self._slide_fs_code = _create_shader(
-                device, SLIDE_FRAGMENT_MSL, sdl3.SDL_GPU_SHADERSTAGE_FRAGMENT, num_samplers=4, num_uniform_buffers=1
-            )
-            self._look_fs, self._look_fs_code = _create_shader(
-                device, LOOK_FRAGMENT_MSL, sdl3.SDL_GPU_SHADERSTAGE_FRAGMENT, num_samplers=4, num_uniform_buffers=1
-            )
-        self._wipe_pipeline = _create_pipeline(device, self._vertex_shader, self._wipe_fs, swapchain_format)
-        self._slide_pipeline = _create_pipeline(device, self._vertex_shader, self._slide_fs, swapchain_format)
-        self._look_pipeline = _create_pipeline(device, self._vertex_shader, self._look_fs, swapchain_format)
-
         # Phase 6 Part 2: two-input linear blend pipelines -- same shared
-        # fullscreen-triangle vertex shader as the four above, but only 2
-        # samplers each (pre-composited linear buffers, not YUV planes).
+        # fullscreen-triangle vertex shader as steady-state's own quad pass,
+        # but only 2 samplers each (pre-composited linear buffers, not YUV
+        # planes -- the original 4-sampler single-video wipe/slide/look
+        # pipelines this superseded were removed in Phase 11, see the
+        # comment above LINEAR_WIPE_FRAGMENT_MSL's definition).
         # Phase 7 Part 3 adds dissolve alongside these (see
         # LINEAR_DISSOLVE_FRAGMENT_MSL's docstring).
         #
@@ -3650,7 +3064,11 @@ class HDRVideoBridge(QObject):
         the destroy-tool's live hover target, a red border+interior fill
         both ramping with "progress" [0..1], no handles; "relayerHover" is
         the relayer-tool's live hover target, a plain white thicker border,
-        no fill, no handles)."""
+        no fill, no handles; "areaOutline" (Phase 11) is one entry per area
+        element, the always-on hotspot boundary shown while editing --
+        explicit "borderColor" [r,g,b] and "fillAlpha" fields instead of a
+        fixed color/ramp, since it's white when selected and grey
+        otherwise, no handles)."""
         if not chrome_items:
             return
         target = sdl3.SDL_GPUColorTargetInfo()
@@ -3682,7 +3100,10 @@ class HDRVideoBridge(QObject):
 
             # Border color/alpha: "delete" ramps red with progress, matching
             # Qt's own Qt.rgba(1,0,0, 0.4 + deleteProgress*0.6) exactly;
-            # everything else (including "relayerHover") is plain white.
+            # "areaOutline" carries its own explicit borderColor/fillAlpha
+            # (white when selected, grey otherwise -- computed QML-side
+            # since selection/hover state lives there); everything else
+            # (including "relayerHover") is plain white.
             fill_uniforms = None
             if kind == "delete":
                 try:
@@ -3691,21 +3112,37 @@ class HDRVideoBridge(QObject):
                     progress = 0.0
                 border_uniforms = make_uniforms((1.0, 0.0, 0.0, 0.4 + progress * 0.6))
                 fill_uniforms = make_uniforms((1.0, 0.0, 0.0, progress * 0.6))
+            elif kind == "areaOutline":
+                try:
+                    r, g, b = (float(c) for c in item.get("borderColor", (1.0, 1.0, 1.0)))
+                    fill_alpha = float(item.get("fillAlpha", 0.0))
+                except (TypeError, ValueError):
+                    r, g, b, fill_alpha = 1.0, 1.0, 1.0, 0.0
+                border_uniforms = make_uniforms((r, g, b, 1.0))
+                if fill_alpha > 0.0:
+                    fill_uniforms = make_uniforms((1.0, 1.0, 1.0, fill_alpha))
             else:
                 border_uniforms = white_uniforms
 
             # Border: 4 edge quads (top/bottom/left/right), not a single
             # stroked rect -- CHROME_FRAGMENT_MSL only draws filled quads.
-            draw_quad(x1, y1, x2, y1 + border_width, uniforms=border_uniforms)
-            draw_quad(x1, y2 - border_width, x2, y2, uniforms=border_uniforms)
-            draw_quad(x1, y1, x1 + border_width, y2, uniforms=border_uniforms)
-            draw_quad(x2 - border_width, y1, x2, y2, uniforms=border_uniforms)
+            # Phase 11: "noBorder" (area's own selection chrome only) skips
+            # this -- an area's continuous border line comes entirely from
+            # the separate "areaOutline" push at its own 28px-inset rect,
+            # not from this raw-rect selection-chrome item; only its handle
+            # dots (below) belong at the raw rect, matching the real
+            # SceneContent.qml corner/edge handle Items' own positions.
+            if not item.get("noBorder"):
+                draw_quad(x1, y1, x2, y1 + border_width, uniforms=border_uniforms)
+                draw_quad(x1, y2 - border_width, x2, y2, uniforms=border_uniforms)
+                draw_quad(x1, y1, x1 + border_width, y2, uniforms=border_uniforms)
+                draw_quad(x2 - border_width, y1, x2, y2, uniforms=border_uniforms)
 
             if fill_uniforms is not None:
                 draw_quad(x1 + border_width, y1 + border_width, x2 - border_width, y2 - border_width, uniforms=fill_uniforms)
 
-            if kind in ("rubberband", "delete", "relayerHover"):
-                continue  # these three never show resize handles
+            if kind in ("rubberband", "delete", "relayerHover", "areaOutline"):
+                continue  # these never show resize handles
 
             # 8 handle dots: 4 corners + 4 edge midpoints, centered exactly
             # like each delegate's own handle Items in SceneContent.qml.
@@ -4063,9 +3500,6 @@ class HDRVideoBridge(QObject):
             self._sdr_pipeline,
             self._chrome_pipeline,
             self._final_pipeline,
-            self._wipe_pipeline,
-            self._slide_pipeline,
-            self._look_pipeline,
             self._linear_dissolve_pipeline,
             self._linear_wipe_pipeline,
             self._linear_slide_pipeline,
@@ -4081,9 +3515,6 @@ class HDRVideoBridge(QObject):
             self._sdr_fs,
             self._chrome_fs,
             self._final_fs,
-            self._wipe_fs,
-            self._slide_fs,
-            self._look_fs,
             self._linear_dissolve_fs,
             self._linear_wipe_fs,
             self._linear_slide_fs,

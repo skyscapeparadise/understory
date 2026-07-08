@@ -551,8 +551,9 @@ Item {
 
     function _buildNativeChrome() {
         var m = null
+        var isArea = false
         if (viewportRef && buttonGridRef && buttonGridRef.selectedTool === "select" && viewportRef.selectionCount === 1) {
-            if (viewportRef.selectedAreas.length === 1) m = areasModelInst.get(viewportRef.selectedAreas[0])
+            if (viewportRef.selectedAreas.length === 1) { m = areasModelInst.get(viewportRef.selectedAreas[0]); isArea = true }
             else if (viewportRef.selectedTbs.length === 1) m = textBoxesModelInst.get(viewportRef.selectedTbs[0])
             else if (viewportRef.selectedImages.length === 1) m = imagesModelInst.get(viewportRef.selectedImages[0])
             else if (viewportRef.selectedVideos.length === 1) m = videosModelInst.get(viewportRef.selectedVideos[0])
@@ -568,10 +569,25 @@ Item {
         // on-screen size regardless of the story's resolution or the
         // editor's current zoom. Sending them pre-computed means the Python
         // side never needs to know about editorScaleFactor at all.
+        //
+        // Phase 11: an area's own resize-handle dots (SceneContent.qml's
+        // per-corner Items above) sit at the raw model rect same as every
+        // other element type's -- but its continuous selection BORDER line
+        // is separately supplied by the always-on boundary Rectangle
+        // turning white when isActive (now mirrored natively by
+        // understoryui.qml's "areaOutline" push, at the same flush-with-
+        // model-rect coordinates -- see that push's own comment for why
+        // its Rectangle's 28px local offset is not a real inset). Drawing
+        // a second, redundant border at the same rect here (this
+        // function's normal behavior for every other type) is harmless in
+        // principle but duplicates a draw for no benefit and briefly
+        // looked like a "double outline" bug while this was being worked
+        // out -- suppressed via noBorder so only the dots draw here.
         nativeChromeJson = JSON.stringify([{
             x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2,
             handleSize: 8 / editorScaleFactor,
-            borderWidth: 2 / editorScaleFactor
+            borderWidth: 2 / editorScaleFactor,
+            noBorder: isArea
         }])
     }
 
@@ -905,9 +921,10 @@ Item {
                         color: areaDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, viewportRef.deleteProgress * 0.6) : (areaDelegate.isActive && index === viewportRef.hoveredAreaIndex ? Qt.rgba(1, 1, 1, 0.15) : "transparent")
                         border.color: areaDelegate.isBeingDeleted ? Qt.rgba(1, 0, 0, 0.4 + viewportRef.deleteProgress * 0.6) : ((areaDelegate.isActive || areaDelegate.isRelayerHovered) ? "white" : "#666666")
                         border.width: (areaDelegate.isActive && index === viewportRef.hoveredAreaIndex) || areaDelegate.isRelayerHovered ? 2 : 1
-                        // Phase 7 Part 4: only the selected element's border+handles get a
-                        // native equivalent (see _buildNativeChrome()) -- an unselected area's
-                        // plain boundary outline is a deliberately deferred gap for now.
+                        // Phase 11: every area's own boundary/hover-fill now has a native
+                        // equivalent too (understoryui.qml's nativeChromeExtraJson "areaOutline"
+                        // push, mirroring this Rectangle's exact geometry/color logic) --
+                        // this was the last disclosed native-mode chrome gap from Phase 7 Part 4.
                         opacity: sceneContent.qtPresentationSuspended ? 0 : 1
                         Behavior on color {
                             ColorAnimation {

@@ -3948,6 +3948,50 @@ Window {
                         x1: groupBBox.gbX1, y1: groupBBox.gbY1, x2: groupBBox.gbX2, y2: groupBBox.gbY2
                     })
                 }
+                // Phase 11: every area's own always-on boundary outline
+                // (SceneContent.qml's areaDelegate border Rectangle) --
+                // previously a disclosed native-mode gap (opacity-gated to
+                // 0 under qtPresentationSuspended with "missing a native
+                // replacement" left as a comment). Mirrors that Rectangle's
+                // exact geometry/color logic: border white when selected
+                // (isActive) else grey, a 2px border + 15% white fill only
+                // when selected AND directly hovered, else 1px no fill.
+                // NOTE (found the hard way -- first attempt at this used a
+                // 28/editorScale inset here, which was wrong): the border
+                // Rectangle's own local x/y (28/editorScaleFactor) is NOT a
+                // real visual inset from the raw model rect -- areaDelegate
+                // itself (the Rectangle's parent) is pre-expanded by that
+                // exact same 28px on every side ("expanded 28px on all
+                // sides so 56x56 handle items stay within parent bounds",
+                // areaDelegate's own comment), so the local inset exactly
+                // cancels the parent's own offset. Net result: the real
+                // border sits flush with the raw model rect, x1/y1/x2/y2
+                // used here directly, no padding at all. Deliberately NOT
+                // gated on selectedTool === "select" for visibility (only
+                // the color logic needs isSelect) -- matches the real
+                // Rectangle's own visible: condition exactly, which shows
+                // outlines in every tool except simulate.
+                // isBeingDeleted/isRelayerHovered are NOT replicated here
+                // since those already draw as their own separate, later
+                // (so visually on-top) "delete"/"relayerHover" push below,
+                // for any element type including area -- no need to
+                // duplicate that logic.
+                if (buttonGrid.selectedTool !== "simulate" && !wiping && !sliding && !looking && !capturingThumbnail && areasModel) {
+                    var isSelectTool = buttonGrid.selectedTool === "select"
+                    for (var ai = 0; ai < areasModel.count; ai++) {
+                        var arow = areasModel.get(ai)
+                        var aIsActive = isSelectTool && selectionRevision >= 0 && selectedAreas.indexOf(ai) !== -1
+                        var aIsHovered = aIsActive && ai === hoveredAreaIndex
+                        items.push({
+                            kind: "areaOutline",
+                            x1: arow.x1, y1: arow.y1,
+                            x2: arow.x2, y2: arow.y2,
+                            borderWidth: (aIsHovered ? 2 : 1) / editorScale,
+                            borderColor: aIsActive ? [1, 1, 1] : [0.4, 0.4, 0.4],
+                            fillAlpha: aIsHovered ? 0.15 : 0.0
+                        })
+                    }
+                }
                 // Phase 7 Part 5: delete-hover (destroy tool) and relayer-hover
                 // targets aren't necessarily the selected element -- you can
                 // destroy-hover or relayer-hover anything, selected or not --
