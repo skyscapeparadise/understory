@@ -512,12 +512,18 @@ CHROME_FRAGMENT_MSL = (
 struct ChromeUniforms {
     float4 color;
     float sdr_ref_nits;
+    float shape; // 0 = filled rect (default), 1 = filled circle inscribed in the quad
 };
 
 fragment float4 fs_main(VertexOut in [[stage_in]],
                          constant ChromeUniforms &u [[buffer(0)]]) {
+    float alpha = u.color.a;
+    if (u.shape > 0.5) {
+        float dist = distance(in.uv, float2(0.5, 0.5));
+        if (dist > 0.5) alpha = 0.0;
+    }
     float3 lin = srgb_eotf(u.color.rgb) * u.sdr_ref_nits;
-    return float4(lin, u.color.a);
+    return float4(lin, alpha);
 }
 """
 )
@@ -1366,7 +1372,7 @@ class SDRVideoUniforms(ctypes.Structure):
 
 
 class ChromeUniforms(ctypes.Structure):
-    _fields_ = [("color", ctypes.c_float * 4), ("sdr_ref_nits", ctypes.c_float)]
+    _fields_ = [("color", ctypes.c_float * 4), ("sdr_ref_nits", ctypes.c_float), ("shape", ctypes.c_float)]
 
 
 class _VideoSource:
@@ -3078,10 +3084,15 @@ class HDRVideoBridge(QObject):
         render_pass = sdl3.SDL_BeginGPURenderPass(cmdbuf, ctypes.byref(target), 1, None)
         sdl3.SDL_BindGPUGraphicsPipeline(render_pass, self._chrome_pipeline)
 
-        def make_uniforms(rgba):
-            return ChromeUniforms(color=(ctypes.c_float * 4)(*rgba), sdr_ref_nits=_SDR_REF_NITS)
+        def make_uniforms(rgba, shape=0.0):
+            return ChromeUniforms(color=(ctypes.c_float * 4)(*rgba), sdr_ref_nits=_SDR_REF_NITS, shape=shape)
 
         white_uniforms = make_uniforms((1.0, 1.0, 1.0, 1.0))
+        # Handle dots are circles, matching every real SceneContent.qml
+        # resize-handle Rectangle's own radius: 4/editorScaleFactor (exactly
+        # half its 8/editorScaleFactor width, i.e. a full circle) -- native
+        # was drawing plain squares here until this was pointed out.
+        white_circle_uniforms = make_uniforms((1.0, 1.0, 1.0, 1.0), shape=1.0)
 
         def draw_quad(x1, y1, x2, y2, uniforms=white_uniforms):
             rect_ndc = self._story_rect_to_ndc(x1, y1, x2, y2)
@@ -3089,6 +3100,21 @@ class HDRVideoBridge(QObject):
             sdl3.SDL_PushGPUVertexUniformData(cmdbuf, 0, ctypes.byref(rect_u), ctypes.sizeof(rect_u))
             sdl3.SDL_PushGPUFragmentUniformData(cmdbuf, 0, ctypes.byref(uniforms), ctypes.sizeof(uniforms))
             sdl3.SDL_DrawGPUPrimitives(render_pass, 6, 1, 0, 0)
+
+        # Two passes, not one: every item's border+fill draws first, then
+        # every item's handle dots draw last, all in one final sub-pass.
+        # Needed because "kind" entries aren't independent self-contained
+        # layers -- an area's continuous border specifically comes from a
+        # *separate*, later-in-the-list "areaOutline" item than the one
+        # supplying its handle dots (its own selection-chrome item, drawn
+        # earlier, with noBorder set -- see below). Interleaving border-
+        # then-handles per item (the original single-pass approach) meant
+        # that later item's border painted right over the earlier item's
+        # already-drawn dots at every corner they shared -- exactly the
+        # "handles render behind the border" bug the user caught. Handles
+        # can never be a per-item afterthought here; they must be the very
+        # last thing drawn across the whole pass.
+        pending_handles = []  # [(x1,y1,x2,y2,handle_size), ...]
 
         for item in chrome_items:
             try:
@@ -3144,20 +3170,39 @@ class HDRVideoBridge(QObject):
             if kind in ("rubberband", "delete", "relayerHover", "areaOutline"):
                 continue  # these never show resize handles
 
-            # 8 handle dots: 4 corners + 4 edge midpoints, centered exactly
-            # like each delegate's own handle Items in SceneContent.qml.
             try:
                 handle_size = float(item.get("handleSize", 8.0))
             except (TypeError, ValueError):
                 continue
+            pending_handles.append((x1, y1, x2, y2, handle_size, border_width))
+
+        # 8 handle dots per pending item: 4 corners + 4 edge midpoints,
+        # centered exactly like each delegate's own handle Items in
+        # SceneContent.qml -- drawn last, on top of every border/fill above
+        # (including any later-in-the-list item's, like an area's
+        # "areaOutline" border relative to its own earlier handle-dot item).
+        #
+        # Each dot is centered on the border's own visual stroke, not on the
+        # raw x1/y1/x2/y2 corner the border quads are anchored to -- a
+        # border quad is drawn *inward* from that raw coordinate by
+        # border_width (see draw_quad calls above), so its centerline sits
+        # border_width/2 further in. Centering a dot at the raw corner
+        # instead put it visibly outside the border's own middle -- caught
+        # live by the user ("control points are not centered over the
+        # border lines, they are 1 or 2px outwards"). ix1/iy1/ix2/iy2 below
+        # are the border-centerline equivalents of x1/y1/x2/y2; mid_x/mid_y
+        # need no adjustment, already centered between two such edges.
+        for x1, y1, x2, y2, handle_size, border_width in pending_handles:
             mid_x, mid_y = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+            half_border = border_width / 2.0
+            ix1, iy1, ix2, iy2 = x1 + half_border, y1 + half_border, x2 - half_border, y2 - half_border
             half = handle_size / 2.0
             for cx, cy in (
-                (x1, y1), (mid_x, y1), (x2, y1),
-                (x1, mid_y), (x2, mid_y),
-                (x1, y2), (mid_x, y2), (x2, y2),
+                (ix1, iy1), (mid_x, iy1), (ix2, iy1),
+                (ix1, mid_y), (ix2, mid_y),
+                (ix1, iy2), (mid_x, iy2), (ix2, iy2),
             ):
-                draw_quad(cx - half, cy - half, cx + half, cy + half)
+                draw_quad(cx - half, cy - half, cx + half, cy + half, uniforms=white_circle_uniforms)
 
         sdl3.SDL_EndGPURenderPass(render_pass)
 
@@ -3252,11 +3297,31 @@ class HDRVideoBridge(QObject):
         self._ensure_linear_buffer(snap)
 
         elements = self._parse_elements(snap.active_native_elements_json)
-        if snap.active_native_elements_json != self._last_elements_json:
-            self._reconcile_video_sources(elements)
-            self._reconcile_image_sources(elements)
-            self._reconcile_shader_sources(elements)
-            self._last_elements_json = snap.active_native_elements_json
+        # Phase 12: reconcile (not composite -- see the composite call
+        # below, which still only ever draws `elements`) against staging's
+        # elements too, not just active's. Qt already pre-warms its own
+        # MediaPlayer for the scene's first jump target ~300ms after
+        # arrival (understoryui.qml's preWarmTimer/preWarmNextScene,
+        # stagingContent.loadScene()) -- but the native pipeline was never
+        # told about that pre-warmed staging content until a real
+        # transition's _begin_transition actually started, so a fresh
+        # _VideoSource for the destination video only ever began decoding
+        # at the moment of the jump, not before, and its ring buffer had no
+        # real frames ready yet -- a black-frame flash on every jump except
+        # to a scene already warm from a *previous* recent visit (Phase
+        # 10's grace-period cache only helps that second case). Piggy-
+        # backing on Qt's existing pre-warm here gives the destination
+        # source's decode thread the same head start Qt's own MediaPlayer
+        # already gets, for free -- explicitly deferred at the end of
+        # Phase 10 as "lower-certainty payoff, unclear whether the app's
+        # architecture offers meaningful lead time at all"; it does.
+        staging_elements = self._parse_elements(snap.staging_native_elements_json)
+        elements_key = (snap.active_native_elements_json, snap.staging_native_elements_json)
+        if elements_key != self._last_elements_json:
+            self._reconcile_video_sources(elements + staging_elements)
+            self._reconcile_image_sources(elements + staging_elements)
+            self._reconcile_shader_sources(elements + staging_elements)
+            self._last_elements_json = elements_key
         # Phase 7 Part 3: previously hid the native window here for an
         # empty element list (e.g. a legacy .qsb-shader-only scene, not yet
         # native-eligible), letting Qt's own rendering show through as a
