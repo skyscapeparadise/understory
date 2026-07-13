@@ -117,7 +117,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Slot
 
 try:
     import av
@@ -164,6 +164,13 @@ _GAMMA = 1.2 + 0.42 * math.log10(max(_PEAK_NITS, 1.0) / 1000.0)
 # video in prototypes/hdr_phase5_mixed_compositing_test.py (Stage 0);
 # user confirmed the default looked right with no adjustment needed.
 _SDR_REF_NITS = 203.0
+
+# Scene-card thumbnail capture: matches understoryui.qml's
+# captureAndSaveThumbnail()'s own grabToImage(Qt.size(540, 300)) target size,
+# so the two paths (Qt's grabToImage vs. this native readback) produce
+# identically-sized files regardless of which one a given tick uses.
+_THUMB_W = 540
+_THUMB_H = 300
 
 # Phase 10: how long a _VideoSource stays cached after it's no longer
 # referenced by anything on screen, before actually being torn down and
@@ -2018,6 +2025,12 @@ class QmlSnapshot:
     # Phase 7 Part 4: true whenever the scene editor screen itself is showing
     # (covers both plain editing and previewing) -- see _should_be_visible.
     scene_editor_visible: bool = False
+    # Mirrors viewportBlackOverlay.opacity (understoryui.qml) -- the black
+    # fade Qt already plays on scene-editor enter/exit. Qt's own overlay
+    # Rectangle sits above `viewport` in its scene graph, but the native
+    # render surface sits above the whole Qt window at the OS compositor
+    # level, so it never sees that overlay -- see _composite_fade_pass.
+    fade_black_opacity: float = 0.0
 
 
 class HDRVideoBridge(QObject):
@@ -2095,6 +2108,16 @@ class HDRVideoBridge(QObject):
         self._final_fs = None
         self._final_fs_code = None
         self._final_pipeline = None
+        # Scene-card thumbnail capture (see capture_thumbnail): always the
+        # SDR encode shader/pipeline/texture regardless of self._mode, so a
+        # thumbnail is always SDR even while live-previewing in HDR mode --
+        # built once in _attach(), independent of self._final_fs/_pipeline
+        # above (which follow the live mode).
+        self._thumb_fs = None
+        self._thumb_fs_code = None
+        self._thumb_pipeline = None
+        self._thumb_texture = None
+        self._thumb_transfer_buffer = None
         self._image_sources = {}
         # Phase 7 Part 2: compiled native shader elements, keyed by
         # (fragPath, vertPath) -- reconciled the same way _image_sources is.
@@ -2320,6 +2343,27 @@ class HDRVideoBridge(QObject):
         )
         self._final_pipeline = _create_pipeline(device, self._vertex_shader, self._final_fs, swapchain_format)
 
+        # Scene-card thumbnails must always render as SDR, even in "hdr" live
+        # mode -- built unconditionally here (not branched on `mode` like
+        # self._final_fs/_pipeline above), targeting a small fixed-size,
+        # fixed-format (R8G8B8A8_UNORM) offscreen texture rather than
+        # `swapchain_format`, which in "hdr" mode is a 10-bit PQ format
+        # unsuitable for a plain PNG. See capture_thumbnail().
+        self._thumb_fs, self._thumb_fs_code = _create_shader(
+            device, SDR_FINAL_FRAGMENT_MSL, sdl3.SDL_GPU_SHADERSTAGE_FRAGMENT, num_samplers=1, num_uniform_buffers=1
+        )
+        thumb_format = sdl3.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM
+        self._thumb_pipeline = _create_pipeline(device, self._vertex_shader, self._thumb_fs, thumb_format)
+        self._thumb_texture = _make_texture(
+            device, thumb_format, _THUMB_W, _THUMB_H, sdl3.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET
+        )
+        transfer_info = sdl3.SDL_GPUTransferBufferCreateInfo()
+        transfer_info.usage = sdl3.SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD
+        transfer_info.size = _THUMB_W * _THUMB_H * 4
+        self._thumb_transfer_buffer = sdl3.SDL_CreateGPUTransferBuffer(device, ctypes.byref(transfer_info))
+        if not self._thumb_transfer_buffer:
+            raise RuntimeError(f"SDL_CreateGPUTransferBuffer failed: {sdl3.SDL_GetError().decode()}")
+
         # Placeholder allocation only -- at this point (right after
         # engine.load(), before any story is open) contentWidth/contentHeight
         # are still mainWindow's declared defaults (1920x1080), not
@@ -2471,6 +2515,7 @@ class HDRVideoBridge(QObject):
             content_width=int(v.property("contentWidth") or 1920),
             content_height=int(v.property("contentHeight") or 1080),
             scene_editor_visible=bool(v.property("sceneEditorVisible")),
+            fade_black_opacity=float(v.property("viewportBlackOverlayOpacity") or 0.0),
         )
 
     def _sync_geometry(self):
@@ -3265,6 +3310,105 @@ class HDRVideoBridge(QObject):
         sdl3.SDL_DrawGPUPrimitives(render_pass, 6, 1, 0, 0)
         sdl3.SDL_EndGPURenderPass(render_pass)
 
+    def _composite_fade_pass(self, cmdbuf, opacity, target_texture):
+        """Draws a full-story-rect black quad on top of everything else this
+        tick, mirroring understoryui.qml's viewportBlackOverlay (the fade Qt
+        plays on scene-editor enter/exit) -- see QmlSnapshot.fade_black_opacity.
+        Reuses _chrome_pipeline/ChromeUniforms exactly as-is: pure black rgb
+        PQ/SDR-encodes to 0 regardless of sdr_ref_nits, so only alpha matters
+        here, and the pipeline's existing SRC_ALPHA blending is already what
+        a fade needs."""
+        if opacity <= 0.0:
+            return
+        target = sdl3.SDL_GPUColorTargetInfo()
+        target.texture = target_texture
+        target.load_op = sdl3.SDL_GPU_LOADOP_LOAD
+        target.store_op = sdl3.SDL_GPU_STOREOP_STORE
+        render_pass = sdl3.SDL_BeginGPURenderPass(cmdbuf, ctypes.byref(target), 1, None)
+        sdl3.SDL_BindGPUGraphicsPipeline(render_pass, self._chrome_pipeline)
+        rect_ndc = self._story_rect_to_ndc(0, 0, self._linear_w, self._linear_h)
+        rect_u = RectUniform((ctypes.c_float * 4)(*rect_ndc))
+        sdl3.SDL_PushGPUVertexUniformData(cmdbuf, 0, ctypes.byref(rect_u), ctypes.sizeof(rect_u))
+        uniforms = ChromeUniforms(color=(ctypes.c_float * 4)(0.0, 0.0, 0.0, opacity), sdr_ref_nits=_SDR_REF_NITS, shape=0.0)
+        sdl3.SDL_PushGPUFragmentUniformData(cmdbuf, 0, ctypes.byref(uniforms), ctypes.sizeof(uniforms))
+        sdl3.SDL_DrawGPUPrimitives(render_pass, 6, 1, 0, 0)
+        sdl3.SDL_EndGPURenderPass(render_pass)
+
+    @Slot(str, result=bool)
+    def capture_thumbnail(self, path):
+        """Called directly from QML (understoryui.qml's
+        captureAndSaveThumbnail) whenever the native pipeline is active and
+        Qt's own grabToImage() would just capture black -- every
+        SceneContent.qml element delegate sits at opacity 0 while
+        qtPresentationSuspended (see viewport.activeContent), since the
+        native pipeline is the one actually drawing pixels, not Qt. Always
+        encodes through self._thumb_pipeline (the SDR final-encode shader,
+        built once in _attach() regardless of live mode -- see there)
+        rather than whatever self._mode currently is, so a thumbnail saved
+        while live-previewing in HDR mode still looks right in the (SDR)
+        story-hub/scene-menu cards. Synchronous -- waits on a GPU fence --
+        but only ever called once, right before the scene editor closes,
+        same as the Qt-mode grabToImage() path it replaces."""
+        if self._device is None or self._linear_buffer is None or not self._linear_w or not self._linear_h:
+            return False
+
+        # Re-run just the elements pass (no chrome/cursor/fade overlay) fresh
+        # into self._linear_buffer -- mirrors Qt's own thumbnail source
+        # (thumbnailCaptureSurface's ShaderEffectSource, sourced from
+        # viewport.activeContent alone, no editor chrome). Safe to do off-
+        # tick: the next regular render tick clears and recomposites this
+        # same buffer from scratch anyway (see _render_unsafe's Pass 1), so
+        # scribbling over it here has no lasting effect on the live frame.
+        elements = self._parse_elements(self._snapshot.active_native_elements_json)
+        cmdbuf = sdl3.SDL_AcquireGPUCommandBuffer(self._device)
+        self._composite_elements_pass(cmdbuf, elements, self._linear_buffer)
+
+        target = sdl3.SDL_GPUColorTargetInfo()
+        target.texture = self._thumb_texture
+        target.load_op = sdl3.SDL_GPU_LOADOP_DONT_CARE
+        target.store_op = sdl3.SDL_GPU_STOREOP_STORE
+        render_pass = sdl3.SDL_BeginGPURenderPass(cmdbuf, ctypes.byref(target), 1, None)
+        sdl3.SDL_BindGPUGraphicsPipeline(render_pass, self._thumb_pipeline)
+        binding = (sdl3.SDL_GPUTextureSamplerBinding * 1)(
+            sdl3.SDL_GPUTextureSamplerBinding(texture=self._linear_buffer, sampler=self._sampler)
+        )
+        sdl3.SDL_BindGPUFragmentSamplers(render_pass, 0, binding, 1)
+        uniforms = SDRUniforms(sdr_ref_nits=_SDR_REF_NITS)
+        sdl3.SDL_PushGPUFragmentUniformData(cmdbuf, 0, ctypes.byref(uniforms), ctypes.sizeof(uniforms))
+        sdl3.SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0)
+        sdl3.SDL_EndGPURenderPass(render_pass)
+
+        copy_pass = sdl3.SDL_BeginGPUCopyPass(cmdbuf)
+        region = sdl3.SDL_GPUTextureRegion()
+        region.texture = self._thumb_texture
+        region.w = _THUMB_W
+        region.h = _THUMB_H
+        region.d = 1
+        transfer_info = sdl3.SDL_GPUTextureTransferInfo()
+        transfer_info.transfer_buffer = self._thumb_transfer_buffer
+        transfer_info.pixels_per_row = _THUMB_W
+        transfer_info.rows_per_layer = _THUMB_H
+        sdl3.SDL_DownloadFromGPUTexture(copy_pass, ctypes.byref(region), ctypes.byref(transfer_info))
+        sdl3.SDL_EndGPUCopyPass(copy_pass)
+
+        fence = sdl3.SDL_SubmitGPUCommandBufferAndAcquireFence(cmdbuf)
+        if not fence:
+            return False
+        fences = (ctypes.POINTER(sdl3.SDL_GPUFence) * 1)(fence)
+        sdl3.SDL_WaitForGPUFences(self._device, True, fences, 1)
+        sdl3.SDL_ReleaseGPUFence(self._device, fence)
+
+        ptr = sdl3.SDL_MapGPUTransferBuffer(self._device, self._thumb_transfer_buffer, False)
+        if not ptr:
+            return False
+        try:
+            pixels = ctypes.string_at(ptr, _THUMB_W * _THUMB_H * 4)
+        finally:
+            sdl3.SDL_UnmapGPUTransferBuffer(self._device, self._thumb_transfer_buffer)
+
+        image = QImage(pixels, _THUMB_W, _THUMB_H, _THUMB_W * 4, QImage.Format_RGBA8888)
+        return bool(image.save(path))
+
     def _render_unsafe(self, snap):
         # `snap` is the most recent beforeSynchronizing-built snapshot,
         # passed in explicitly by _render() rather than read from
@@ -3367,6 +3511,9 @@ class HDRVideoBridge(QObject):
 
         # --- Pass 1c: tool-cursor icon, drawn on top of everything else ---
         self._composite_cursor_pass(cmdbuf, cursor_item, self._linear_buffer)
+
+        # --- Pass 1d: scene-editor enter/exit black fade, on top of all of the above ---
+        self._composite_fade_pass(cmdbuf, snap.fade_black_opacity, self._linear_buffer)
 
         # --- Pass 2: PQ-encode the composited buffer to the real swapchain ---
         swapchain_texture = ctypes.POINTER(sdl3.SDL_GPUTexture)()
@@ -3550,6 +3697,12 @@ class HDRVideoBridge(QObject):
         self._last_elements_json = None
         if self._sampler is not None:
             sdl3.SDL_ReleaseGPUSampler(self._device, self._sampler)
+        if self._thumb_transfer_buffer is not None:
+            sdl3.SDL_ReleaseGPUTransferBuffer(self._device, self._thumb_transfer_buffer)
+            self._thumb_transfer_buffer = None
+        if self._thumb_texture is not None:
+            sdl3.SDL_ReleaseGPUTexture(self._device, self._thumb_texture)
+            self._thumb_texture = None
         if self._linear_buffer is not None:
             sdl3.SDL_ReleaseGPUTexture(self._device, self._linear_buffer)
             self._linear_buffer = None
@@ -3565,6 +3718,7 @@ class HDRVideoBridge(QObject):
             self._sdr_pipeline,
             self._chrome_pipeline,
             self._final_pipeline,
+            self._thumb_pipeline,
             self._linear_dissolve_pipeline,
             self._linear_wipe_pipeline,
             self._linear_slide_pipeline,
@@ -3580,6 +3734,7 @@ class HDRVideoBridge(QObject):
             self._sdr_fs,
             self._chrome_fs,
             self._final_fs,
+            self._thumb_fs,
             self._linear_dissolve_fs,
             self._linear_wipe_fs,
             self._linear_slide_fs,

@@ -3838,6 +3838,13 @@ Window {
             // (nativeRenderMode alone is true from app startup regardless
             // of which screen is showing).
             readonly property bool sceneEditorVisible: sceneEditor.visible
+            // Mirrors viewportBlackOverlay's own opacity so the native HDR/SDR
+            // bridge (hdr_viewport.py) can composite the same enter/exit black
+            // fade on top of its own pipeline -- that overlay is a QML Rectangle
+            // stacked above `viewport` in Qt's own scene graph, which the native
+            // render surface sits above at the OS compositor level and would
+            // otherwise never see.
+            readonly property real viewportBlackOverlayOpacity: viewportBlackOverlay.opacity
             // Polled by the native HDR bridge (hdr_viewport.py) to decide whether the
             // active/staging scene qualifies for the native pipeline instead of Qt's.
             readonly property bool activeNativeEligible:  activeContent  ? activeContent.nativeEligible  : false
@@ -5163,9 +5170,8 @@ Window {
                     return;
                 }
                 var tempPath = "/tmp/understory_thumb_" + sceneId + ".png";
-                viewport.capturingThumbnail = true;
-                thumbnailCaptureSurface.grabToImage(function (result) {
-                    result.saveToFile(tempPath);
+
+                function finishThumbnail() {
                     storyManager.saveThumbnail(sceneId, tempPath);
                     storyManager.saveStoryThumbnail(tempPath);
                     for (var i = 0; i < scenesRectModel.count; i++) {
@@ -5176,7 +5182,25 @@ Window {
                         }
                     }
                     onDone();
-                }, Qt.size(540, 300));
+                }
+
+                if (viewport.qtPresentationSuspended && hdrBridge) {
+                    // Native SDL3 pipeline is drawing the real pixels -- every
+                    // SceneContent.qml element sits at opacity 0 in Qt's own
+                    // scene graph while qtPresentationSuspended, so grabToImage()
+                    // below would just capture black. Ask the native bridge to
+                    // encode+save an always-SDR frame straight from its own
+                    // linear-light compositing buffer instead (see
+                    // hdr_viewport.py's capture_thumbnail()).
+                    hdrBridge.capture_thumbnail(tempPath);
+                    finishThumbnail();
+                } else {
+                    viewport.capturingThumbnail = true;
+                    thumbnailCaptureSurface.grabToImage(function (result) {
+                        result.saveToFile(tempPath);
+                        finishThumbnail();
+                    }, Qt.size(540, 300));
+                }
             }
 
             // Convert comma-separated text to a serialisable array/scalar (for storing in model).

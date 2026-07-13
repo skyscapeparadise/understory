@@ -1864,6 +1864,7 @@ if not engine.rootObjects():
 # via appSettings.nativeRenderMode ("off"/"sdr"/"hdr"), no-op unless
 # enabled/supported/on macOS. Falls back to the existing Qt video pipeline
 # entirely on its own if construction fails for any reason.
+hdrBridge = None
 if HDRVideoBridge is not None:
     try:
         hdrBridge = HDRVideoBridge(engine.rootObjects()[0])
@@ -1871,5 +1872,11 @@ if HDRVideoBridge is not None:
             app.aboutToQuit.connect(hdrBridge.cleanup)
     except Exception as exc:
         print(f"[hdr_viewport] bridge construction failed, using Qt pipeline: {exc}")
+
+# Exposed so understoryui.qml's captureAndSaveThumbnail() can call
+# hdrBridge.capture_thumbnail() directly when the native pipeline is active
+# -- None (falsy in QML too) whenever native rendering is off/unsupported,
+# so that call site's own qtPresentationSuspended guard is what matters.
+engine.rootContext().setContextProperty("hdrBridge", hdrBridge if hdrBridge is not None and hdrBridge.active else None)
 
 sys.exit(app.exec())
