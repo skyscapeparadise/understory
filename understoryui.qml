@@ -23,6 +23,15 @@ Window {
         // so the same native SDL3 pipeline can target either a standard
         // (sdr) or HDR10 (hdr) swapchain, not just HDR.
         property string nativeRenderMode: "off"
+        // When true, every menu/editor chrome transition is instant instead
+        // of animated: window resize/move snaps straight to its target
+        // size/position (see mainWindow.windowAnimDuration), the viewport's
+        // enter/exit black fade is skipped (see viewportFadeInAnim/
+        // viewportFadeOutAnim), and the storyHub2sceneEditor/sceneEditor2
+        // storyHub/story2storyHub/scene2launchScreen chrome-transition .mp4s
+        // are skipped entirely in favor of jumping straight to each one's
+        // end state (see each Rectangle's finishTransition()).
+        property bool disableAnimations: false
     }
 
     visible: true
@@ -156,6 +165,15 @@ Window {
 
     property int xanimationduration: 0
     property int yanimationduration: 0
+    // Drives both the width/height Behaviors' NumberAnimation duration below
+    // and every xanimationduration/yanimationduration assignment at each
+    // window-resize call site -- one switch instead of a duration literal
+    // repeated at every call site, so appSettings.disableAnimations can't
+    // miss one.
+    readonly property int windowAnimDuration: appSettings.disableAnimations ? 0 : 1000
+    // Same idea for the viewport's enter/exit black fade (viewportFadeInAnim/
+    // viewportFadeOutAnim), which has its own base duration (800ms).
+    readonly property int fadeAnimDuration: appSettings.disableAnimations ? 0 : 800
     property real sceneEditorEntryX: 0
     property int currentSceneId: -1
     property string currentSceneName: {
@@ -203,7 +221,7 @@ Window {
                 value: true
             }
             NumberAnimation {
-                duration: 1000
+                duration: mainWindow.windowAnimDuration
                 easing.type: Easing.InOutQuad
             }
             ScriptAction {
@@ -212,14 +230,13 @@ Window {
                     mainWindow.widthAnimating = false;
                     if (sceneEditor2storyHub.windowSizeCompleteTrigger) {
                         console.log("ScriptAction triggered");
-                        sceneEditor2storyHub.visible = true;
-                        sceneEditor2storyHubPlayer.play();
+                        mainWindow.startChromeTransition(sceneEditor2storyHub, sceneEditor2storyHubPlayer);
                     } else if (mainWindow.width === 1365 && mainWindow.currentSceneId !== -1) {
                         // Just finished opening the scene editor — auto-open timeline if it was open last time
                         var tlState = storyManager.getEditorState("scene_" + mainWindow.currentSceneId + "_timeline_open");
                         if (tlState === "1") {
                             sceneEditorButtons.timelineOpen = true;
-                            yanimationduration = 1000;
+                            yanimationduration = mainWindow.windowAnimDuration;
                             mainWindow.height = mainWindow.height + 300;
                             mainWindow.y = mainWindow.y - 150;
                         }
@@ -247,7 +264,7 @@ Window {
                 value: true
             }
             NumberAnimation {
-                duration: 1000
+                duration: mainWindow.windowAnimDuration
                 easing.type: Easing.InOutQuad
             }
             ScriptAction {
@@ -417,8 +434,7 @@ Window {
                                     saveStoryDialog.open();
                                 } else {
                                     if (storyManager.openStory(storyData.path)) {
-                                        story2storyHub.visible = true;
-                                        story2storyHubPlayer.play();
+                                        mainWindow.startChromeTransition(story2storyHub, story2storyHubPlayer);
                                     }
                                 }
                             }
@@ -606,6 +622,55 @@ Window {
                                 color: renderModeRect.isOn ? "#477B78" : "#888"
                                 Behavior on color { ColorAnimation { duration: 120 } }
                             }
+                        }
+                    }
+                }
+
+                Text {
+                    text: "window"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: "white"
+                    topPadding: 8
+                }
+
+                Rectangle {
+                    id: disableAnimationsRect
+                    Layout.fillWidth: true
+                    height: 44
+                    radius: 10
+                    property bool isOn: appSettings.disableAnimations
+                    color: isOn ? "white" : "transparent"
+                    border.width: 2
+                    border.color: "white"
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: appSettings.disableAnimations = !appSettings.disableAnimations
+                    }
+                    Item {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        height: 20
+                        Text {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "disable animations (instant window resize, viewport fade, and menu transitions)"
+                            font.pixelSize: 14
+                            font.bold: true
+                            color: disableAnimationsRect.isOn ? "#477B78" : "white"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
+                        Text {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: disableAnimationsRect.isOn ? "on" : "off"
+                            font.pixelSize: 11
+                            color: disableAnimationsRect.isOn ? "#477B78" : "#888"
+                            Behavior on color { ColorAnimation { duration: 120 } }
                         }
                     }
                 }
@@ -1006,15 +1071,13 @@ Window {
                                         mainWindow.currentSceneId = newId;
                                         viewport.activeContent.clear();
                                         viewport.nextStackOrder = 0;
-                                        storyHub2sceneEditor.visible = true;
-                                        storyHub2sceneEditorPlayer.play();
+                                        mainWindow.startChromeTransition(storyHub2sceneEditor, storyHub2sceneEditorPlayer);
                                     }
                                 } else {
                                     navigationSettings.saveNavLinks(mainWindow.currentSceneId);
                                     mainWindow.currentSceneId = model.sceneId;
                                     viewport.loadSceneIntoViewport(model.sceneId);
-                                    storyHub2sceneEditor.visible = true;
-                                    storyHub2sceneEditorPlayer.play();
+                                    mainWindow.startChromeTransition(storyHub2sceneEditor, storyHub2sceneEditorPlayer);
                                 }
                             }
                         }
@@ -3745,8 +3808,7 @@ Window {
                             } else {
                                 console.log("button", modelData, "clicked!");
                                 if (modelData === "exit story") {
-                                    scene2launchScreen.visible = true;
-                                    scene2launchScreenPlayer.play();
+                                    mainWindow.startChromeTransition(scene2launchScreen, scene2launchScreenPlayer);
                                 }
                             }
                         }
@@ -7339,7 +7401,7 @@ Window {
                     target: viewportBlackOverlay
                     property: "opacity"
                     to: 1.0
-                    duration: 800
+                    duration: mainWindow.fadeAnimDuration
                     easing.type: Easing.InOutQuad
                 }
 
@@ -7348,7 +7410,7 @@ Window {
                     target: viewportBlackOverlay
                     property: "opacity"
                     to: 0.0
-                    duration: 800
+                    duration: mainWindow.fadeAnimDuration
                     easing.type: Easing.InOutQuad
                 }
             }
@@ -7601,7 +7663,7 @@ Window {
                                 } else if (modelData === "story map") {
                                     var opening = !sceneEditorButtons.timelineOpen;
                                     sceneEditorButtons.timelineOpen = opening;
-                                    yanimationduration = 1000;
+                                    yanimationduration = mainWindow.windowAnimDuration;
                                     if (opening) {
                                         mainWindow.height = mainWindow.height + 300;
                                         mainWindow.y = mainWindow.y - 150;
@@ -7632,16 +7694,22 @@ Window {
                                             storyManager.setEditorState("scene_" + savedSceneId + "_timeline_open", sceneEditorButtons.timelineOpen ? "1" : "0");
                                         if (sceneEditorButtons.timelineOpen) {
                                             sceneEditorButtons.timelineOpen = false;
-                                            yanimationduration = 1000;
+                                            yanimationduration = mainWindow.windowAnimDuration;
                                             mainWindow.height = 540;
                                             mainWindow.y = mainWindow.y + 150;
                                             closeSceneTimer.start();
                                         } else {
                                             viewportFadeInAnim.start();
-                                            xanimationduration = 1000;
+                                            xanimationduration = mainWindow.windowAnimDuration;
+                                            // Must be set before the width assignment below --
+                                            // with windowAnimDuration at 0 (disableAnimations),
+                                            // the Behavior on width's ScriptAction runs
+                                            // synchronously as part of that assignment, so this
+                                            // flag has to already be true by the time it checks,
+                                            // not set right after.
+                                            sceneEditor2storyHub.windowSizeCompleteTrigger = true;
                                             mainWindow.width = 960;
                                             mainWindow.x = sceneEditorEntryX;
-                                            sceneEditor2storyHub.windowSizeCompleteTrigger = true;
                                         }
                                     });
                                 }
@@ -15626,14 +15694,20 @@ Window {
 
     Timer {
         id: closeSceneTimer
-        interval: 1000
+        // Matches windowAnimDuration -- this wait exists only to let the
+        // "story map" height-collapse animation above finish visually
+        // before the width-collapse/exit sequence starts; with
+        // disableAnimations there's nothing to wait on.
+        interval: mainWindow.windowAnimDuration
         repeat: false
         onTriggered: {
             viewportFadeInAnim.start();
-            xanimationduration = 1000;
+            xanimationduration = mainWindow.windowAnimDuration;
+            // See the "close scene" handler's matching comment -- must be
+            // set before the width assignment below.
+            sceneEditor2storyHub.windowSizeCompleteTrigger = true;
             mainWindow.width = 960;
             mainWindow.x = sceneEditorEntryX;
-            sceneEditor2storyHub.windowSizeCompleteTrigger = true;
         }
     }
 
@@ -15685,6 +15759,16 @@ Window {
             fillMode: Image.PreserveAspectFit
         }
 
+        // End state of the storymenu2scenemenu.mp4 transition -- called
+        // either from the video's own EndOfMedia (normal) or directly,
+        // skipping the video, when appSettings.disableAnimations is on (see
+        // mainWindow.startChromeTransition()).
+        function finishTransition() {
+            storyHub.visible = true;
+            story2storyHub.visible = false;
+            launchScreen.visible = false;
+        }
+
         MediaPlayer {
             id: story2storyHubPlayer
             source: "file:storymenu2scenemenu.mp4"
@@ -15694,9 +15778,7 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
-                    storyHub.visible = true;
-                    story2storyHub.visible = false;
-                    launchScreen.visible = false;
+                    story2storyHub.finishTransition();
                 }
             }
         }
@@ -15720,6 +15802,15 @@ Window {
             fillMode: Image.PreserveAspectFit
         }
 
+        // See story2storyHub.finishTransition()'s comment above.
+        function finishTransition() {
+            mainWindow.currentSceneId = -1;
+            viewport.activeContent.clear();
+            launchScreen.visible = true;
+            scene2launchScreen.visible = false;
+            storyHub.visible = false;
+        }
+
         MediaPlayer {
             id: scene2launchScreenPlayer
             source: "file:scenemenu2storymenu.mp4"
@@ -15729,11 +15820,7 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
-                    mainWindow.currentSceneId = -1;
-                    viewport.activeContent.clear();
-                    launchScreen.visible = true;
-                    scene2launchScreen.visible = false;
-                    storyHub.visible = false;
+                    scene2launchScreen.finishTransition();
                 }
             }
         }
@@ -15757,6 +15844,27 @@ Window {
             fillMode: Image.PreserveAspectFit
         }
 
+        // See story2storyHub.finishTransition()'s comment above.
+        function finishTransition() {
+            sceneEditorEntryX = mainWindow.x;
+            xanimationduration = mainWindow.windowAnimDuration;
+            mainWindow.width = 1365;
+            mainWindow.x = mainWindow.x - 202;
+            sceneEditor.visible = true;
+            viewportFadeOutAnim.start();
+            storyHub2sceneEditor.visible = false;
+            storyHub.visible = false;
+            viewport.capturingThumbnail = false;
+            buttonGrid.selectedTool = "select";
+            sceneEditorButtons.conditionsOpen = false;
+            sceneEditorButtons.variablesOpen = false;
+            sceneEditorButtons.navigationOpen = false;
+            sceneEditorButtons.interactivityPickerOpen = false;
+            // Populate the scene name field from the DB
+            if (mainWindow.currentSceneId !== -1)
+                sceneNameInput.text = storyManager.getSceneName(mainWindow.currentSceneId);
+        }
+
         MediaPlayer {
             id: storyHub2sceneEditorPlayer
             source: "file:scenemenu2sceneeditor.mp4"
@@ -15766,23 +15874,7 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
-                    sceneEditorEntryX = mainWindow.x;
-                    xanimationduration = 1000;
-                    mainWindow.width = 1365;
-                    mainWindow.x = mainWindow.x - 202;
-                    sceneEditor.visible = true;
-                    viewportFadeOutAnim.start();
-                    storyHub2sceneEditor.visible = false;
-                    storyHub.visible = false;
-                    viewport.capturingThumbnail = false;
-                    buttonGrid.selectedTool = "select";
-                    sceneEditorButtons.conditionsOpen = false;
-                    sceneEditorButtons.variablesOpen = false;
-                    sceneEditorButtons.navigationOpen = false;
-                    sceneEditorButtons.interactivityPickerOpen = false;
-                    // Populate the scene name field from the DB
-                    if (mainWindow.currentSceneId !== -1)
-                        sceneNameInput.text = storyManager.getSceneName(mainWindow.currentSceneId);
+                    storyHub2sceneEditor.finishTransition();
                 }
             }
         }
@@ -15823,23 +15915,24 @@ Window {
                         storyManager.setEditorState("scene_" + savedSceneId + "_timeline_open", sceneEditorButtons.timelineOpen ? "1" : "0");
                     if (sceneEditorButtons.timelineOpen) {
                         sceneEditorButtons.timelineOpen = false;
-                        yanimationduration = 1000;
+                        yanimationduration = mainWindow.windowAnimDuration;
                         mainWindow.height = 540;
                         mainWindow.y = mainWindow.y + 150;
                         closeSceneTimer.start();
                     } else {
                         viewportFadeInAnim.start();
-                        xanimationduration = 1000;
+                        xanimationduration = mainWindow.windowAnimDuration;
+                        // See the "close scene" handler's matching comment --
+                        // must be set before the width assignment below.
+                        sceneEditor2storyHub.windowSizeCompleteTrigger = true;
                         mainWindow.width = 960;
                         mainWindow.x = sceneEditorEntryX;
-                        sceneEditor2storyHub.windowSizeCompleteTrigger = true;
                     }
                 });
             } else if (launchScreen.visible) {
                 // On story menu — load and animate to scene menu
                 if (storyManager.openStory(path)) {
-                    story2storyHub.visible = true;
-                    story2storyHubPlayer.play();
+                    mainWindow.startChromeTransition(story2storyHub, story2storyHubPlayer);
                 }
             } else {
                 // On scene menu — just load; scene menu updates reactively
@@ -15863,8 +15956,7 @@ Window {
             else
                 ok = storyManager.saveStoryAs(selectedFile.toString());
             if (ok && triggerTransition && pendingAction === "new") {
-                story2storyHub.visible = true;
-                story2storyHubPlayer.play();
+                mainWindow.startChromeTransition(story2storyHub, story2storyHubPlayer);
             }
         }
     }
@@ -15878,6 +15970,21 @@ Window {
 
         property bool windowSizeCompleteTrigger: false
 
+        // See story2storyHub.finishTransition()'s comment above.
+        function finishTransition() {
+            mainWindow.currentSceneId = -1;
+            viewport.activeContent.clear();
+            sceneEditor.visible = false;
+            viewportBlackOverlay.opacity = 1;
+            sceneEditor2storyHub.visible = false;
+            storyHub.visible = true;
+            sceneEditor2storyHub.windowSizeCompleteTrigger = false;
+            if (openStoryDialog.pendingStoryPath !== "") {
+                storyManager.openStory(openStoryDialog.pendingStoryPath);
+                openStoryDialog.pendingStoryPath = "";
+            }
+        }
+
         MediaPlayer {
             id: sceneEditor2storyHubPlayer
             source: "file:sceneeditor2scenemenu.mp4"
@@ -15887,17 +15994,7 @@ Window {
 
             onMediaStatusChanged: {
                 if (mediaStatus === MediaPlayer.EndOfMedia) {
-                    mainWindow.currentSceneId = -1;
-                    viewport.activeContent.clear();
-                    sceneEditor.visible = false;
-                    viewportBlackOverlay.opacity = 1;
-                    sceneEditor2storyHub.visible = false;
-                    storyHub.visible = true;
-                    sceneEditor2storyHub.windowSizeCompleteTrigger = false;
-                    if (openStoryDialog.pendingStoryPath !== "") {
-                        storyManager.openStory(openStoryDialog.pendingStoryPath);
-                        openStoryDialog.pendingStoryPath = "";
-                    }
+                    sceneEditor2storyHub.finishTransition();
                 }
             }
         }
@@ -15907,6 +16004,21 @@ Window {
             anchors.fill: parent
         }
     }
+
+    // Shared by every chrome-transition trigger site (story2storyHub,
+    // scene2launchScreen, storyHub2sceneEditor, sceneEditor2storyHub):
+    // plays `player` normally, or -- when appSettings.disableAnimations is
+    // on -- skips the video entirely and jumps straight to `rect`'s own
+    // finishTransition(), its end state.
+    function startChromeTransition(rect, player) {
+        rect.visible = true;
+        if (appSettings.disableAnimations) {
+            rect.finishTransition();
+        } else {
+            player.play();
+        }
+    }
+
     // Global Looping Sound Manager
     function updateGlobalLoopingSound() {
         if (!storyManager.isOpen || mainWindow.currentSceneId === -1) {
