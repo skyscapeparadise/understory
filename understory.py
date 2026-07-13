@@ -688,6 +688,13 @@ class StoryManager(QObject):
             conn.execute("INSERT INTO story (id, title) VALUES (1, '')")
             conn.commit()
             conn.execute("PRAGMA journal_mode=WAL")
+            # Matches _SaveThread's own connection (SQLite's documented
+            # recommendation alongside WAL) -- without this, every single
+            # commit() on this connection (saveSceneElements, saveVariables,
+            # saveNetworkData, updateSceneName, setEditorState, ...) does a
+            # full fsync, and "close scene" alone fires several of those in
+            # a row, adding up to a very noticeable hang.
+            conn.execute("PRAGMA synchronous=NORMAL")
             self._conn = conn
             self._save_thread.open(path)
             self._path = path
@@ -772,6 +779,8 @@ class StoryManager(QObject):
                 conn.commit()
             row = conn.execute("SELECT title FROM story WHERE id = 1").fetchone()
             conn.execute("PRAGMA journal_mode=WAL")
+            # See newStory()'s matching comment.
+            conn.execute("PRAGMA synchronous=NORMAL")
             self._conn = conn
             self._save_thread.open(path)
             self._path = path
@@ -813,6 +822,8 @@ class StoryManager(QObject):
             self._close()
             conn = sqlite3.connect(path)
             conn.execute("PRAGMA journal_mode=WAL")
+            # See newStory()'s matching comment.
+            conn.execute("PRAGMA synchronous=NORMAL")
             self._conn = conn
             self._save_thread.open(path)
             self._path = path
@@ -1825,6 +1836,16 @@ QFontDatabase.addApplicationFont("headings/MonaSans-Italic-VariableFont_wdth,wgh
 app.setFont(QFont("Mona Sans"))
 
 engine = QQmlApplicationEngine()
+
+# Registered as None here, before engine.load(), purely so understoryui.qml's
+# `Connections { target: hdrBridge }` (a declarative binding, resolved at
+# load time) has *some* value to resolve against instead of raising
+# "hdrBridge is not defined" -- the real HDRVideoBridge instance can only be
+# constructed after load() (it attaches to the already-loaded root window),
+# so it's set again below once that's done. setContextProperty() re-notifies
+# every binding depending on it, so this later update reaches that
+# Connections block correctly, same as a normal QML property change.
+engine.rootContext().setContextProperty("hdrBridge", None)
 
 # Set the version number as a context property
 engine.rootContext().setContextProperty("versionnumber", versionnumber)

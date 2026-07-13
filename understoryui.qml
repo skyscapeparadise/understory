@@ -5222,6 +5222,11 @@ Window {
                 }
             }
 
+            // Set only while a hdrBridge.capture_thumbnail() request is in
+            // flight -- the finishThumbnail() closure to run once
+            // onThumbnailCaptured (below) reports it's actually on disk.
+            property var _pendingThumbnailDone: null
+
             // Capture a 540×300 thumbnail of the scene content with a black background.
             // Uses an off-screen ShaderEffectSource (thumbnailCaptureSurface) so the visible
             // viewport never changes — no flash. Saves to DB and updates the scene card model.
@@ -5254,14 +5259,36 @@ Window {
                     // encode+save an always-SDR frame straight from its own
                     // linear-light compositing buffer instead (see
                     // hdr_viewport.py's capture_thumbnail()).
+                    //
+                    // Asynchronous: capture_thumbnail() only submits GPU work
+                    // and returns immediately -- the GPU fence-wait and PNG
+                    // encode/write happen off the main thread, reported back
+                    // via the onThumbnailCaptured Connections handler below.
+                    // A previous synchronous version blocked here on the GPU
+                    // wait plus the disk write, which froze the whole app
+                    // (including the "close scene" window animation) for
+                    // however long that took.
+                    viewport._pendingThumbnailDone = finishThumbnail;
                     hdrBridge.capture_thumbnail(tempPath);
-                    finishThumbnail();
                 } else {
                     viewport.capturingThumbnail = true;
                     thumbnailCaptureSurface.grabToImage(function (result) {
                         result.saveToFile(tempPath);
                         finishThumbnail();
                     }, Qt.size(540, 300));
+                }
+            }
+
+            Connections {
+                target: hdrBridge
+                function onThumbnailCaptured(path, ok) {
+                    if (!ok)
+                        console.warn("[hdr_viewport] thumbnail capture failed for", path);
+                    if (viewport._pendingThumbnailDone) {
+                        var done = viewport._pendingThumbnailDone;
+                        viewport._pendingThumbnailDone = null;
+                        done();
+                    }
                 }
             }
 

@@ -117,7 +117,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from PySide6.QtCore import QObject, Slot
+from PySide6.QtCore import QObject, Signal, Slot
 
 try:
     import av
@@ -2040,6 +2040,13 @@ class HDRVideoBridge(QObject):
     -- an HDR10 swapchain is actually supported ("sdr" mode has no such
     requirement)."""
 
+    # Emitted once a capture_thumbnail() request's PNG is actually on disk
+    # (path, success) -- fired from a background thread (see
+    # _poll_thumbnail_fence), so QML's connected handler runs via Qt's
+    # automatic queued cross-thread connection, on the main thread, once its
+    # event loop gets to it.
+    thumbnailCaptured = Signal(str, bool)
+
     def __init__(self, window, parent=None):
         super().__init__(parent)
         self.active = False
@@ -2118,6 +2125,10 @@ class HDRVideoBridge(QObject):
         self._thumb_pipeline = None
         self._thumb_texture = None
         self._thumb_transfer_buffer = None
+        # Set by capture_thumbnail(), cleared by _poll_thumbnail_fence() once
+        # the GPU work it submitted is actually done -- see both.
+        self._thumb_pending_fence = None
+        self._thumb_pending_path = None
         self._image_sources = {}
         # Phase 7 Part 2: compiled native shader elements, keyed by
         # (fragPath, vertPath) -- reconciled the same way _image_sources is.
@@ -2897,6 +2908,7 @@ class HDRVideoBridge(QObject):
         is untouched and fine. Fall back to hidden + reset transition state
         on any failure instead."""
         try:
+            self._poll_thumbnail_fence()
             self._render_unsafe(self._snapshot)
         except Exception as exc:
             print(f"[hdr_viewport] render tick failed, hiding native overlay: {exc}")
@@ -3334,7 +3346,7 @@ class HDRVideoBridge(QObject):
         sdl3.SDL_DrawGPUPrimitives(render_pass, 6, 1, 0, 0)
         sdl3.SDL_EndGPURenderPass(render_pass)
 
-    @Slot(str, result=bool)
+    @Slot(str)
     def capture_thumbnail(self, path):
         """Called directly from QML (understoryui.qml's
         captureAndSaveThumbnail) whenever the native pipeline is active and
@@ -3346,11 +3358,28 @@ class HDRVideoBridge(QObject):
         built once in _attach() regardless of live mode -- see there)
         rather than whatever self._mode currently is, so a thumbnail saved
         while live-previewing in HDR mode still looks right in the (SDR)
-        story-hub/scene-menu cards. Synchronous -- waits on a GPU fence --
-        but only ever called once, right before the scene editor closes,
-        same as the Qt-mode grabToImage() path it replaces."""
+        story-hub/scene-menu cards.
+
+        Fire-and-forget: only *submits* the GPU work here and returns
+        immediately -- the original version instead blocked the Qt main
+        thread on SDL_WaitForGPUFences (routinely several ms, sometimes
+        much more if the GPU queue was already busy) plus a synchronous
+        PNG encode+disk write, which froze the entire app (including the
+        "close scene" window animation) for that whole span. The fence is
+        now polled non-blockingly from the existing per-tick _render() (see
+        _poll_thumbnail_fence) instead of waited on here, and the actual PNG
+        encode/write -- pure CPU+IO work once the pixels are read back, no
+        GPU/SDL calls left -- happens on a background thread. Completion is
+        reported via thumbnailCaptured(path, success), not a return value."""
         if self._device is None or self._linear_buffer is None or not self._linear_w or not self._linear_h:
-            return False
+            self.thumbnailCaptured.emit(path, False)
+            return
+        if self._thumb_pending_fence is not None:
+            # Only ever one capture in flight in practice (captureAndSave
+            # Thumbnail() is called once, right before the scene editor
+            # closes) -- guard anyway rather than leaking the stale fence.
+            sdl3.SDL_ReleaseGPUFence(self._device, self._thumb_pending_fence)
+            self._thumb_pending_fence = None
 
         # Re-run just the elements pass (no chrome/cursor/fade overlay) fresh
         # into self._linear_buffer -- mirrors Qt's own thumbnail source
@@ -3393,21 +3422,48 @@ class HDRVideoBridge(QObject):
 
         fence = sdl3.SDL_SubmitGPUCommandBufferAndAcquireFence(cmdbuf)
         if not fence:
-            return False
-        fences = (ctypes.POINTER(sdl3.SDL_GPUFence) * 1)(fence)
-        sdl3.SDL_WaitForGPUFences(self._device, True, fences, 1)
-        sdl3.SDL_ReleaseGPUFence(self._device, fence)
+            self.thumbnailCaptured.emit(path, False)
+            return
+        self._thumb_pending_fence = fence
+        self._thumb_pending_path = path
+
+    def _poll_thumbnail_fence(self):
+        """Called every render tick from _render() (regardless of
+        _should_be_visible -- a capture_thumbnail() request lands right as
+        the scene editor is closing, so the native window may already be
+        hidden by the time its fence signals). Non-blocking: SDL_QueryGPUFence
+        just checks whether the GPU work capture_thumbnail() submitted has
+        completed yet, unlike SDL_WaitForGPUFences which would stall this
+        (main) thread until it does."""
+        if self._thumb_pending_fence is None:
+            return
+        if not sdl3.SDL_QueryGPUFence(self._device, self._thumb_pending_fence):
+            return
+        sdl3.SDL_ReleaseGPUFence(self._device, self._thumb_pending_fence)
+        self._thumb_pending_fence = None
+        path = self._thumb_pending_path
+        self._thumb_pending_path = None
 
         ptr = sdl3.SDL_MapGPUTransferBuffer(self._device, self._thumb_transfer_buffer, False)
         if not ptr:
-            return False
+            self.thumbnailCaptured.emit(path, False)
+            return
         try:
             pixels = ctypes.string_at(ptr, _THUMB_W * _THUMB_H * 4)
         finally:
             sdl3.SDL_UnmapGPUTransferBuffer(self._device, self._thumb_transfer_buffer)
 
-        image = QImage(pixels, _THUMB_W, _THUMB_H, _THUMB_W * 4, QImage.Format_RGBA8888)
-        return bool(image.save(path))
+        # Everything left is plain CPU/IO work on a copy of the pixels
+        # already in hand -- no GPU or SDL calls, so unlike the rest of this
+        # class's methods (all main-thread-only), this is safe to run on a
+        # background thread, keeping a slow PNG encode or disk write off the
+        # render tick and off whatever QML flow is waiting on this signal.
+        def encode_and_save():
+            image = QImage(pixels, _THUMB_W, _THUMB_H, _THUMB_W * 4, QImage.Format_RGBA8888)
+            ok = bool(image.save(path))
+            self.thumbnailCaptured.emit(path, ok)
+
+        threading.Thread(target=encode_and_save, daemon=True).start()
 
     def _render_unsafe(self, snap):
         # `snap` is the most recent beforeSynchronizing-built snapshot,
@@ -3697,6 +3753,9 @@ class HDRVideoBridge(QObject):
         self._last_elements_json = None
         if self._sampler is not None:
             sdl3.SDL_ReleaseGPUSampler(self._device, self._sampler)
+        if self._thumb_pending_fence is not None:
+            sdl3.SDL_ReleaseGPUFence(self._device, self._thumb_pending_fence)
+            self._thumb_pending_fence = None
         if self._thumb_transfer_buffer is not None:
             sdl3.SDL_ReleaseGPUTransferBuffer(self._device, self._thumb_transfer_buffer)
             self._thumb_transfer_buffer = None
