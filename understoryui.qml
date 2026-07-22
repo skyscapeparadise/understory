@@ -3891,7 +3891,21 @@ Window {
             // SceneContent.qml. True whenever native rendering is active at
             // all (either color-space mode) -- the plain editor canvas is
             // native too, not just preview, regardless of sdr vs hdr.
-            readonly property bool qtPresentationSuspended: appSettings.nativeRenderMode !== "off"
+            //
+            // "&& !navPickerOpen" is a deliberate, temporary carve-out: the
+            // nav-jump/interactivity-target picker (navigationViewportOverlay)
+            // needs the cursor icon and the real (dimmed) scene content behind
+            // it visible while open, and the native window is hidden for that
+            // whole span (see hdr_viewport.py's _should_be_visible), so
+            // nothing else would draw either. Un-suspending Qt's own
+            // rendering for this one modal case reuses the exact code path
+            // that already renders it correctly in Qt-only mode, rather than
+            // building a second (native) renderer for the same picker just to
+            // have it ripped out again once the Qt viewport itself goes away
+            // -- see the project_runtime_roadmap memory doc. Not future-proof
+            // by design, just the cheapest correct fix for the Qt-viewport
+            // era this codebase is still in.
+            readonly property bool qtPresentationSuspended: appSettings.nativeRenderMode !== "off" && !navPickerOpen
 
             // Phase 7 Part 4: true whenever the scene editor screen itself
             // is showing (covers both plain editing and previewing) --
@@ -5735,7 +5749,11 @@ Window {
                 isInteractive: viewport.foregroundLayer === 0
                 previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
-                nativeModeActive: (appSettings.nativeRenderMode !== "off")
+                // See viewport.qtPresentationSuspended's matching comment --
+                // only the interactive (foreground) layer un-suspends while
+                // the nav picker is open; the staging layer stays suspended
+                // as normal (it isn't shown either way).
+                nativeModeActive: (appSettings.nativeRenderMode !== "off") && !(isInteractive && viewport.navPickerOpen)
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
                 // Foreground: fully opaque.  Staging during dissolve: fades 0→1.
@@ -5770,7 +5788,8 @@ Window {
                 isInteractive: viewport.foregroundLayer === 1
                 previewActive: mainWindow.previewActive
                 globalMuted: appSettings.muted
-                nativeModeActive: (appSettings.nativeRenderMode !== "off")
+                // See sceneLayerA's matching comment.
+                nativeModeActive: (appSettings.nativeRenderMode !== "off") && !(isInteractive && viewport.navPickerOpen)
                 chapterPlayheadTime: nodeWorkspace.playheadTime
                 activeChapterId: nodeWorkspace.activeChapterId
                 opacity: (viewport.wiping || viewport.sliding || viewport.looking) ? 1.0 : viewport.foregroundLayer === 1 ? (viewport.dissolving ? 1.0 - viewport.dissolveOpacity : 1.0) : (viewport.dissolving ? viewport.dissolveOpacity : 0.0)
