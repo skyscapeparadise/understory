@@ -2843,6 +2843,31 @@ Item {
                     property bool videoReadySignaled: false
                     property int videoFrameCount: 0
 
+                    // Native rendering paints this path's actual pixels once
+                    // nativeModeActive && nativeEligible -- Qt's own decoded-frame count
+                    // below says nothing about that separate PyAV/SDL pipeline's own
+                    // readiness (Qt's MediaPlayer keeps decoding regardless, purely for
+                    // the audio/position clock -- see HDRVideoBridge.is_native_video_ready's
+                    // docstring), so this delegate's readiness signal must come from there
+                    // instead whenever native is what will actually display it. Without
+                    // this, the scene-jump gate could fire the instant Qt hit 2 frames while
+                    // native was still showing its placeholder -- a black flash on jump.
+                    readonly property bool useNativeReadiness: sceneContent.nativeModeActive
+                            && sceneContent.nativeEligible && hdrBridge !== null && hdrBridge !== undefined
+
+                    Timer {
+                        id: nativeReadyPoller
+                        interval: 16
+                        repeat: true
+                        running: vidDelegate.useNativeReadiness && !vidDelegate.videoReadySignaled
+                        onTriggered: {
+                            if (hdrBridge.is_native_video_ready(vidDelegate.trackedFilePath)) {
+                                vidDelegate.videoReadySignaled = true
+                                imageLoadComplete()
+                            }
+                        }
+                    }
+
                     // Source-swap freeze-frame state. liveFilePath must NOT bind to model.filePath
                     // — it is initialized by onTrackedFilePathChanged and then managed manually.
                     property string liveFilePath: ""
@@ -3176,7 +3201,7 @@ Item {
                             // frame parameter is not marshaled to QML — just count fires.
                             // Any videoFrameChanged emission means a real GPU frame arrived.
                             function onVideoFrameChanged() {
-                                if (!vidDelegate.videoReadySignaled) {
+                                if (!vidDelegate.videoReadySignaled && !vidDelegate.useNativeReadiness) {
                                     vidDelegate.videoFrameCount++
                                     if (vidDelegate.videoFrameCount >= 2) {
                                         vidDelegate.videoReadySignaled = true

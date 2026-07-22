@@ -105,6 +105,7 @@ video -- before any of this touched the real app.
 """
 
 import collections
+import concurrent.futures
 import ctypes
 import json
 import math
@@ -115,6 +116,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import QObject, Signal, Slot
@@ -1382,6 +1384,91 @@ class ChromeUniforms(ctypes.Structure):
     _fields_ = [("color", ctypes.c_float * 4), ("sdr_ref_nits", ctypes.c_float), ("shape", ctypes.c_float)]
 
 
+class _AsyncSourceLoader:
+    """Runs each scene source's slow, GPU-free setup work (file I/O,
+    container probing, image decode, shader subprocess compile) on a shared
+    background thread pool, off the render thread -- the render tick only
+    ever does the fast GPU-resource creation with the finished result, so a
+    slow-to-open file never stalls playback of everything else already on
+    screen (the bug this replaces: _reconcile_video_sources used to call
+    av.open() straight from the render tick, and while that blocked, every
+    other already-playing video's decode ring buffer would starve since
+    nothing was pulling frames for it that whole time).
+
+    Deliberately dependency-free beyond stdlib threading -- no SDL, no Qt --
+    since this is meant to carry over unchanged into the future Qt-less
+    runtime; only the reconcile methods that call it are Qt/SDL-facing.
+
+    One instance is shared across video/image/shader sources, keyed by
+    caller-chosen tuples (e.g. ("video", path)) so all three can queue work
+    on the same pool without colliding."""
+
+    def __init__(self, max_workers=4):
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        self._pending = {}  # key -> Future
+
+    def request(self, key, fn, *args):
+        """No-op if `key` is already queued or in flight -- callers are
+        expected to call this every tick for everything in their `wanted`
+        set, same shape as the existing reconcile methods' "skip if already
+        in the cache dict" check."""
+        if key not in self._pending:
+            self._pending[key] = self._executor.submit(fn, *args)
+
+    def poll_ready(self, kind):
+        """Yields (key, result, exc) once for each finished job whose key
+        starts with `kind`, then forgets it -- exactly one of result/exc is
+        not None. Never blocks: jobs still running are simply skipped this
+        tick. Filtered by `kind` (not just "all finished jobs") because
+        multiple independent reconcile methods share one loader instance --
+        without this, whichever one happened to poll first would pop and
+        discard results meant for another (e.g. _reconcile_video_sources
+        silently eating a crossfade secondary's finished load before
+        _reconcile_crossfade_sources ever saw it)."""
+        for key in [k for k, fut in self._pending.items() if k[0] == kind and fut.done()]:
+            future = self._pending.pop(key)
+            exc = future.exception()
+            yield key, (None if exc else future.result()), exc
+
+    def cancel(self, key):
+        """For a source that fell out of the caller's `wanted` set before
+        its load finished -- cancels it if it hasn't started yet; if it's
+        already running, this just stops it from being polled again (the
+        thread finishes on its own, its result quietly discarded)."""
+        future = self._pending.pop(key, None)
+        if future is not None:
+            future.cancel()
+
+    def pending_keys(self):
+        return list(self._pending.keys())
+
+    def is_pending(self, key):
+        return key in self._pending
+
+    def shutdown(self):
+        for future in self._pending.values():
+            future.cancel()
+        self._pending = {}
+        self._executor.shutdown(wait=False, cancel_futures=True)
+
+
+@dataclass
+class _VideoSourcePrepared:
+    """Result of _VideoSource.prepare() -- everything about opening and
+    probing a video file that involves no SDL/GPU calls, done off the render
+    thread. Handed to _VideoSource.__init__, which does only the fast part
+    (GPU texture/buffer creation) with it."""
+
+    path: str
+    container: object
+    hw_decode: bool
+    transfer: object
+    primaries: object
+    is_hdr: bool
+    width: int
+    height: int
+
+
 class _VideoSource:
     """Threaded/hardware-decoded HDR video source. Decodes unthrottled into
     a small bounded ring buffer; frame selection is driven by the caller
@@ -1389,19 +1476,28 @@ class _VideoSource:
     rather than any wall-clock pacing of our own. Upload is non-blocking so a
     slow/late frame never stalls the Qt main thread this render tick runs on."""
 
-    def __init__(self, device, path, width, height):
-        self.device = device
-        self.path = path
+    @staticmethod
+    def prepare(path):
+        """Opens and probes the file -- av.open() plus the hwaccel fallback
+        it can trigger, both genuine (sometimes slow) file I/O -- with no
+        SDL/GPU calls at all, so this is safe to run on a background thread
+        via _AsyncSourceLoader rather than blocking the render tick (the bug
+        this replaces: this used to run inline in _reconcile_video_sources,
+        and while it blocked, every other already-playing video's decode
+        ring buffer would starve since nothing was pulling frames for it).
+        Returns a _VideoSourcePrepared for __init__ to finish on the render
+        thread."""
         try:
-            self.container = av.open(path, hwaccel=HWAccel("videotoolbox"))
-            self.hw_decode = True
+            container = av.open(path, hwaccel=HWAccel("videotoolbox"))
+            hw_decode = True
         except Exception:
-            self.container = av.open(path)
-            self.hw_decode = False
-        stream = self.container.streams.video[0]
+            container = av.open(path)
+            hw_decode = False
+        print(f"[hdr_viewport] video decode: {os.path.basename(path)} hw_decode={hw_decode}")
+        stream = container.streams.video[0]
         cc = stream.codec_context
-        self.transfer = cc.color_trc or BT709_TRC
-        self.primaries = cc.color_primaries
+        transfer = cc.color_trc or BT709_TRC
+        primaries = cc.color_primaries
         # Phase 7 Part 1: this classification was previously computed and
         # discarded (self.transfer was assigned but never branched on) --
         # every source went through the same BT.2020/HLG math in
@@ -1411,8 +1507,22 @@ class _VideoSource:
         # yuv420p/bt709, HDR clips are 10-bit yuv420p10le/bt2020/arib-std-b67
         # (HLG). PQ is included for completeness even though no test asset
         # uses it yet.
-        self.is_hdr = self.transfer in (TRANSFER_HLG, TRANSFER_PQ)
+        is_hdr = transfer in (TRANSFER_HLG, TRANSFER_PQ)
+        return _VideoSourcePrepared(
+            path=path, container=container, hw_decode=hw_decode, transfer=transfer,
+            primaries=primaries, is_hdr=is_hdr, width=cc.width, height=cc.height,
+        )
 
+    def __init__(self, device, prepared):
+        self.device = device
+        self.path = prepared.path
+        self.container = prepared.container
+        self.hw_decode = prepared.hw_decode
+        self.transfer = prepared.transfer
+        self.primaries = prepared.primaries
+        self.is_hdr = prepared.is_hdr
+
+        width, height = prepared.width, prepared.height
         self.width, self.height = width, height
         self.uv_width, self.uv_height = width // 2, height // 2
 
@@ -1472,6 +1582,34 @@ class _VideoSource:
         self._buffer_lock = threading.Lock()
         self._buffer_not_full = threading.Condition(self._buffer_lock)
         self._stop = threading.Event()
+        # Diagnostic-only throttles (see _decode_loop/_advance_to) -- last
+        # time each warning fired, so a sustained problem logs once a
+        # second instead of once a frame/tick.
+        self._last_decode_lag_log = 0.0
+        self._last_starve_log = 0.0
+        # True once try_upload_latest has uploaded a genuine decoded frame
+        # (not just this __init__'s own neutral-chroma placeholder above) --
+        # queried via HDRVideoBridge.is_native_video_ready(), which
+        # SceneContent.qml's video readiness gate polls in place of Qt's own
+        # decoded-frame count when native rendering is what's actually going
+        # to paint this path (see that method's docstring for why: the two
+        # decoders are otherwise unrelated, and Qt's own frame count says
+        # nothing about whether native has anything to show yet).
+        #
+        # Deliberately set from the decode thread the moment a frame is
+        # buffered (_buffer_put below), NOT from try_upload_latest actually
+        # uploading one -- try_upload_latest is only ever called for a
+        # staging/pre-warming path once a transition has already started
+        # (see _render_unsafe vs _render_transition's differing
+        # video_players arguments), which is *after* whatever readiness gate
+        # this flag feeds is supposed to have already passed. Gating
+        # readiness on upload created a real deadlock: a jump could never
+        # start because it was waiting on an upload that only happens once
+        # the jump has already started. Decode-thread readiness has no such
+        # cycle -- it only depends on _reconcile_video_sources having
+        # constructed the source, which already happens for staging paths
+        # every ordinary tick.
+        self.has_decoded_frame = False
         self._thread = threading.Thread(target=self._decode_loop, daemon=True)
         self._thread.start()
 
@@ -1482,6 +1620,7 @@ class _VideoSource:
             if self._stop.is_set():
                 return
             self._buffer.append(item)
+        self.has_decoded_frame = True
 
     def _make_plane_texture(self, fmt, w, h):
         info = sdl3.SDL_GPUTextureCreateInfo()
@@ -1509,12 +1648,32 @@ class _VideoSource:
             self.container.seek(0)
 
     def _decode_loop(self):
+        last_pts = None
         for frame in self._decoded_frames():
             if self._stop.is_set():
                 return
+            t0 = time.monotonic()
             rf = frame.reformat(width=self.width, height=self.height, format="p016le")
             y_bytes = bytes(_plane_bytes(rf.planes[0]))
             uv_bytes = bytes(_plane_bytes(rf.planes[1]))
+            decode_elapsed = time.monotonic() - t0
+
+            # Diagnostic only: a loop wrap makes frame.time jump back to ~0,
+            # which would otherwise read as a hugely negative interval here --
+            # skip the check on that tick rather than flag a false lag.
+            if last_pts is not None and frame.time > last_pts:
+                frame_interval = frame.time - last_pts
+                if decode_elapsed > frame_interval:
+                    now = time.monotonic()
+                    if now - self._last_decode_lag_log > 1.0:
+                        print(
+                            f"[hdr_viewport] video decode falling behind realtime: "
+                            f"{os.path.basename(self.path)} decode={decode_elapsed * 1000:.1f}ms "
+                            f"> frame_interval={frame_interval * 1000:.1f}ms (hw_decode={self.hw_decode})"
+                        )
+                        self._last_decode_lag_log = now
+            last_pts = frame.time
+
             self._buffer_put((frame.time, y_bytes, uv_bytes))
 
     def _advance_to(self, position_seconds):
@@ -1538,6 +1697,18 @@ class _VideoSource:
             while self._buffer and self._buffer[0][0] <= position_seconds:
                 selected = self._buffer.popleft()
                 self._buffer_not_full.notify_all()
+            if selected is None and not self._buffer:
+                # Diagnostic only: buffer is genuinely empty (decode can't
+                # keep pace), not just momentarily ahead of position -- this
+                # is the "frozen frame" symptom, logged here at its source.
+                now = time.monotonic()
+                if now - self._last_starve_log > 1.0:
+                    print(
+                        f"[hdr_viewport] video buffer starved (frame frozen): "
+                        f"{os.path.basename(self.path)} position={position_seconds:.2f}s "
+                        f"(hw_decode={self.hw_decode})"
+                    )
+                    self._last_starve_log = now
             return selected
 
     def _upload_bytes(self, copy_pass, y_bytes, uv_bytes):
@@ -1595,6 +1766,81 @@ class _VideoSource:
         sdl3.SDL_ReleaseGPUTexture(self.device, self.y_texture)
         sdl3.SDL_ReleaseGPUTexture(self.device, self.uv_texture)
         sdl3.SDL_ReleaseGPUTransferBuffer(self.device, self.transfer_buffer)
+
+
+class _PlaceholderVideoSource:
+    """Stand-in occupying a video path's slot in self._video_sources for the
+    real (sometimes multi-tick -- av.open() is genuine file I/O) window
+    between the path becoming wanted and _VideoSource.prepare() finishing on
+    the background loader. Without this, _composite_elements_pass finds
+    nothing for the element and skips drawing it entirely -- which reads as
+    a black flash (the render pass's own clear color) on every scene jump,
+    a visible regression from when _VideoSource construction (including its
+    own neutral-chroma placeholder upload, see that class's __init__
+    comment) ran synchronously and so already existed by the first tick.
+
+    Fixed tiny (2x2) size: the video pipeline always draws a source as a
+    textured quad stretched to the element's rect via RectUniform, so the
+    texture's real pixel dimensions never matter -- this looks pixel-for-
+    pixel identical to a correctly-sized _VideoSource showing the same
+    neutral fill before its own first decoded frame lands."""
+
+    is_hdr = False
+
+    def __init__(self, device):
+        self.device = device
+        w = h = 2
+        self.y_texture = _make_texture(device, sdl3.SDL_GPU_TEXTUREFORMAT_R16_UNORM, w, h, sdl3.SDL_GPU_TEXTUREUSAGE_SAMPLER)
+        self.uv_texture = _make_texture(
+            device, sdl3.SDL_GPU_TEXTUREFORMAT_R16G16_UNORM, w, h, sdl3.SDL_GPU_TEXTUREUSAGE_SAMPLER
+        )
+        y_size, uv_size = w * h * 2, w * h * 4
+        transfer_info = sdl3.SDL_GPUTransferBufferCreateInfo()
+        transfer_info.usage = sdl3.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD
+        transfer_info.size = y_size + uv_size
+        transfer_buffer = sdl3.SDL_CreateGPUTransferBuffer(device, ctypes.byref(transfer_info))
+        if not transfer_buffer:
+            raise RuntimeError(f"SDL_CreateGPUTransferBuffer failed: {sdl3.SDL_GetError().decode()}")
+
+        # Same neutral-chroma reasoning as _VideoSource's own initial upload:
+        # an all-zero UV plane does not decode to black, it clamps to a
+        # saturated green (see that class's __init__ comment for the full
+        # story).
+        zero_y = bytes(y_size)
+        neutral_chroma_word = round((512 / 1023) * 65535).to_bytes(2, "little")
+        neutral_uv = (neutral_chroma_word * 2) * (w * h)
+        ptr = sdl3.SDL_MapGPUTransferBuffer(device, transfer_buffer, True)
+        ctypes.memmove(ptr, zero_y, y_size)
+        ctypes.memmove(ptr + y_size, neutral_uv, uv_size)
+        sdl3.SDL_UnmapGPUTransferBuffer(device, transfer_buffer)
+
+        cmdbuf = sdl3.SDL_AcquireGPUCommandBuffer(device)
+        copy_pass = sdl3.SDL_BeginGPUCopyPass(cmdbuf)
+        for offset, tex in ((0, self.y_texture), (y_size, self.uv_texture)):
+            src = sdl3.SDL_GPUTextureTransferInfo()
+            src.transfer_buffer = transfer_buffer
+            src.offset = offset
+            src.pixels_per_row = w
+            src.rows_per_layer = h
+            dst = sdl3.SDL_GPUTextureRegion()
+            dst.texture = tex
+            dst.mip_level = 0
+            dst.layer = 0
+            dst.x = dst.y = dst.z = 0
+            dst.w = w
+            dst.h = h
+            dst.d = 1
+            sdl3.SDL_UploadToGPUTexture(copy_pass, ctypes.byref(src), ctypes.byref(dst), True)
+        sdl3.SDL_EndGPUCopyPass(copy_pass)
+        sdl3.SDL_SubmitGPUCommandBuffer(cmdbuf)
+        sdl3.SDL_ReleaseGPUTransferBuffer(device, transfer_buffer)
+
+    def try_upload_latest(self, copy_pass, position_seconds):
+        return False
+
+    def release(self):
+        sdl3.SDL_ReleaseGPUTexture(self.device, self.y_texture)
+        sdl3.SDL_ReleaseGPUTexture(self.device, self.uv_texture)
 
 
 _SVG_RASTER_SIZE = 1024
@@ -2077,6 +2323,11 @@ class HDRVideoBridge(QObject):
         # second fully independent decode at a different playback
         # position, not a different asset.
         self._video_sources = {}
+        # Shared background loader for slow, GPU-free source setup work
+        # (currently just _VideoSource.prepare(); image/shader reconciliation
+        # are meant to move onto this same instance later) -- see
+        # _AsyncSourceLoader's docstring for why this exists.
+        self._async_loader = _AsyncSourceLoader()
         # Phase 10: dict[path -> monotonic timestamp last referenced],
         # driving the grace period above -- only touched for plain-path
         # keys (crossfade "#B" secondary sources are always released
@@ -2640,9 +2891,35 @@ class HDRVideoBridge(QObject):
         _VIDEO_SOURCE_GRACE_SECONDS after it was last wanted, so quickly
         revisiting a scene doesn't pay a fresh decode + black-flash cost.
         Only actually torn down once the grace period elapses with the
-        path still unwanted."""
+        path still unwanted -- at which point any load still in flight for
+        it is cancelled too.
+
+        A newly-wanted path gets a _PlaceholderVideoSource in its slot the
+        same tick its real load is requested, immediately swapped for the
+        real _VideoSource once that finishes -- without this, a path with
+        no entry yet is simply skipped by _composite_elements_pass, which
+        reads as a black flash on every scene jump for however long
+        av.open() takes (now genuinely off the render thread, so no longer
+        bounded to "however fast this tick's Python code runs").
+
+        Requesting new loads only needs to happen when `elements` itself
+        changes, so the caller gates this whole method behind an
+        elements-JSON-changed cache (see _render_unsafe). Swapping *finished*
+        loads into self._video_sources does not belong behind that same
+        gate -- a background thread completing is a wall-clock event
+        completely unrelated to whether the JSON changed, and gating it the
+        same way caused a real, hard-to-see bug: a load could sit finished
+        for many seconds (sometimes 10-25+) with nothing ever collecting it,
+        until some *unrelated* scene change elsewhere happened to touch
+        nativeElementsJson and incidentally trigger a poll. This mirrors
+        _reconcile_crossfade_sources' own "polled every tick, unlike the
+        video/image/shader reconciliation above" comment -- same principle,
+        just missed here originally since the async loader didn't exist yet
+        when that comment was written. See _poll_video_loads, called
+        unconditionally every tick regardless of this method."""
         now = time.monotonic()
         wanted = {e["path"] for e in elements if e.get("type") == "video" and e.get("path")}
+        self._video_wanted = wanted
         for path in wanted:
             self._video_source_last_used[path] = now
         for path in list(self._video_sources.keys()):
@@ -2652,17 +2929,42 @@ class HDRVideoBridge(QObject):
             if now - last_used >= _VIDEO_SOURCE_GRACE_SECONDS:
                 self._video_sources.pop(path).release()
                 self._video_source_last_used.pop(path, None)
+                self._async_loader.cancel(("video", path))
         for path in wanted:
-            if path in self._video_sources:
+            existing = self._video_sources.get(path)
+            if existing is not None and not isinstance(existing, _PlaceholderVideoSource):
                 continue
-            try:
-                probe = av.open(path)
-                src_width = probe.streams.video[0].codec_context.width
-                src_height = probe.streams.video[0].codec_context.height
-                probe.close()
-                self._video_sources[path] = _VideoSource(self._device, path, src_width, src_height)
-            except Exception as exc:
+            if self._async_loader.is_pending(("video", path)):
+                continue
+            if existing is None:
+                self._video_sources[path] = _PlaceholderVideoSource(self._device)
+            self._async_loader.request(("video", path), _VideoSource.prepare, path)
+
+    def _poll_video_loads(self):
+        """Swaps any finished async video loads into self._video_sources --
+        called every render tick, unconditionally (see _reconcile_video_
+        sources' docstring for why this can't be gated behind the same
+        elements-JSON-changed cache its own request-submission half uses)."""
+        wanted = getattr(self, "_video_wanted", set())
+        for key, result, exc in self._async_loader.poll_ready("video"):
+            _kind, path = key
+            existing = self._video_sources.get(path)
+            is_placeholder = isinstance(existing, _PlaceholderVideoSource)
+            if exc is not None:
                 print(f"[hdr_viewport] failed to open video {path!r}, skipping this element: {exc}")
+                if is_placeholder:
+                    self._video_sources.pop(path).release()
+                continue
+            if path not in wanted or (existing is not None and not is_placeholder):
+                # Fell out of `wanted` while this load was in flight, or a
+                # real source already exists for this path somehow -- the
+                # opened container is unused either way, close it rather
+                # than leaking the file handle/decoder.
+                result.container.close()
+                continue
+            if is_placeholder:
+                existing.release()
+            self._video_sources[path] = _VideoSource(self._device, result)
 
     def _upload_video_positions(self, copy_pass, video_players):
         """Feeds each live video's current MediaPlayer.position into its
@@ -2680,7 +2982,15 @@ class HDRVideoBridge(QObject):
             source = self._video_sources.get(path)
             if source is None:
                 continue
-            position_seconds = player.property("position") / 1000.0
+            try:
+                position_seconds = player.property("position") / 1000.0
+            except RuntimeError:
+                # Scene closed between this snapshot being captured and this
+                # tick running -- the QML MediaPlayer behind this stale
+                # reference is already gone. Skip just this entry rather than
+                # letting it blow up the whole render tick (see
+                # _poll_crossfade_state's identical guard just below).
+                continue
             source.try_upload_latest(copy_pass, position_seconds)
 
     def _poll_crossfade_state(self, video_players):
@@ -2702,10 +3012,19 @@ class HDRVideoBridge(QObject):
             item = entry.get("item") if isinstance(entry, dict) else None
             if not path or item is None:
                 continue
-            active = bool(item.property("vidCfActive"))
-            prerolling = bool(item.property("vidCfPrerolling"))
-            opacity = float(item.property("secondaryOpacity") or 0.0)
-            player_b = item.property("playerB")
+            try:
+                active = bool(item.property("vidCfActive"))
+                prerolling = bool(item.property("vidCfPrerolling"))
+                opacity = float(item.property("secondaryOpacity") or 0.0)
+                player_b = item.property("playerB")
+            except RuntimeError:
+                # Scene closed between this snapshot being captured and this
+                # tick running -- the QML delegate item behind this stale
+                # reference is already gone. Skip just this entry rather than
+                # letting it blow up the whole render tick and blank the
+                # entire native overlay (the previous behavior, via
+                # _render's catch-all).
+                continue
             if not (active or prerolling or opacity > 0.0):
                 continue
             state[path] = {"opacity": opacity, "player_b": player_b}
@@ -2723,18 +3042,22 @@ class HDRVideoBridge(QObject):
         for key in list(self._video_sources.keys()):
             if key.endswith("#B") and key not in wanted:
                 self._video_sources.pop(key).release()
+        for loader_key in [k for k in self._async_loader.pending_keys() if k[0] == "video_b" and k[1] not in wanted]:
+            self._async_loader.cancel(loader_key)
         for path in crossfade_state:
             key = f"{path}#B"
             if key in self._video_sources:
                 continue
-            try:
-                probe = av.open(path)
-                src_width = probe.streams.video[0].codec_context.width
-                src_height = probe.streams.video[0].codec_context.height
-                probe.close()
-                self._video_sources[key] = _VideoSource(self._device, path, src_width, src_height)
-            except Exception as exc:
-                print(f"[hdr_viewport] failed to open crossfade secondary {path!r}, skipping: {exc}")
+            self._async_loader.request(("video_b", key), _VideoSource.prepare, path)
+        for loader_key, result, exc in self._async_loader.poll_ready("video_b"):
+            _kind, key = loader_key
+            if exc is not None:
+                print(f"[hdr_viewport] failed to open crossfade secondary {key[:-2]!r}, skipping: {exc}")
+                continue
+            if key not in wanted or key in self._video_sources:
+                result.container.close()
+                continue
+            self._video_sources[key] = _VideoSource(self._device, result)
 
     def _upload_crossfade_positions(self, copy_pass, crossfade_state):
         """Sibling of _upload_video_positions for crossfade secondary
@@ -2890,6 +3213,7 @@ class HDRVideoBridge(QObject):
         # source" effect the old single-slot design needed a dedicated
         # _open_source() call for.
         self._reconcile_video_sources(active_elements + staging_elements)
+        self._poll_video_loads()
         self._reconcile_image_sources(active_elements + staging_elements)
         self._reconcile_shader_sources(active_elements + staging_elements)
         # Phase 10 Stage 2: crossfade never composites during a transition
@@ -2929,6 +3253,7 @@ class HDRVideoBridge(QObject):
             self._render_unsafe(self._snapshot)
         except Exception as exc:
             print(f"[hdr_viewport] render tick failed, hiding native overlay: {exc}")
+            print(traceback.format_exc())
             try:
                 self._last_rect = (0, 0, 0, 0)
                 self._sdl_nswindow.setFrame_display_(((0, 0), (0, 0)), True)
@@ -3363,6 +3688,31 @@ class HDRVideoBridge(QObject):
         sdl3.SDL_DrawGPUPrimitives(render_pass, 6, 1, 0, 0)
         sdl3.SDL_EndGPURenderPass(render_pass)
 
+    @Slot(str, result=bool)
+    def is_native_video_ready(self, path):
+        """Called from SceneContent.qml's video readiness gate in place of
+        counting Qt's own decoded frames, whenever native rendering is what
+        will actually paint this path. Qt's MediaPlayer/VideoOutput keep
+        decoding even while native is active (it's still needed live for
+        _upload_video_positions' audio/position clock -- see that method,
+        and the runtime-roadmap note that this Qt dependency itself is a
+        future removal target, not a permanent fixture) but its frame count
+        says nothing about whether this file's *separate* PyAV/SDL decode
+        (self._video_sources, populated by _reconcile_video_sources via
+        _AsyncSourceLoader) has produced anything yet. Without this, the
+        scene-jump gate could fire the instant Qt's own decoder got 2
+        frames while the native side was still showing its placeholder --
+        a black flash on jump/transition despite the gate supposedly having
+        waited for the destination to be ready. Checks has_decoded_frame
+        (set by the decode thread the moment it buffers a frame), not
+        whether a frame has been uploaded to the GPU yet -- upload only
+        happens once a path is in try_upload_latest's video_players list,
+        which for a staging/pre-warming path is only true after a
+        transition has already started (see _VideoSource.has_decoded_frame's
+        own comment for the deadlock that gating on upload caused)."""
+        source = self._video_sources.get(path)
+        return isinstance(source, _VideoSource) and source.has_decoded_frame
+
     @Slot(str)
     def capture_thumbnail(self, path):
         """Called directly from QML (understoryui.qml's
@@ -3539,6 +3889,14 @@ class HDRVideoBridge(QObject):
             self._reconcile_image_sources(elements + staging_elements)
             self._reconcile_shader_sources(elements + staging_elements)
             self._last_elements_json = elements_key
+        # Unconditional, unlike the block above -- a background video load
+        # finishing is a wall-clock event independent of whether
+        # nativeElementsJson changed this tick. Gating this the same way the
+        # request-submission half above legitimately can be was a real bug:
+        # a finished load could sit uncollected for many seconds until some
+        # unrelated scene change elsewhere happened to touch the JSON and
+        # incidentally trigger a poll. See _poll_video_loads' own docstring.
+        self._poll_video_loads()
         # Phase 7 Part 3: previously hid the native window here for an
         # empty element list (e.g. a legacy .qsb-shader-only scene, not yet
         # native-eligible), letting Qt's own rendering show through as a
@@ -3635,6 +3993,7 @@ class HDRVideoBridge(QObject):
         active_elements = self._parse_elements(snap.active_native_elements_json)
         staging_elements = self._parse_elements(snap.staging_native_elements_json)
         self._reconcile_video_sources(active_elements + staging_elements)
+        self._poll_video_loads()
         self._reconcile_image_sources(active_elements + staging_elements)
         self._reconcile_shader_sources(active_elements + staging_elements)
 
@@ -3753,6 +4112,7 @@ class HDRVideoBridge(QObject):
         if self._timer is not None:
             self._timer.invalidate()
             self._timer = None
+        self._async_loader.shutdown()
         for source in self._video_sources.values():
             source.release()
         self._video_sources = {}
