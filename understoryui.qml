@@ -3907,6 +3907,19 @@ Window {
             // render surface sits above at the OS compositor level and would
             // otherwise never see.
             readonly property real viewportBlackOverlayOpacity: viewportBlackOverlay.opacity
+            // Read by hdr_viewport.py's _should_be_visible() to hide the native
+            // window while the nav-jump/interactivity-target picker
+            // (navigationViewportOverlay, a Qt Rectangle inside this same
+            // viewport item, gated on the same two flags) is open -- without
+            // this, the picker's dimmed grid (and the navDragGhost drag
+            // visual shown only while it's open) renders correctly in Qt's
+            // own scene graph but is always covered by the always-on-top
+            // native window, making it invisible and effectively unusable in
+            // any native render mode. Qt's own MouseAreas already receive
+            // every click regardless (the native window has
+            // setIgnoresMouseEvents_(True) set unconditionally) -- this was a
+            // pure visibility bug, not an input one.
+            readonly property bool navPickerOpen: sceneEditorButtons.navOverlayOpen || sceneEditorButtons.interactivityPickerOpen
             // Polled by the native HDR bridge (hdr_viewport.py) to decide whether the
             // active/staging scene qualifies for the native pipeline instead of Qt's.
             readonly property bool activeNativeEligible:  activeContent  ? activeContent.nativeEligible  : false

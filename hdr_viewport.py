@@ -2031,6 +2031,12 @@ class QmlSnapshot:
     # render surface sits above the whole Qt window at the OS compositor
     # level, so it never sees that overlay -- see _composite_fade_pass.
     fade_black_opacity: float = 0.0
+    # Mirrors viewport.navPickerOpen -- true while the nav-jump/
+    # interactivity-target scene picker (navigationViewportOverlay, a Qt
+    # Rectangle inside `viewport`) is open. See _should_be_visible: the
+    # native window hides while this is true so that Qt overlay (and clicks
+    # into it, already passed through regardless) actually becomes visible.
+    nav_picker_open: bool = False
 
 
 class HDRVideoBridge(QObject):
@@ -2527,6 +2533,7 @@ class HDRVideoBridge(QObject):
             content_height=int(v.property("contentHeight") or 1080),
             scene_editor_visible=bool(v.property("sceneEditorVisible")),
             fade_black_opacity=float(v.property("viewportBlackOverlayOpacity") or 0.0),
+            nav_picker_open=bool(v.property("navPickerOpen")),
         )
 
     def _sync_geometry(self):
@@ -2595,7 +2602,17 @@ class HDRVideoBridge(QObject):
         # The native pipeline must put zero Qt rendering in the viewport
         # once active; a non-eligible scene showing black is the correct,
         # deliberate contract, not a bug.
-        return snap.scene_editor_visible
+        #
+        # nav_picker_open is a different axis, not a content-eligibility
+        # fallback: navigationViewportOverlay (the nav-jump/interactivity-
+        # target scene picker) is a full-screen modal Qt Rectangle living
+        # inside `viewport` itself, not a SceneContent element -- it was
+        # always meant to render via Qt, on top of whatever's beneath it.
+        # Clicks into it already reach Qt's own MouseAreas regardless (the
+        # native window ignores mouse events unconditionally), so hiding
+        # here only fixes visibility, matching how scene_editor_visible
+        # itself already suspends native output for a full-screen Qt state.
+        return snap.scene_editor_visible and not snap.nav_picker_open
 
     def _reconcile_video_sources(self, elements):
         """Adds/keeps a _VideoSource per distinct video path referenced by
